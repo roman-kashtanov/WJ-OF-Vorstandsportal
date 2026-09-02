@@ -39,6 +39,7 @@ import {
 } from '../utils/pwaNotifications';
 import { sendMail } from '../utils/emailService';
 import { Biometric } from '../utils/biometric';
+import { isVotingMember } from '../utils/formatters';
 import { firebaseConfig } from '../lib/firebase';
 
 interface SettingsModalProps {
@@ -111,6 +112,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [newEmail, setNewEmail] = useState('');
   const [newRole, setNewRole] = useState<BoardRole>('Vorstand Events & Netzwerk');
   const [isPermanentStaff, setIsPermanentStaff] = useState(false);
+  const [newIsVoting, setNewIsVoting] = useState(true);
 
   // Security Passcode change state
   const [newPasscode, setNewPasscode] = useState('');
@@ -275,6 +277,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       initials,
       avatarColor: 'bg-[#003594]',
       isPermanentStaff,
+      isVotingMember: newIsVoting,
       authProvider: 'google',
     };
 
@@ -295,6 +298,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
     setNewName('');
     setNewEmail('');
+    setNewIsVoting(true);
     setIsAddingMember(false);
   };
 
@@ -601,7 +605,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       </select>
                     </div>
 
-                    <div className="flex items-center pt-5">
+                    <div className="flex flex-col justify-center pt-2 gap-2">
                       <label className="flex items-center space-x-2 cursor-pointer">
                         <input
                           type="checkbox"
@@ -610,7 +614,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           className="rounded text-[#003594] focus:ring-[#003594] w-4 h-4"
                         />
                         <span className="font-bold text-slate-700 text-xs">
-                          Festangestellt (Kein Vorstandscode nötig)
+                          Festangestellt (kein Vorstandscode nötig)
+                        </span>
+                      </label>
+
+                      <label className="flex items-center space-x-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={newIsVoting}
+                          onChange={(e) => setNewIsVoting(e.target.checked)}
+                          className="rounded text-[#003594] focus:ring-[#003594] w-4 h-4"
+                        />
+                        <span className="font-bold text-slate-700 text-xs">
+                          Stimmberechtigt bei Beschlüssen
                         </span>
                       </label>
                     </div>
@@ -659,12 +675,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               Festangestellt
                             </span>
                           )}
+                          {!isVotingMember(m) && (
+                            <span className="text-[9px] font-bold bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full">
+                              Ohne Stimmrecht
+                            </span>
+                          )}
                         </div>
                         <div className="text-[11px] text-slate-500 flex items-center space-x-2">
                           <span>{m.role}</span>
                           <span>•</span>
                           <span className="font-mono text-slate-700">{m.email}</span>
                         </div>
+
+                        <label className="mt-1 flex items-center space-x-1.5 cursor-pointer w-fit">
+                          <input
+                            type="checkbox"
+                            checked={isVotingMember(m)}
+                            onChange={(e) =>
+                              onUpdateMembers(
+                                members.map((x) =>
+                                  x.id === m.id ? { ...x, isVotingMember: e.target.checked } : x
+                                )
+                              )
+                            }
+                            className="w-3.5 h-3.5 accent-[#003594]"
+                          />
+                          <span className="text-[10px] font-semibold text-slate-600">
+                            stimmberechtigt
+                          </span>
+                        </label>
                       </div>
                     </div>
 

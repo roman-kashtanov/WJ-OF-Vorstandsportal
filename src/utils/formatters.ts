@@ -123,3 +123,14 @@ export function calculateVoteStats(resolution: Resolution, totalMembersCount: nu
     percentageTotalVoted: eligibleCount > 0 ? Math.round((totalVotesCast / eligibleCount) * 100) : 0,
   };
 }
+
+/**
+ * Ist dieses Mitglied bei Beschluessen stimmberechtigt?
+ *
+ * Der Wert wird ausdruecklich am Mitglied gepflegt. Fehlt er (Mitglieder aus
+ * der Zeit davor), greift die alte Regel: festangestellt = kein Stimmrecht.
+ */
+export function isVotingMember(member: { isVotingMember?: boolean; isPermanentStaff?: boolean }): boolean {
+  if (typeof member.isVotingMember === 'boolean') return member.isVotingMember;
+  return !member.isPermanentStaff;
+}

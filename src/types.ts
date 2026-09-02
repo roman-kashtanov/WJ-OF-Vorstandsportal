@@ -21,6 +21,15 @@ export interface BoardMember {
   avatarColor: string;
   isCurrentUser?: boolean;
   isPermanentStaff?: boolean; // If true, exempt from 5-digit code
+  /**
+   * Stimmberechtigt bei Beschluessen.
+   *
+   * Nicht gesetzt = Altbestand: dann gilt die frueher genutzte Regel
+   * "festangestellt bedeutet kein Stimmrecht". Neu angelegte Mitglieder
+   * tragen den Wert ausdruecklich, damit Befreiung vom Vorstandscode und
+   * Stimmrecht unabhaengig voneinander einstellbar sind.
+   */
+  isVotingMember?: boolean;
   isAdmin?: boolean; // System Administrator privileges
   password?: string; // User login password
   credentialsSentAt?: string; // Timestamp when access credentials were sent via email

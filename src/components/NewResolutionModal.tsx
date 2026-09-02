@@ -16,7 +16,8 @@ import {
   Plus,
   Sparkles,
   Check,
-  ClipboardPaste
+  ClipboardPaste,
+  Users
 } from 'lucide-react';
 import { 
   STANDARD_RESOLUTION_TEMPLATES, 
@@ -25,6 +26,7 @@ import {
 } from '../utils/copilotParser';
 import { SpeechToTextHelper } from '../utils/speechToText';
 import { getAttachmentType, formatFileSize } from '../utils/fileHelpers';
+import { isVotingMember } from '../utils/formatters';
 
 interface NewResolutionModalProps {
   isOpen: boolean;
@@ -83,11 +85,18 @@ export const NewResolutionModal: React.FC<NewResolutionModalProps> = ({
     setShowCopilotImport(false);
   };
   
-  // Stimmberechtigte Mitglieder: default alle stimmberechtigten Vorstände
-  const [eligibleVoterIds] = useState<string[]>(() => {
-    const votingMembers = members.filter((m) => !m.isPermanentStaff);
-    return votingMembers.length > 0 ? votingMembers.map((m) => m.id) : members.map((m) => m.id);
+  // Stimmberechtigte: Vorgabe sind alle als stimmberechtigt gefuehrten
+  // Mitglieder; fuer den Einzelfall hier anpassbar.
+  const [eligibleVoterIds, setEligibleVoterIds] = useState<string[]>(() => {
+    const voting = members.filter(isVotingMember);
+    return voting.length > 0 ? voting.map((m) => m.id) : members.map((m) => m.id);
   });
+  const [showVoters, setShowVoters] = useState<boolean>(false);
+
+  const toggleVoter = (id: string) =>
+    setEligibleVoterIds((prev) =>
+      prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]
+    );
 
   // Voice dictation state
   const [isDictating, setIsDictating] = useState<boolean>(false);
@@ -178,7 +187,7 @@ export const NewResolutionModal: React.FC<NewResolutionModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text.trim() || !name.trim()) return;
+    if (!text.trim() || !name.trim() || eligibleVoterIds.length === 0) return;
 
     if (stopDictationRef.current) {
       stopDictationRef.current();
@@ -267,6 +276,50 @@ export const NewResolutionModal: React.FC<NewResolutionModalProps> = ({
                     {tmpl.name}
                   </button>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* Stimmberechtigte fuer diesen Beschluss */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-slate-500">
+                Stimmberechtigt: {eligibleVoterIds.length} von {members.length}
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowVoters(!showVoters)}
+                className="text-[11px] font-bold text-[#003594] hover:underline cursor-pointer flex items-center space-x-1"
+              >
+                <Users className="w-3 h-3 text-[#00A3E0]" />
+                <span>{showVoters ? 'Ausblenden' : 'Anpassen'}</span>
+              </button>
+            </div>
+
+            {showVoters && (
+              <div className="p-2.5 bg-blue-50/60 rounded-xl border border-blue-100 space-y-1 animate-in fade-in">
+                {members.map((m) => (
+                  <label
+                    key={m.id}
+                    className="flex items-center justify-between gap-2 py-1 cursor-pointer"
+                  >
+                    <span className="text-[11px] text-slate-700 truncate">
+                      {m.name}
+                      <span className="text-slate-400"> · {m.role}</span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={eligibleVoterIds.includes(m.id)}
+                      onChange={() => toggleVoter(m.id)}
+                      className="w-4 h-4 accent-[#003594] shrink-0"
+                    />
+                  </label>
+                ))}
+                {eligibleVoterIds.length === 0 && (
+                  <p className="text-[11px] text-rose-700 font-semibold pt-1">
+                    Mindestens eine Person muss stimmberechtigt sein.
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -476,7 +529,7 @@ export const NewResolutionModal: React.FC<NewResolutionModalProps> = ({
           <button
             type="submit"
             form="new-resolution-form"
-            disabled={!name.trim() || !text.trim()}
+            disabled={!name.trim() || !text.trim() || eligibleVoterIds.length === 0}
             className="px-5 py-2.5 rounded-xl bg-[#003594] hover:bg-[#00266B] disabled:opacity-40 font-bold text-white transition-all shadow-xs cursor-pointer flex items-center space-x-1.5 text-xs sm:text-sm active:scale-98"
           >
             <Vote className="w-4 h-4" />

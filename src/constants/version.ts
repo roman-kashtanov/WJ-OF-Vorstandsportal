@@ -1,13 +1,26 @@
 import { AppVersionConfig } from '../types';
 
-export const CURRENT_APP_VERSION = '3.0.0';
-export const APP_BUILD_DATE = '02.09.2026';
+/**
+ * Wird beim Bauen aus package.json eingesetzt (siehe vite.config.ts).
+ * Frueher stand die Nummer hier fest im Code und musste zusaetzlich zur
+ * package.json gepflegt werden - dadurch zeigte die App eine Version an,
+ * die nicht mehr dem ausgelieferten Stand entsprach.
+ */
+export const CURRENT_APP_VERSION: string =
+  typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0';
+
+export const APP_BUILD_DATE: string = (() => {
+  const iso = typeof __APP_BUILD_DATE__ !== 'undefined' ? __APP_BUILD_DATE__ : '';
+  if (!iso) return '';
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? '' : d.toLocaleDateString('de-DE');
+})();
 
 export const DEFAULT_VERSION_CONFIG: AppVersionConfig = {
   latestVersion: CURRENT_APP_VERSION,
   minRequiredVersion: CURRENT_APP_VERSION,
   forceUpdateEnabled: false,
-  releaseNotes: 'Version 3.0.0: E-Mail-Versand und Push-Benachrichtigungen laufen jetzt serverseitig ueber Netlify Functions. Firebase auf das WJ-Konto umgestellt, Anmeldung ausschliesslich ueber Google.',
+  releaseNotes: '',
   updatedAt: new Date().toISOString(),
   updatedBy: 'System',
 };
