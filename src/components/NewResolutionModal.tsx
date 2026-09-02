@@ -15,11 +15,13 @@ import {
   FileText,
   Plus,
   Sparkles,
-  Check
+  Check,
+  ClipboardPaste
 } from 'lucide-react';
 import { 
   STANDARD_RESOLUTION_TEMPLATES, 
-  ResolutionTemplate 
+  ResolutionTemplate,
+  parseTeamsCopilotSummary
 } from '../utils/copilotParser';
 import { SpeechToTextHelper } from '../utils/speechToText';
 import { getAttachmentType, formatFileSize } from '../utils/fileHelpers';
@@ -52,6 +54,34 @@ export const NewResolutionModal: React.FC<NewResolutionModalProps> = ({
   const [text, setText] = useState(initialTitle || '');
   const [budget, setBudget] = useState<string>(initialBudget ? String(initialBudget) : '');
   const [showTemplates, setShowTemplates] = useState<boolean>(false);
+
+  // Uebernahme aus einer Teams-/Copilot-Zusammenfassung
+  const [showCopilotImport, setShowCopilotImport] = useState<boolean>(false);
+  const [copilotText, setCopilotText] = useState<string>('');
+  const [copilotHint, setCopilotHint] = useState<string | null>(null);
+
+  const handleCopilotImport = () => {
+    if (!copilotText.trim()) return;
+    const parsed = parseTeamsCopilotSummary(copilotText);
+
+    if (parsed.title) setName(parsed.title.slice(0, 60));
+    if (parsed.motionText) setText(parsed.motionText);
+    if (parsed.requestedBudget) setBudget(String(parsed.requestedBudget));
+
+    // Ehrlich benennen, was erkannt wurde - der Text muss danach ohnehin
+    // geprueft werden, das ist keine fertige Beschlussfassung.
+    const found: string[] = [];
+    if (parsed.title) found.push('Name');
+    if (parsed.motionText) found.push('Beschlusstext');
+    if (parsed.requestedBudget) found.push('Betrag');
+
+    setCopilotHint(
+      found.length > 0
+        ? `Übernommen: ${found.join(', ')}. Bitte den Wortlaut noch einmal prüfen.`
+        : 'Aus dem Text ließ sich nichts sicher erkennen. Bitte manuell eintragen.'
+    );
+    setShowCopilotImport(false);
+  };
   
   // Stimmberechtigte Mitglieder: default alle stimmberechtigten Vorstände
   const [eligibleVoterIds] = useState<string[]>(() => {
@@ -237,6 +267,49 @@ export const NewResolutionModal: React.FC<NewResolutionModalProps> = ({
                     {tmpl.name}
                   </button>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* Uebernahme aus Teams / Copilot */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-slate-500">
+                Beschluss aus einer Teams-Zusammenfassung?
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowCopilotImport(!showCopilotImport)}
+                className="text-[11px] font-bold text-[#003594] hover:underline cursor-pointer flex items-center space-x-1"
+              >
+                <ClipboardPaste className="w-3 h-3 text-[#00A3E0]" />
+                <span>{showCopilotImport ? 'Ausblenden' : 'Text einfügen'}</span>
+              </button>
+            </div>
+
+            {showCopilotImport && (
+              <div className="p-2.5 bg-blue-50/60 rounded-xl border border-blue-100 space-y-2 animate-in fade-in">
+                <textarea
+                  value={copilotText}
+                  onChange={(e) => setCopilotText(e.target.value)}
+                  rows={4}
+                  placeholder="Zusammenfassung aus Microsoft Teams / Copilot hier einfügen…"
+                  className="w-full px-2.5 py-2 bg-white border border-blue-200 rounded-lg text-slate-900 text-base sm:text-xs focus:outline-none focus:ring-2 focus:ring-[#003594]"
+                />
+                <button
+                  type="button"
+                  onClick={handleCopilotImport}
+                  disabled={!copilotText.trim()}
+                  className="px-3 py-1.5 bg-[#003594] hover:bg-[#00266B] disabled:opacity-40 text-white font-bold rounded-lg text-[11px] transition-colors cursor-pointer"
+                >
+                  Felder daraus füllen
+                </button>
+              </div>
+            )}
+
+            {copilotHint && (
+              <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-2">
+                {copilotHint}
               </div>
             )}
           </div>
