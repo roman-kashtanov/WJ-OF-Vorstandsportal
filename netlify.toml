@@ -5,9 +5,19 @@
   functions = "netlify/functions"
 
 [build.environment]
-  # Mindestens 22.12: @netlify/functions und @vitejs/plugin-react verlangen das.
-  # Mit "20" bricht der Build auf Netlify ab, waehrend er lokal (Node 24) laeuft.
+  # Mindestens 22.12 laut @netlify/functions und @vitejs/plugin-react.
+  # Mit 20 laeuft der Build zwar, meldet aber EBADENGINE-Warnungen.
   NODE_VERSION = "22"
+
+  # Netlifys Geheimnis-Scanner erkennt den Firebase-Web-Schluessel am Muster
+  # "AIza..." und bricht den Build ab. Dieser Schluessel ist jedoch bewusst
+  # oeffentlich: Er steht zwangslaeufig in jedem Browser-Bundle und ist eine
+  # reine Projektkennung, kein Zugangsdatum. Geschuetzt werden die Daten durch
+  # die Firestore-Regeln (firestore.rules) und die Google-Anmeldung.
+  #
+  # Bewusst nur DIESER eine Wert wird ausgenommen - der Scanner bleibt fuer
+  # echte Geheimnisse (z.B. ein versehentlich eingefuegtes SMTP-Passwort) aktiv.
+  SECRETS_SCAN_SMART_DETECTION_OMIT_VALUES = "AIzaSyA9pUq6DmHJiPxHwdT04EI7q7lxyRG8oJw"
 
 [functions]
   node_bundler = "esbuild"
