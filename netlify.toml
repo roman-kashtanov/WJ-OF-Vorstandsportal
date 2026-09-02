@@ -5,7 +5,9 @@
   functions = "netlify/functions"
 
 [build.environment]
-  NODE_VERSION = "20"
+  # Mindestens 22.12: @netlify/functions und @vitejs/plugin-react verlangen das.
+  # Mit "20" bricht der Build auf Netlify ab, waehrend er lokal (Node 24) laeuft.
+  NODE_VERSION = "22"
 
 [functions]
   node_bundler = "esbuild"
