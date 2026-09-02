@@ -145,6 +145,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setBioEnabled(Biometric.isEnabled());
   }, [isOpen]);
 
+  // Echter Verbindungszustand statt einer Behauptung
+  const [cloudState, setCloudState] = useState<'checking' | 'ok' | 'blocked'>('checking');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setCloudState('checking');
+    FirebaseSync.checkConnection().then((c) =>
+      setCloudState(c.canRead && c.canWrite ? 'ok' : 'blocked')
+    );
+  }, [isOpen]);
+
   // System-Check
   const [checkResult, setCheckResult] = useState<
     { label: string; ok: boolean; detail: string }[] | null
@@ -818,9 +829,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </span>
                 </div>
 
-                <div className="flex items-center space-x-2 bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-xl font-bold text-xs">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                  <span>Cloud-Echtzeit synchron</span>
+                {/* Tatsaechlich gemessener Zustand. Vorher stand hier ein fest
+                    verdrahtetes gruenes "synchron" - das behauptete auch dann
+                    eine funktionierende Verbindung, wenn gar keine bestand. */}
+                <div
+                  className={`flex items-center space-x-2 px-3 py-1.5 rounded-xl font-bold text-xs border ${
+                    cloudState === 'ok'
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                      : cloudState === 'blocked'
+                      ? 'bg-rose-50 text-rose-800 border-rose-200'
+                      : 'bg-slate-50 text-slate-600 border-slate-200'
+                  }`}
+                >
+                  <div
+                    className={`w-2 h-2 rounded-full ${
+                      cloudState === 'ok'
+                        ? 'bg-emerald-500'
+                        : cloudState === 'blocked'
+                        ? 'bg-rose-500'
+                        : 'bg-slate-400 wj-pulse-soft'
+                    }`}
+                  ></div>
+                  <span>
+                    {cloudState === 'ok'
+                      ? 'Cloud verbunden'
+                      : cloudState === 'blocked'
+                      ? 'Keine Cloud-Verbindung'
+                      : 'Wird geprüft …'}
+                  </span>
                 </div>
               </div>
 
