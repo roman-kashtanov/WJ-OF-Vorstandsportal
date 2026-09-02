@@ -488,12 +488,22 @@ export default function App() {
   const handleAuthSuccess = (session: AuthSession) => {
     setAuthSession(session);
     setIsAuthModalOpen(false);
-    if (session.user) {
-      if (!members.some((m) => m.id === session.user?.id || m.email === session.user?.email)) {
-        setMembers((prev) => [...prev, session.user!]);
-      }
-      setCurrentMemberId(session.user.id);
+    if (!session.user) return;
+
+    const user = session.user;
+    const isNew = !members.some(
+      (m) => m.id === user.id || (m.email || '').toLowerCase() === (user.email || '').toLowerCase()
+    );
+
+    if (isNew) {
+      setMembers((prev) => [...prev, user]);
+      // Das eigene Profil muss auch in der Cloud landen, sonst sieht kein
+      // anderes Geraet das Mitglied - und die eigene Freigabe fehlt.
+      FirebaseSync.saveMember(user).catch(() => {});
+      FirebaseSync.addToAllowlist(user.email).catch(() => {});
     }
+
+    setCurrentMemberId(user.id);
   };
 
   // Logout Handler

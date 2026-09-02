@@ -106,6 +106,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   // Member Management state
   const [isAddingMember, setIsAddingMember] = useState(false);
+  const [memberError, setMemberError] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newRole, setNewRole] = useState<BoardRole>('Vorstand Events & Netzwerk');
@@ -269,6 +270,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const updated = [...members, newMember];
     onUpdateMembers(updated);
     await FirebaseSync.saveMember(newMember);
+    // Zugang sofort freischalten - ohne diesen Eintrag verweigert die
+    // Datenbank dem neuen Mitglied jeden Zugriff.
+    const grant = await FirebaseSync.addToAllowlist(newMember.email);
+
+    if (!grant.success) {
+      setMemberError(
+        `${newMember.name} wurde angelegt, aber die Freigabe in der Datenbank hat nicht geklappt: ${grant.error || 'unbekannter Fehler'}`
+      );
+    } else {
+      setMemberError(null);
+    }
 
     setNewName('');
     setNewEmail('');
@@ -281,9 +293,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       alert('Mindestens ein Vorstandsmitglied muss vorhanden sein.');
       return;
     }
+
+    const removed = members.find((m) => m.id === memberId);
+
+    // Sich selbst zu entfernen wuerde den eigenen Zugang sofort sperren.
+    if (removed && removed.id === currentMember.id) {
+      alert('Das eigene Konto kann nicht entfernt werden.');
+      return;
+    }
+
+    if (
+      removed &&
+      !confirm(
+        `${removed.name} entfernen?\n\nDamit entfällt auch der Zugang zum Portal (${removed.email}).`
+      )
+    ) {
+      return;
+    }
+
     const updated = members.filter((m) => m.id !== memberId);
     onUpdateMembers(updated);
     await FirebaseSync.deleteMember(memberId);
+    // Zugang gezielt entziehen - die Freigabeliste raeumt sich sonst nie auf
+    if (removed?.email) {
+      await FirebaseSync.removeFromAllowlist(removed.email);
+    }
   };
 
   // Change 5-digit Passcode (SHA-256 Hashed)
@@ -500,6 +534,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <span>{isAddingMember ? 'Schließen' : '+ Google-Konto freigeben'}</span>
                 </button>
               </div>
+
+              {memberError && (
+                <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 text-[11px] leading-relaxed text-rose-800">
+                  {memberError}
+                </div>
+              )}
 
               {/* Add Member Form */}
               {isAddingMember && (

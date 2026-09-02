@@ -627,30 +627,69 @@ export const FirebaseSync = {
   // Freigabeliste (allowlist): steuert, welche Google-Konten ueberhaupt auf die
   // Datenbank zugreifen duerfen. Wird aus der Vorstandsliste abgeleitet.
   // ---------------------------------------------------------------------------
+  /**
+   * Traegt die E-Mail-Adressen aller Vorstandsmitglieder in die Freigabeliste ein.
+   *
+   * Bewusst NUR hinzufuegend: Eintraege werden hier niemals geloescht.
+   * Frueher wurde alles entfernt, was zu keinem Mitglied passte - damit haette
+   * der von Hand angelegte Erst-Eintrag des Administrators (der noch kein
+   * Mitgliedsprofil hat) beim ersten Abgleich die eigene Aussperrung ausgeloest.
+   * Entfernt wird eine Freigabe deshalb ausschliesslich beim gezielten Loeschen
+   * eines Mitglieds (siehe removeFromAllowlist / deleteMember).
+   */
   async syncAllowlist(membersList: BoardMember[]) {
     try {
       const wanted = membersList
         .map((m) => (m.email || '').toLowerCase().trim())
         .filter(Boolean);
+      if (wanted.length === 0) return { success: true };
 
       const snap = await getDocs(collection(db, 'allowlist'));
-      const existing = snap.docs.map((d) => d.id);
+      const existing = snap.docs.map((d) => d.id.toLowerCase().trim());
+
+      const missing = wanted.filter((email) => !existing.includes(email));
+      if (missing.length === 0) return { success: true };
 
       const batch = writeBatch(db);
-      for (const email of wanted) {
-        if (!existing.includes(email)) {
-          batch.set(doc(db, 'allowlist', email), { aktiv: true, updatedAt: new Date().toISOString() });
-        }
-      }
-      for (const email of existing) {
-        if (!wanted.includes(email)) {
-          batch.delete(doc(db, 'allowlist', email));
-        }
+      for (const email of missing) {
+        batch.set(doc(db, 'allowlist', email), {
+          aktiv: true,
+          updatedAt: new Date().toISOString(),
+        });
       }
       await batch.commit();
       return { success: true };
     } catch (err: any) {
       console.warn('Freigabeliste konnte nicht aktualisiert werden:', err?.message);
+      return { success: false, error: err?.message };
+    }
+  },
+
+  /** Einzelne Freigabe erteilen (z.B. direkt beim Anlegen eines Mitglieds). */
+  async addToAllowlist(email: string) {
+    const clean = (email || '').toLowerCase().trim();
+    if (!clean) return { success: false, error: 'Keine E-Mail-Adresse' };
+    try {
+      await setDoc(doc(db, 'allowlist', clean), {
+        aktiv: true,
+        updatedAt: new Date().toISOString(),
+      });
+      return { success: true };
+    } catch (err: any) {
+      console.warn('Freigabe konnte nicht erteilt werden:', err?.message);
+      return { success: false, error: err?.message };
+    }
+  },
+
+  /** Freigabe gezielt entziehen - nur beim Entfernen eines Mitglieds. */
+  async removeFromAllowlist(email: string) {
+    const clean = (email || '').toLowerCase().trim();
+    if (!clean) return { success: false };
+    try {
+      await deleteDoc(doc(db, 'allowlist', clean));
+      return { success: true };
+    } catch (err: any) {
+      console.warn('Freigabe konnte nicht entzogen werden:', err?.message);
       return { success: false, error: err?.message };
     }
   },
