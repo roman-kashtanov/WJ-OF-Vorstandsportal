@@ -34,17 +34,40 @@ Alle weiteren Vorstandsmitglieder werden danach bequem in der App unter
 
 ### 1.2 Resend (E-Mail-Versand)
 
-> Der bisher verwendete Schlüssel `re_LiEXBD84…` wird von Resend als **ungültig**
-> zurückgewiesen und stand zusätzlich im Browser-Code. Bitte einen **neuen
-> Schlüssel** erzeugen und den alten löschen.
+Zu verifizieren ist die Vereinsdomain **`wj-offenbach.de`** (dort laeuft die
+Website). Das DNS liegt bei **IONOS** - dort werden die Eintraege hinterlegt.
 
-1. <https://resend.com> → **API Keys** → neuen Key erstellen.
-2. Optional, aber empfohlen: **Domains → Add Domain** mit der Vereinsdomain
-   (z. B. `wj-offenbach.de`). Resend zeigt DNS-Einträge (DKIM/SPF), die beim
-   Domain-Anbieter hinterlegt werden. Erst danach darf als Absender
-   `vorstand@wj-offenbach.de` verwendet werden.
-   Bis dahin funktioniert ausschließlich `onboarding@resend.dev`, und
-   Empfänger darf nur die bei Resend registrierte Adresse sein.
+> **Achtung, bestehende Vereins-Mails nicht zerstoeren.**
+> Die Domain hat bereits einen SPF-Eintrag, der den IONOS-Mailserver und
+> `vereinonline.org` (Mitgliederverwaltung) abdeckt:
+> `v=spf1 mx a:vereinonline.org include:vereinonline.org include:_spf.perfora.net
+> include:_spf-eu.ionos.com include:mx.kundenserver.de include:_spf.kundenserver.de ~all`
+>
+> Eine Domain darf nur EINEN SPF-Eintrag haben. Ein zweiter macht SPF ungueltig -
+> dann landen auch die bestehenden Mitglieder-Mails im Spam.
+
+**Empfohlener Weg: Subdomain verwenden.**
+Bei Resend unter *Domains -> Add Domain* nicht `wj-offenbach.de` eintragen,
+sondern **`send.wj-offenbach.de`**. Vorteile:
+
+- Die Eintraege betreffen ausschliesslich die Subdomain; der bestehende
+  Mailbetrieb des Vereins kann dadurch nicht kaputtgehen.
+- Resend liefert DKIM- und SPF-Eintraege, die bei IONOS unter
+  *Domains -> wj-offenbach.de -> DNS* als neue Eintraege angelegt werden.
+
+Absender ist danach z. B. `vorstand@send.wj-offenbach.de`
+(in Netlify als `RESEND_FROM` hinterlegen).
+
+**Alternative: Hauptdomain `wj-offenbach.de`.**
+Sieht mit `vorstand@wj-offenbach.de` schoener aus, erfordert aber, dass
+`include:_spf.resend.com` in den **bestehenden** SPF-Eintrag hineingeschrieben
+wird (vor dem abschliessenden `~all`) - kein zweiter Eintrag. Wer die
+IONOS-DNS-Verwaltung nicht sicher bedient, sollte den Subdomain-Weg nehmen.
+
+**Bis zur Verifizierung** funktioniert ausschliesslich `onboarding@resend.dev`
+als Absender, und Resend nimmt als Empfaenger nur die beim Konto registrierte
+Adresse an. Ein echter Rundversand an den Vorstand ist erst nach der
+Verifizierung moeglich.
 
 ### 1.3 Netlify
 
