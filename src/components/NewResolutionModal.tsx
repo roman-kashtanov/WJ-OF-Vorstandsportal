@@ -48,6 +48,7 @@ export const NewResolutionModal: React.FC<NewResolutionModalProps> = ({
   const currentYear = new Date().getFullYear();
   const autoNumber = `VB-${currentYear}-${String(existingCount + 1).padStart(2, '0')}`;
 
+  const [name, setName] = useState('');
   const [text, setText] = useState(initialTitle || '');
   const [budget, setBudget] = useState<string>(initialBudget ? String(initialBudget) : '');
   const [showTemplates, setShowTemplates] = useState<boolean>(false);
@@ -147,19 +148,17 @@ export const NewResolutionModal: React.FC<NewResolutionModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text.trim()) return;
+    if (!text.trim() || !name.trim()) return;
 
     if (stopDictationRef.current) {
       stopDictationRef.current();
     }
 
-    const firstLine = text.trim().split('\n')[0];
-    const derivedTitle = firstLine.length > 80 ? firstLine.substring(0, 77) + '...' : firstLine;
     const calculatedQuorum = Math.max(1, Math.ceil(eligibleVoterIds.length / 2));
 
     onSubmit({
       number: autoNumber,
-      title: derivedTitle,
+      title: name.trim(),
       // Nur ein Text: er ist zugleich Antragswortlaut. Eine separate
       // Beschreibung wuerde in der Detailansicht doppelt erscheinen.
       description: '',
@@ -274,7 +273,23 @@ export const NewResolutionModal: React.FC<NewResolutionModalProps> = ({
           {/* MAIN SIMPLE FORM */}
           <form id="new-resolution-form" onSubmit={handleSubmit} className="space-y-3.5">
             
-            {/* 1. Beschlusstext */}
+            {/* 1. Kurzname - macht die Beschlussliste lesbar */}
+            <div>
+              <label className="font-bold text-slate-900 text-xs sm:text-sm block mb-1.5">
+                Name *
+              </label>
+              <input
+                type="text"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="z. B. Sommerfest 2026"
+                maxLength={60}
+                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#003594]"
+              />
+            </div>
+
+            {/* 2. Beschlusstext */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="font-bold text-slate-900 text-xs sm:text-sm">
@@ -388,7 +403,8 @@ export const NewResolutionModal: React.FC<NewResolutionModalProps> = ({
           <button
             type="submit"
             form="new-resolution-form"
-            className="px-5 py-2.5 rounded-xl bg-[#003594] hover:bg-[#00266B] font-bold text-white transition-all shadow-xs cursor-pointer flex items-center space-x-1.5 text-xs sm:text-sm active:scale-98"
+            disabled={!name.trim() || !text.trim()}
+            className="px-5 py-2.5 rounded-xl bg-[#003594] hover:bg-[#00266B] disabled:opacity-40 font-bold text-white transition-all shadow-xs cursor-pointer flex items-center space-x-1.5 text-xs sm:text-sm active:scale-98"
           >
             <Vote className="w-4 h-4" />
             <span>Beschluss fassen</span>

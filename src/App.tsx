@@ -26,6 +26,7 @@ import { sendResolutionVoteMails } from './utils/emailService';
 import { notifyAllDevices } from './utils/webPushHelper';
 import { FirebaseSync, FirebaseSyncStatus } from './utils/firebaseSync';
 import { CURRENT_APP_VERSION, DEFAULT_VERSION_CONFIG } from './constants/version';
+import { normalizeSecuritySettings } from './utils/security';
 import { Header } from './components/Header';
 import { DashboardView } from './components/DashboardView';
 import { ResolutionsView } from './components/ResolutionsView';
@@ -45,6 +46,8 @@ import { EmailVoteModal } from './components/EmailVoteModal';
 import { InvoiceRequestModal } from './components/InvoiceRequestModal';
 import { ForceUpdateModal } from './components/ForceUpdateModal';
 import { MobileBottomNav } from './components/MobileBottomNav';
+import { BiometricLock } from './components/BiometricLock';
+import { Biometric } from './utils/biometric';
 import { calculateVoteStats, formatDate } from './utils/formatters';
 import { CheckCircle2, AlertCircle, Mail, Sparkles, X, Bell, Settings, Video } from 'lucide-react';
 
@@ -163,7 +166,9 @@ export default function App() {
     );
 
     const unsubSec = FirebaseSync.subscribeSecuritySettings((remoteSec) => {
-      if (remoteSec) setSecuritySettings(remoteSec);
+      // Auch aus der Cloud kann noch der kaputte Alt-Hash kommen, wenn die
+      // Einstellungen vor dem Fix einmal hochgeladen wurden.
+      if (remoteSec) setSecuritySettings(normalizeSecuritySettings(remoteSec));
     });
 
     const unsubMeetingConfig = FirebaseSync.subscribeMeetingSettings((remoteConfig) => {
@@ -192,6 +197,17 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(() => {
     const existing = AppStorage.getAuthSession();
     return !existing || !existing.isAuthenticated || !existing.isCodeVerified;
+  });
+
+  // Face-ID-Sperre: Die Anmeldung bleibt bestehen, aber solange dieses Geraet
+  // biometrisch geschuetzt ist, muss beim Oeffnen entsperrt werden.
+  // sessionStorage = pro geoeffneter App-Sitzung genau einmal.
+  const [isDeviceLocked, setIsDeviceLocked] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const session = AppStorage.getAuthSession();
+    if (!session?.isAuthenticated) return false;
+    if (!Biometric.isEnabled()) return false;
+    return sessionStorage.getItem('wjof_unlocked') !== '1';
   });
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
@@ -276,6 +292,12 @@ export default function App() {
     type: 'resolution' | 'vote' | 'invoice' | 'meeting' | 'system';
     targetTab?: ActiveTab;
     targetId?: string;
+    /**
+     * Wenn gesetzt, erhalten nur diese Mitglieder eine Push-Nachricht.
+     * Bei Beschluessen sind das die Stimmberechtigten - alle anderen sollen
+     * nicht fuer etwas benachrichtigt werden, wozu sie nichts beitragen.
+     */
+    recipientMemberIds?: string[];
   }) => {
     const newEntry: InAppNotification = {
       id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -307,7 +329,8 @@ export default function App() {
         body: notif.message,
         url: '/',
       },
-      currentMember.id
+      currentMember.id,
+      notif.recipientMemberIds
     ).catch(() => {});
   };
 
@@ -469,6 +492,8 @@ export default function App() {
   const handleLogout = () => {
     setAuthSession(null);
     AppStorage.saveAuthSession(null);
+    sessionStorage.removeItem('wjof_unlocked');
+    setIsDeviceLocked(false);
     setIsAuthModalOpen(true);
   };
 
@@ -522,6 +547,7 @@ export default function App() {
               type: 'vote',
               targetTab: 'resolutions',
               targetId: res.id,
+              recipientMemberIds: res.eligibleVoterIds,
             });
           }
         } else if (stats.isQuorumReached && stats.noCount >= members.length / 2) {
@@ -623,10 +649,12 @@ export default function App() {
     if (notificationSettings.notifyOnNewResolution) {
       addInAppAndPushNotification({
         title: `⚡ Neuer Umlaufbeschluss: ${newRes.number}`,
-        message: `"${newRes.title}" Deine Stimme wird benötigt!`,
+        message: `${newRes.title} – deine Stimme wird benötigt.`,
         type: 'resolution',
         targetTab: 'resolutions',
         targetId: newRes.id,
+        // Nur die Stimmberechtigten dieses Beschlusses benachrichtigen
+        recipientMemberIds: newRes.eligibleVoterIds,
       });
     }
 
@@ -1209,6 +1237,16 @@ export default function App() {
       </footer>
 
       {/* Modals */}
+      <BiometricLock
+        isOpen={isDeviceLocked && !isAuthModalOpen}
+        memberName={currentMember.name}
+        onUnlocked={() => {
+          sessionStorage.setItem('wjof_unlocked', '1');
+          setIsDeviceLocked(false);
+        }}
+        onLogout={handleLogout}
+      />
+
       <AuthModal
         isOpen={isAuthModalOpen}
         onSuccess={handleAuthSuccess}

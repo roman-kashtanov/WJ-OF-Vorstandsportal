@@ -12,17 +12,28 @@ export const urlBase64ToUint8Array = (base64String: string) => {
 };
 
 /**
- * Schickt eine echte Push-Nachricht an alle registrierten Geraete ausser den
- * eigenen. Laeuft ueber die Netlify-Function - dadurch erreicht die Nachricht
- * das Smartphone auch dann, wenn die App dort geschlossen ist.
+ * Schickt eine echte Push-Nachricht an registrierte Geraete. Laeuft ueber die
+ * Netlify-Function - dadurch erreicht die Nachricht das Smartphone auch dann,
+ * wenn die App dort geschlossen ist.
+ *
+ * `onlyMemberIds` grenzt die Empfaenger ein: Bei einem Beschluss werden so nur
+ * die Stimmberechtigten benachrichtigt, nicht der gesamte Vorstand.
+ * Ohne Angabe gehen die Mitteilungen an alle (z.B. Belege, Sitzungen).
  */
 export const notifyAllDevices = async (
   payload: { title: string; body: string; url?: string; tag?: string },
-  excludeMemberId?: string
+  excludeMemberId?: string,
+  onlyMemberIds?: string[]
 ): Promise<{ sent: number; failed: number }> => {
   try {
     const all = await FirebaseSync.fetchPushSubscriptions();
-    const targets = all.filter((s) => !excludeMemberId || s.memberId !== excludeMemberId);
+    const targets = all.filter((s) => {
+      if (excludeMemberId && s.memberId === excludeMemberId) return false;
+      if (onlyMemberIds && onlyMemberIds.length > 0 && !onlyMemberIds.includes(s.memberId)) {
+        return false;
+      }
+      return true;
+    });
     if (targets.length === 0) return { sent: 0, failed: 0 };
 
     const res = await fetch('/api/push/send', {

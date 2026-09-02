@@ -38,6 +38,7 @@ import {
   PwaNotificationService,
 } from '../utils/pwaNotifications';
 import { sendMail } from '../utils/emailService';
+import { Biometric } from '../utils/biometric';
 import { firebaseConfig } from '../lib/firebase';
 
 interface SettingsModalProps {
@@ -130,6 +131,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [pushMessage, setPushMessage] = useState<string | null>(null);
   const isIosDevice = PwaNotificationService.isIos();
   const isStandaloneApp = PwaNotificationService.isStandalone();
+
+  // Face ID / Touch ID auf diesem Geraet
+  const [bioSupported, setBioSupported] = useState(false);
+  const [bioEnabled, setBioEnabled] = useState(false);
+  const [bioBusy, setBioBusy] = useState(false);
+  const [bioMessage, setBioMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    Biometric.isSupported().then(setBioSupported);
+    setBioEnabled(Biometric.isEnabled());
+  }, [isOpen]);
 
   // System-Check
   const [checkResult, setCheckResult] = useState<
@@ -607,7 +620,58 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* TAB 2: PASSCODE MANAGEMENT (SHA-256 HASHED) */}
           {activeTab === 'security' && (
-            <div className="space-y-4 max-w-md">
+            <div className="space-y-5 max-w-md">
+              {/* Entsperrung dieses Geraets */}
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="font-bold text-slate-900 text-sm">Face ID / Touch ID</div>
+                    <div className="mt-0.5 text-slate-500">
+                      {!bioSupported
+                        ? 'Dieses Gerät unterstützt keine biometrische Entsperrung.'
+                        : bioEnabled
+                        ? 'Aktiv – die App wird beim Öffnen biometrisch entsperrt.'
+                        : 'Statt Code-Eingabe beim Öffnen biometrisch entsperren.'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!bioSupported || bioBusy}
+                    onClick={async () => {
+                      setBioBusy(true);
+                      setBioMessage(null);
+                      if (bioEnabled) {
+                        Biometric.disable();
+                        setBioEnabled(false);
+                        setBioMessage('Entsperrung für dieses Gerät entfernt.');
+                      } else {
+                        const res = await Biometric.enable({
+                          id: currentMember.id,
+                          name: currentMember.name,
+                          email: currentMember.email,
+                        });
+                        setBioEnabled(res.ok);
+                        setBioMessage(res.ok ? 'Eingerichtet.' : res.error || 'Fehlgeschlagen.');
+                      }
+                      setBioBusy(false);
+                    }}
+                    className={`shrink-0 px-4 py-2 rounded-xl font-bold text-xs transition-colors disabled:opacity-50 ${
+                      bioEnabled
+                        ? 'border border-slate-300 text-slate-700 hover:bg-slate-50'
+                        : 'bg-[#003594] text-white hover:bg-[#00266B]'
+                    }`}
+                  >
+                    {bioBusy ? '...' : bioEnabled ? 'Entfernen' : 'Einrichten'}
+                  </button>
+                </div>
+
+                {bioMessage && (
+                  <div className="mt-3 text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-2.5">
+                    {bioMessage}
+                  </div>
+                )}
+              </div>
+
               <div>
                 <h4 className="font-bold text-slate-900 text-sm">
                   5-stelligen Vorstandscode ändern

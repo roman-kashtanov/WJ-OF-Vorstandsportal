@@ -13,6 +13,7 @@ import {
   EmailServerConfig
 } from '../types';
 import { INITIAL_BOARD_MEMBERS, INITIAL_RESOLUTIONS, INITIAL_INVOICES, INITIAL_INVOICE_FOLDERS, INITIAL_MEETINGS, INITIAL_SECURITY_SETTINGS } from '../data/initialData';
+import { normalizeSecuritySettings } from './security';
 
 const INITIAL_NOTIFICATIONS: InAppNotification[] = [];
 
@@ -98,7 +99,8 @@ export const AppStorage = {
   getSecuritySettings(): SecuritySettings {
     try {
       const data = localStorage.getItem(STORAGE_KEYS.SECURITY);
-      return data ? JSON.parse(data) : INITIAL_SECURITY_SETTINGS;
+      if (!data) return INITIAL_SECURITY_SETTINGS;
+      return normalizeSecuritySettings(JSON.parse(data) as SecuritySettings);
     } catch {
       return INITIAL_SECURITY_SETTINGS;
     }

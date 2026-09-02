@@ -39,6 +39,26 @@ export async function hashPasscode(passcode: string): Promise<string> {
 export const DEFAULT_PASSCODE_HASH = 'd17f25ecfbcc7857f7bebea469308be0b2580943e96d13a3ad98a13675c4bfc2';
 
 /**
+ * Hash aus dem urspruenglichen AI-Studio-Build. Er passte zu keinem
+ * tatsaechlichen Code - wer die App vorher geoeffnet hatte, hat ihn im
+ * Browser-Speicher (und ggf. in Firestore) liegen und kaeme sonst nie
+ * wieder herein.
+ */
+export const BROKEN_LEGACY_PASSCODE_HASH =
+  '5c95e1e82813589c32e9be4efebceea96dfdca7cbbadff08f4c4c233aaee8e4a';
+
+/**
+ * Ersetzt den kaputten Alt-Hash durch den gueltigen Standard.
+ * Wird auf jede Quelle angewendet: lokaler Speicher und Cloud.
+ */
+export function normalizeSecuritySettings<T extends { passcodeHash?: string }>(settings: T): T {
+  if (settings && settings.passcodeHash === BROKEN_LEGACY_PASSCODE_HASH) {
+    return { ...settings, passcodeHash: DEFAULT_PASSCODE_HASH };
+  }
+  return settings;
+}
+
+/**
  * Verifies if the entered code matches the stored security settings (hashed or legacy).
  */
 export async function verifyPasscode(
@@ -51,7 +71,7 @@ export async function verifyPasscode(
   const enteredHash = await sha256(cleanEntered);
 
   // 1. Check against passcodeHash if set
-  if (settings.passcodeHash) {
+  if (settings.passcodeHash && settings.passcodeHash !== BROKEN_LEGACY_PASSCODE_HASH) {
     return enteredHash === settings.passcodeHash;
   }
 

@@ -2,11 +2,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import { BoardMember, SecuritySettings, AuthSession } from '../types';
 import { AppStorage } from '../utils/storage';
 import { verifyPasscode } from '../utils/security';
+import { Biometric } from '../utils/biometric';
 import { auth, googleProvider } from '../lib/firebase';
+import { FirebaseSync } from '../utils/firebaseSync';
 import {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
+  signOut,
   type User,
 } from 'firebase/auth';
 
@@ -39,7 +42,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   members,
   securitySettings,
 }) => {
-  const [step, setStep] = useState<'login' | 'code'>('login');
+  const [step, setStep] = useState<'login' | 'code' | 'biometric'>('login');
+  const [biometricSupported, setBiometricSupported] = useState(false);
+  const [isEnablingBiometric, setIsEnablingBiometric] = useState(false);
+  const [biometricError, setBiometricError] = useState<string | null>(null);
   const [pendingUser, setPendingUser] = useState<BoardMember | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSigningIn, setIsSigningIn] = useState(false);
@@ -60,11 +66,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     if (step === 'code') setTimeout(() => inputRefs[0].current?.focus(), 120);
   }, [step]);
 
+  useEffect(() => {
+    Biometric.isSupported().then(setBiometricSupported);
+  }, []);
+
   // Ergebnis einer Weiterleitungs-Anmeldung (Fallback fuer iOS/PWA)
   useEffect(() => {
     getRedirectResult(auth)
       .then((res) => {
-        if (res?.user) handleGoogleUser(res.user);
+        if (res?.user) void handleGoogleUser(res.user);
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -84,10 +94,32 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleGoogleUser = (googleUser: User) => {
+  const handleGoogleUser = async (googleUser: User) => {
     const email = (googleUser.email || '').toLowerCase().trim();
     if (!email) {
       setError('Google hat keine E-Mail-Adresse übermittelt.');
+      return;
+    }
+
+    // Massgeblich ist die Freigabeliste in Firestore, nicht die lokale
+    // Mitgliederliste: Letztere ist bei einem fremden Konto immer leer, weil
+    // die Sicherheitsregeln das Lesen verhindern - daraus darf kein Zugang
+    // entstehen.
+    const allowState = await FirebaseSync.getAllowlistState(email);
+
+    if (allowState === 'not_allowed') {
+      setError(
+        `Das Konto ${email} ist nicht freigegeben. Bitte wende dich an den Administrator des Vorstandsportals.`
+      );
+      await signOut(auth).catch(() => {});
+      return;
+    }
+
+    if (allowState === 'unavailable') {
+      setError(
+        'Die Freigabeliste konnte nicht geprüft werden. Besteht eine Internetverbindung, und ist die Datenbank eingerichtet?'
+      );
+      await signOut(auth).catch(() => {});
       return;
     }
 
@@ -98,31 +130,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    // Erststart: Es ist noch kein Vorstand hinterlegt -> erste Anmeldung wird Administrator
-    if (members.length === 0) {
-      const name = googleUser.displayName || email.split('@')[0];
-      const initials = name
-        .split(' ')
-        .map((w) => w[0])
-        .join('')
-        .slice(0, 2)
-        .toUpperCase();
-      proceedWith({
-        id: `mem_${Date.now()}`,
-        name,
-        role: 'Kreissprecher / Vorsitzender',
-        email,
-        initials,
-        avatarColor: 'bg-[#003594]',
-        isAdmin: true,
-        isPermanentStaff: false,
-      } as BoardMember);
-      return;
-    }
+    // Freigegeben, aber noch kein Profil hinterlegt (z.B. allererste
+    // Einrichtung oder ein gerade neu freigegebenes Konto).
+    const name = googleUser.displayName || email.split('@')[0];
+    const initials = name
+      .split(' ')
+      .map((w) => w[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase();
 
-    setError(
-      `Das Konto ${email} ist nicht in der Vorstandsliste freigegeben. Bitte beim Administrator melden.`
-    );
+    proceedWith({
+      id: `mem_${Date.now()}`,
+      name,
+      role: 'Kreissprecher / Vorsitzender',
+      email,
+      initials,
+      avatarColor: 'bg-[#003594]',
+      // Nur beim allerersten Start (leere Freigabeliste) entsteht ein Admin
+      isAdmin: allowState === 'bootstrap',
+      isPermanentStaff: false,
+    } as BoardMember);
   };
 
   const handleGoogleLogin = async () => {
@@ -130,7 +158,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setError(null);
     try {
       const res = await signInWithPopup(auth, googleProvider);
-      handleGoogleUser(res.user);
+      await handleGoogleUser(res.user);
     } catch (err: any) {
       const code = err?.code || '';
       if (code === 'auth/popup-blocked' || code === 'auth/cancelled-popup-request') {
@@ -156,7 +184,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     try {
       const valid = await verifyPasscode(code, securitySettings);
       if (valid && pendingUser) {
-        onSuccess({ isAuthenticated: true, isCodeVerified: true, user: pendingUser });
+        // Einmalig anbieten, dieses Geraet kuenftig per Face ID / Touch ID zu
+        // entsperren, statt den Code erneut einzutippen.
+        if (biometricSupported && !Biometric.isEnabled()) {
+          setStep('biometric');
+        } else {
+          onSuccess({ isAuthenticated: true, isCodeVerified: true, user: pendingUser });
+        }
       } else {
         setCodeError('Code ungültig.');
         setDigits(['', '', '', '', '']);
@@ -234,7 +268,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
             )}
           </div>
-        ) : (
+        ) : step === 'code' ? (
           <div className="mt-7 space-y-5">
             <div className="text-center text-[12px] text-slate-500">
               Vorstandscode für <strong className="text-slate-800">{pendingUser?.name}</strong>
@@ -302,6 +336,71 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 className="flex-1 py-3 rounded-2xl bg-[#003594] text-white text-xs font-bold disabled:opacity-40"
               >
                 {isVerifying ? 'Prüfen …' : 'Bestätigen'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* Angebot: dieses Geraet kuenftig per Face ID / Touch ID entsperren */
+          <div className="mt-7 space-y-5">
+            <div className="text-center space-y-2">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#003594] flex items-center justify-center mx-auto">
+                <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 8V6a2 2 0 0 1 2-2h2" />
+                  <path d="M16 4h2a2 2 0 0 1 2 2v2" />
+                  <path d="M20 16v2a2 2 0 0 1-2 2h-2" />
+                  <path d="M8 20H6a2 2 0 0 1-2-2v-2" />
+                  <path d="M9 10h.01" />
+                  <path d="M15 10h.01" />
+                  <path d="M9 15c.83.67 1.83 1 3 1s2.17-.33 3-1" />
+                </svg>
+              </div>
+              <div className="text-sm font-bold text-slate-900">Schneller entsperren</div>
+              <p className="text-[12px] text-slate-500 leading-relaxed">
+                Künftig mit Face ID oder Touch ID öffnen, statt den Vorstandscode
+                einzugeben. Gilt nur für dieses Gerät.
+              </p>
+            </div>
+
+            {biometricError && (
+              <div className="rounded-2xl bg-rose-50 border border-rose-200 p-3 text-[12px] leading-relaxed text-rose-800">
+                {biometricError}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <button
+                type="button"
+                disabled={isEnablingBiometric}
+                onClick={async () => {
+                  if (!pendingUser) return;
+                  setIsEnablingBiometric(true);
+                  setBiometricError(null);
+                  const res = await Biometric.enable({
+                    id: pendingUser.id,
+                    name: pendingUser.name,
+                    email: pendingUser.email,
+                  });
+                  setIsEnablingBiometric(false);
+                  if (res.ok) {
+                    onSuccess({ isAuthenticated: true, isCodeVerified: true, user: pendingUser });
+                  } else {
+                    setBiometricError(res.error || 'Einrichtung fehlgeschlagen.');
+                  }
+                }}
+                className="w-full py-3.5 rounded-2xl bg-[#003594] text-white text-xs font-bold disabled:opacity-50"
+              >
+                {isEnablingBiometric ? 'Wird eingerichtet …' : 'Face ID / Touch ID einrichten'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  pendingUser &&
+                  onSuccess({ isAuthenticated: true, isCodeVerified: true, user: pendingUser })
+                }
+                className="w-full py-3 rounded-2xl border border-slate-200 text-xs font-semibold text-slate-600 active:bg-slate-50"
+              >
+                Später
               </button>
             </div>
           </div>

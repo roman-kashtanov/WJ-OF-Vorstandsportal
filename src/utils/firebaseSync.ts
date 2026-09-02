@@ -655,15 +655,38 @@ export const FirebaseSync = {
     }
   },
 
-  /** Prueft, ob eine E-Mail in der Freigabeliste steht. */
-  async isEmailAllowed(email: string): Promise<boolean> {
+  /**
+   * Prueft die Freigabeliste in Firestore.
+   *
+   * 'allowed'      - E-Mail steht in der Liste
+   * 'bootstrap'    - Liste ist noch leer (allererste Einrichtung)
+   * 'not_allowed'  - Liste existiert, E-Mail steht nicht drin
+   * 'unavailable'  - Liste nicht lesbar (offline, Datenbank fehlt, Regeln)
+   *
+   * Wichtig ist die Unterscheidung zwischen 'unavailable' und 'bootstrap':
+   * Ein Lesefehler darf niemals zu einem Zugang fuehren, sonst kaeme jedes
+   * beliebige Google-Konto herein, sobald die Datenbank nicht antwortet.
+   */
+  async getAllowlistState(
+    email: string
+  ): Promise<'allowed' | 'bootstrap' | 'not_allowed' | 'unavailable'> {
     try {
       const snap = await getDocs(collection(db, 'allowlist'));
-      if (snap.empty) return true; // Erststart: noch niemand eingetragen
-      return snap.docs.some((d) => d.id.toLowerCase() === email.toLowerCase().trim());
-    } catch {
-      return false;
+      if (snap.empty) return 'bootstrap';
+      const wanted = email.toLowerCase().trim();
+      return snap.docs.some((d) => d.id.toLowerCase().trim() === wanted)
+        ? 'allowed'
+        : 'not_allowed';
+    } catch (err: any) {
+      console.warn('Freigabeliste nicht lesbar:', err?.message);
+      return 'unavailable';
     }
+  },
+
+  /** Prueft, ob eine E-Mail in der Freigabeliste steht. */
+  async isEmailAllowed(email: string): Promise<boolean> {
+    const state = await this.getAllowlistState(email);
+    return state === 'allowed' || state === 'bootstrap';
   },
 
   // Subscribe to Version & Force-Update Config
