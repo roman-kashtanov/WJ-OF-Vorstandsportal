@@ -574,7 +574,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
             return (
               <div
                 key={inv.id}
-                className="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-2xs hover:border-[#003594]/40 transition-all flex flex-col justify-between gap-3"
+                className="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-2xs hover:border-[#003594]/40 hover:shadow-sm transition-all duration-200 flex flex-col justify-between gap-3 wj-view-enter"
               >
                 {/* Kopf: Lieferant und Betrag - das Wichtigste zuerst */}
                 <button

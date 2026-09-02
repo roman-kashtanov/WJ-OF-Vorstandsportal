@@ -1140,7 +1140,7 @@ export default function App() {
       {/* Nur im Fehlerfall: Ohne Datenbankzugriff arbeitet die App still nur
           lokal weiter - das darf nicht unbemerkt bleiben. */}
       {syncBlocked && !isAuthModalOpen && (
-        <div className="bg-amber-500 text-amber-950 px-4 py-2.5 text-xs">
+        <div className="bg-amber-500 text-amber-950 px-4 py-2.5 text-xs animate-in fade-in slide-in-from-top">
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
             <span className="font-semibold">
               Keine Verbindung zur Vereinsdatenbank – Änderungen bleiben nur auf diesem Gerät.
@@ -1161,7 +1161,7 @@ export default function App() {
 
       {/* Global System Banner Notification */}
       {systemBanner && (
-        <div className={`px-4 py-3 shadow-md text-white ${
+        <div className={`px-4 py-3 shadow-md text-white animate-in fade-in slide-in-from-top ${
           systemBanner.type === 'error' ? 'bg-rose-700' : systemBanner.type === 'info' ? 'bg-[#003594]' : 'bg-emerald-700'
         }`}>
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 text-xs">
@@ -1183,7 +1183,12 @@ export default function App() {
       )}
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 pb-28 md:pb-8">
+      {/* key auf dem Tab: React baut den Bereich beim Wechsel neu auf, dadurch
+          laeuft die Einblend-Animation bei jedem Ansichtswechsel erneut. */}
+      <main
+        key={activeTab}
+        className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 pb-28 md:pb-8 wj-view-enter"
+      >
         
         {activeTab === 'dashboard' && (
           <DashboardView

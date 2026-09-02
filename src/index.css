@@ -37,3 +37,76 @@
 }
 
 
+
+/* ---------------------------------------------------------------------------
+ * Animationen
+ *
+ * Die App verwendet an vielen Stellen die Klassen "animate-in", "fade-in",
+ * "zoom-in-95" usw. Diese stammen urspruenglich aus dem Paket
+ * tailwindcss-animate, das jedoch nie installiert war - saemtliche
+ * Animationen liefen also ins Leere. Statt eine Abhaengigkeit aufzunehmen,
+ * sind die benoetigten Bausteine hier direkt definiert.
+ * ------------------------------------------------------------------------- */
+
+@keyframes wj-enter {
+  from {
+    opacity: var(--wj-enter-opacity, 1);
+    transform: translate3d(var(--wj-enter-x, 0), var(--wj-enter-y, 0), 0)
+      scale3d(var(--wj-enter-scale, 1), var(--wj-enter-scale, 1), 1);
+  }
+}
+
+@keyframes wj-pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@layer utilities {
+  .animate-in {
+    animation-name: wj-enter;
+    animation-duration: 180ms;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+    animation-fill-mode: both;
+  }
+
+  .fade-in { --wj-enter-opacity: 0; }
+  .zoom-in-95 { --wj-enter-scale: 0.95; }
+  .zoom-in-90 { --wj-enter-scale: 0.9; }
+  .slide-in-from-top { --wj-enter-y: -0.5rem; }
+  .slide-in-from-top-2 { --wj-enter-y: -0.5rem; }
+  .slide-in-from-bottom { --wj-enter-y: 0.5rem; }
+  .slide-in-from-bottom-2 { --wj-enter-y: 0.5rem; }
+  .slide-in-from-right { --wj-enter-x: 1rem; }
+  .slide-in-from-left { --wj-enter-x: -1rem; }
+
+  /* Sanftes Einblenden ganzer Bereiche beim Wechsel */
+  .wj-view-enter {
+    animation: wj-enter 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    --wj-enter-opacity: 0;
+    --wj-enter-y: 0.4rem;
+  }
+
+  /* Aufklappen der Kurzinfo in Listen */
+  .wj-expand {
+    animation: wj-enter 160ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    --wj-enter-opacity: 0;
+    --wj-enter-y: -0.25rem;
+  }
+
+  .wj-pulse-soft {
+    animation: wj-pulse-soft 2s ease-in-out infinite;
+  }
+}
+
+/* Wer im Betriebssystem reduzierte Bewegung eingestellt hat, bekommt keine.
+   Das ist keine Kosmetik: Bewegung kann Uebelkeit und Schwindel ausloesen. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

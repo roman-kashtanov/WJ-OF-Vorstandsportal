@@ -662,10 +662,10 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
               return (
                 <div
                   key={res.id}
-                  className={`rounded-xl border transition-all ${
+                  className={`rounded-xl border transition-all duration-200 wj-view-enter ${
                     isSelected
-                      ? 'bg-blue-50/40 border-[#003594]'
-                      : 'bg-white border-slate-200'
+                      ? 'bg-blue-50/40 border-[#003594] ring-1 ring-[#003594]/20'
+                      : 'bg-white border-slate-200 hover:border-slate-300'
                   }`}
                 >
                   {/* Kopfzeile: bewusst knapp - Nummer, Name, Status */}
@@ -680,7 +680,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                           {res.number}
                         </span>
                         {needsMyVote && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" title="Deine Stimme fehlt" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 wj-pulse-soft" title="Deine Stimme fehlt" />
                         )}
                       </div>
                       <div className="text-sm font-bold text-slate-900 truncate mt-0.5">
@@ -719,7 +719,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
 
                   {/* Kurzinfo - nur auf Wunsch */}
                   {isExpanded && (
-                    <div className="px-3 pb-3 pt-0 space-y-2.5 text-[11px] animate-in fade-in duration-150">
+                    <div className="px-3 pb-3 pt-0 space-y-2.5 text-[11px] wj-expand">
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-500">
                         <span>{formatDate(res.createdAt)}</span>
                         <span>·</span>
