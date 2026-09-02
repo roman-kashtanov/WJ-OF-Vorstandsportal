@@ -2,6 +2,7 @@ import {
   collection, 
   doc, 
   setDoc, 
+  getDoc,
   getDocs, 
   onSnapshot, 
   deleteDoc,
@@ -695,37 +696,46 @@ export const FirebaseSync = {
   },
 
   /**
-   * Prueft die Freigabeliste in Firestore.
+   * Prueft die Freigabe fuer genau eine E-Mail-Adresse.
    *
-   * 'allowed'      - E-Mail steht in der Liste
-   * 'bootstrap'    - Liste ist noch leer (allererste Einrichtung)
-   * 'not_allowed'  - Liste existiert, E-Mail steht nicht drin
-   * 'unavailable'  - Liste nicht lesbar (offline, Datenbank fehlt, Regeln)
+   * Bewusst eine Einzelabfrage statt des Auslesens der ganzen Sammlung:
+   * Das funktioniert auch dann, wenn das Auflisten per Regel verboten ist,
+   * und verraet keinem angemeldeten Konto die uebrigen Vorstandsadressen.
    *
-   * Wichtig ist die Unterscheidung zwischen 'unavailable' und 'bootstrap':
-   * Ein Lesefehler darf niemals zu einem Zugang fuehren, sonst kaeme jedes
-   * beliebige Google-Konto herein, sobald die Datenbank nicht antwortet.
+   * 'allowed'      - Freigabe vorhanden
+   * 'not_allowed'  - kein Eintrag fuer diese Adresse
+   * 'unavailable'  - Datenbank nicht erreichbar / Regeln verbieten die Abfrage
+   *                  (die Ursache steht in `reason`)
    */
   async getAllowlistState(
     email: string
-  ): Promise<'allowed' | 'bootstrap' | 'not_allowed' | 'unavailable'> {
+  ): Promise<{ state: 'allowed' | 'not_allowed' | 'unavailable'; reason?: string }> {
+    const clean = (email || '').toLowerCase().trim();
+    if (!clean) return { state: 'not_allowed' };
+
     try {
-      const snap = await getDocs(collection(db, 'allowlist'));
-      if (snap.empty) return 'bootstrap';
-      const wanted = email.toLowerCase().trim();
-      return snap.docs.some((d) => d.id.toLowerCase().trim() === wanted)
-        ? 'allowed'
-        : 'not_allowed';
+      const snap = await getDoc(doc(db, 'allowlist', clean));
+      return { state: snap.exists() ? 'allowed' : 'not_allowed' };
     } catch (err: any) {
-      console.warn('Freigabeliste nicht lesbar:', err?.message);
-      return 'unavailable';
+      // Den echten Grund weiterreichen - "permission-denied" bedeutet etwas
+      // voellig anderes als "unavailable" (offline) oder eine fehlende
+      // Datenbank, und nur so ist das Problem behebbar.
+      const code = err?.code || 'unknown';
+      const map: Record<string, string> = {
+        'permission-denied':
+          'Die Sicherheitsregeln verweigern den Zugriff. Sind die Regeln aus firestore.rules veröffentlicht?',
+        unavailable: 'Die Datenbank ist nicht erreichbar (Netzwerk oder Firewall).',
+        'not-found': 'Es existiert keine Firestore-Datenbank in diesem Projekt.',
+        'failed-precondition': 'Die Firestore-Datenbank ist noch nicht vollständig eingerichtet.',
+      };
+      return { state: 'unavailable', reason: map[code] || `Firestore meldet: ${code}` };
     }
   },
 
   /** Prueft, ob eine E-Mail in der Freigabeliste steht. */
   async isEmailAllowed(email: string): Promise<boolean> {
-    const state = await this.getAllowlistState(email);
-    return state === 'allowed' || state === 'bootstrap';
+    const { state } = await this.getAllowlistState(email);
+    return state === 'allowed';
   },
 
 

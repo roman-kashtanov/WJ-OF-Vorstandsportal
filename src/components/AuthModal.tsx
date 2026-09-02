@@ -105,20 +105,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     // Mitgliederliste: Letztere ist bei einem fremden Konto immer leer, weil
     // die Sicherheitsregeln das Lesen verhindern - daraus darf kein Zugang
     // entstehen.
-    const allowState = await FirebaseSync.getAllowlistState(email);
+    const allow = await FirebaseSync.getAllowlistState(email);
 
-    if (allowState === 'not_allowed') {
+    if (allow.state === 'not_allowed') {
       setError(
-        `Das Konto ${email} ist nicht freigegeben. Bitte wende dich an den Administrator des Vorstandsportals.`
+        `Das Konto ${email} ist nicht freigegeben.\n\nEin Administrator muss diese Adresse im Portal unter Einstellungen → Vorstand hinzufügen.`
       );
       await signOut(auth).catch(() => {});
       return;
     }
 
-    if (allowState === 'unavailable') {
-      setError(
-        'Die Freigabeliste konnte nicht geprüft werden. Besteht eine Internetverbindung, und ist die Datenbank eingerichtet?'
-      );
+    if (allow.state === 'unavailable') {
+      setError(allow.reason || 'Die Freigabe konnte nicht geprüft werden.');
       await signOut(auth).catch(() => {});
       return;
     }
@@ -140,6 +138,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       .slice(0, 2)
       .toUpperCase();
 
+    // Freigegeben, aber noch ohne Profil: Das ist der Normalfall bei der
+    // allerersten Einrichtung und bei frisch freigeschalteten Konten.
     proceedWith({
       id: `mem_${Date.now()}`,
       name,
@@ -147,8 +147,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       email,
       initials,
       avatarColor: 'bg-[#003594]',
-      // Nur beim allerersten Start (leere Freigabeliste) entsteht ein Admin
-      isAdmin: allowState === 'bootstrap',
+      // Der erste Zugang ueberhaupt richtet den Vorstand ein
+      isAdmin: members.length === 0,
       isPermanentStaff: false,
     } as BoardMember);
   };
@@ -263,7 +263,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             )}
 
             {error && (
-              <div className="rounded-2xl bg-rose-50 border border-rose-200 p-3 text-[12px] leading-relaxed text-rose-800">
+              <div className="rounded-2xl bg-rose-50 border border-rose-200 p-3 text-[12px] leading-relaxed text-rose-800 whitespace-pre-line">
                 {error}
               </div>
             )}

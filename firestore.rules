@@ -7,9 +7,10 @@ rules_version = '2';
 //   2. mit dieser E-Mail-Adresse in der Sammlung "allowlist" eingetragen ist.
 //
 // EINMALIGE EINRICHTUNG (Firebase Console -> Firestore Database -> Daten):
-//   Sammlung "allowlist" anlegen und ein Dokument mit der eigenen
-//   E-Mail-Adresse als Dokument-ID erstellen (Feld: aktiv = true).
-//   Danach koennen weitere Mitglieder bequem in der App gepflegt werden.
+//   Sammlung "allowlist" anlegen und ein Dokument erstellen, dessen
+//   Dokument-ID die eigene E-Mail-Adresse ist (klein geschrieben,
+//   z. B. "vorname.name@gmail.com"), Feld: aktiv = true.
+//   Alle weiteren Mitglieder pflegt danach die App selbst.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -20,10 +21,12 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/allowlist/$(request.auth.token.email));
     }
 
-    // Die Freigabeliste darf jeder Angemeldete lesen (fuer die Pruefung oben),
-    // aendern jedoch nur, wer selbst freigegeben ist.
     match /allowlist/{email} {
-      allow read: if request.auth != null;
+      // Jeder Angemeldete darf GENAU SEINEN EIGENEN Eintrag pruefen.
+      // Das Auflisten der gesamten Sammlung bleibt gesperrt, damit niemand
+      // die E-Mail-Adressen des Vorstands auslesen kann.
+      allow get: if request.auth != null;
+      allow list: if isBoardMember();
       allow write: if isBoardMember();
     }
 
