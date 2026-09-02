@@ -51,6 +51,11 @@ import { Biometric } from './utils/biometric';
 import { calculateVoteStats, formatDate } from './utils/formatters';
 import { CheckCircle2, AlertCircle, Mail, Sparkles, X, Bell, Settings, Video } from 'lucide-react';
 
+/** Stimme als Wort - fuer Rueckfragen und Meldungen. */
+function voteLabel(v: VoteType): string {
+  return v === 'yes' ? 'Ja' : v === 'no' ? 'Nein' : 'Enthaltung';
+}
+
 export default function App() {
   const [members, setMembers] = useState<BoardMember[]>(() => AppStorage.getMembers());
   const [currentMemberId, setCurrentMemberId] = useState<string>(() => AppStorage.getCurrentMemberId());
@@ -587,9 +592,31 @@ export default function App() {
     );
   };
 
+  /**
+   * Stimmabgabe des angemeldeten Mitglieds.
+   *
+   * Liegt bereits eine abweichende Stimme vor, wird zuerst nachgefragt: Die
+   * Abstimmungsknoepfe stehen in Listen dicht beieinander, ein versehentlicher
+   * Tipp wuerde sonst unbemerkt eine bestehende Stimme ueberschreiben.
+   */
   const handleVote = (resolutionId: string, voteType: VoteType, note?: string) => {
+    const existing = resolutions.find((r) => r.id === resolutionId)?.votes[currentMember.id];
+
+    if (existing && existing.vote !== voteType) {
+      setPendingVoteChange({ resolutionId, voteType, note, previous: existing.vote });
+      return;
+    }
+
     handleVoteForMember(resolutionId, currentMember, voteType, note);
   };
+
+  /** Offene Rueckfrage zum Aendern einer bereits abgegebenen Stimme. */
+  const [pendingVoteChange, setPendingVoteChange] = useState<{
+    resolutionId: string;
+    voteType: VoteType;
+    note?: string;
+    previous: VoteType;
+  } | null>(null);
 
   // Handler: Beschluss archivieren bzw. wieder in die laufende Liste holen
   const handleArchiveResolution = (resolutionId: string, archive: boolean) => {
@@ -1332,6 +1359,47 @@ export default function App() {
       </footer>
 
       {/* Modals */}
+      {/* Rueckfrage vor dem Aendern einer bereits abgegebenen Stimme */}
+      {pendingVoteChange && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-5">
+          <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl">
+            <h3 className="text-sm font-bold text-slate-900 text-center">Stimme ändern?</h3>
+            <p className="mt-2 text-[12px] text-slate-500 text-center leading-relaxed">
+              Du hast bereits mit{' '}
+              <strong className="text-slate-800">{voteLabel(pendingVoteChange.previous)}</strong>{' '}
+              gestimmt. Soll die Stimme auf{' '}
+              <strong className="text-slate-800">{voteLabel(pendingVoteChange.voteType)}</strong>{' '}
+              geändert werden?
+            </p>
+
+            <div className="mt-5 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setPendingVoteChange(null)}
+                className="flex-1 py-3 rounded-2xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleVoteForMember(
+                    pendingVoteChange.resolutionId,
+                    currentMember,
+                    pendingVoteChange.voteType,
+                    pendingVoteChange.note
+                  );
+                  setPendingVoteChange(null);
+                }}
+                className="flex-1 py-3 rounded-2xl bg-[#003594] hover:bg-[#00266B] text-white text-xs font-bold transition-colors cursor-pointer"
+              >
+                Ändern
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <BiometricLock
         isOpen={isDeviceLocked && !isAuthModalOpen}
         memberName={currentMember.name}
