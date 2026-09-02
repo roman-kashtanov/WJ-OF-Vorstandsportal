@@ -97,12 +97,17 @@ Nach dem Deploy können Geräte alte Stände im Zwischenspeicher halten:
 
 ## Stand der Einrichtung
 
-Erledigt: Firestore samt Regeln, Google-Anmeldung, Freigabeliste, Netlify mit
-GitHub verbunden, E-Mail über Gmail-SMTP, Push-Schlüssel, Signaturschlüssel
-für Abstimmungslinks.
+Vollständig eingerichtet: Firestore samt Regeln, Google-Anmeldung,
+Freigabeliste, Netlify mit GitHub verbunden, E-Mail über Gmail-SMTP,
+Push-Schlüssel, Signaturschlüssel und Dienstkonto für die Abstimmungslinks.
 
-**Offen:** `FIREBASE_SERVICE_ACCOUNT` in Netlify — ohne diesen Wert funktioniert
-das Abstimmen direkt aus der E-Mail nicht (die Links verweisen dann ins Portal).
+Der Dienstkonto-Zugang ist als „secret" hinterlegt (Bereiche: builds,
+functions, runtime) und nachweislich wirksam: Ein Abstimmungslink für einen
+nicht existierenden Beschluss antwortet mit „Nicht gefunden" statt „Noch nicht
+eingerichtet" — der Server erreicht die Datenbank also.
+
+Neue Mitglieder brauchen keinen Handgriff in der Firebase-Konsole mehr: Anlegen
+in den Einstellungen erteilt die Freigabe automatisch.
 
 ## E-Mail
 
