@@ -689,6 +689,30 @@ export const FirebaseSync = {
     return state === 'allowed' || state === 'bootstrap';
   },
 
+
+  /**
+   * Prueft konkret, ob Lesen UND Schreiben in Firestore moeglich ist.
+   * Nur so faellt auf, wenn die Sicherheitsregeln alles blockieren - sonst
+   * arbeitet die App still nur lokal weiter und nichts synchronisiert sich.
+   */
+  async checkConnection(): Promise<{ canRead: boolean; canWrite: boolean; error?: string }> {
+    let canRead = false;
+    try {
+      await getDocs(collection(db, 'members'));
+      canRead = true;
+    } catch (err: any) {
+      return { canRead: false, canWrite: false, error: err?.message || 'Lesen nicht moeglich' };
+    }
+
+    try {
+      const probe = doc(db, 'diagnostics', 'connectionCheck');
+      await setDoc(probe, { at: new Date().toISOString() }, { merge: true });
+      return { canRead, canWrite: true };
+    } catch (err: any) {
+      return { canRead, canWrite: false, error: err?.message || 'Schreiben nicht moeglich' };
+    }
+  },
+
   // Subscribe to Version & Force-Update Config
   subscribeVersionConfig(callback: (config: AppVersionConfig) => void) {
     try {

@@ -67,6 +67,8 @@ export default function App() {
   const [emailServerConfig, setEmailServerConfig] = useState<EmailServerConfig>(() => AppStorage.getEmailServerConfig());
   const [versionConfig, setVersionConfig] = useState<AppVersionConfig | null>(() => DEFAULT_VERSION_CONFIG);
   const [cloudStatus, setCloudStatus] = useState<FirebaseSyncStatus>(() => FirebaseSync.getStatus());
+  /** Nur gesetzt, wenn die Cloud-Synchronisation tatsaechlich blockiert ist. */
+  const [syncBlocked, setSyncBlocked] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<
     'members' | 'security' | 'notifications' | 'system' | 'teams'
   >('members');
@@ -94,6 +96,12 @@ export default function App() {
     };
 
     FirebaseSync.autoInitCloudIfEmpty(local);
+
+    // Aktiv pruefen statt darauf zu warten, dass ein Listener stillschweigend
+    // scheitert - sonst merkt niemand, dass nichts synchronisiert wird.
+    FirebaseSync.checkConnection().then((conn) => {
+      setSyncBlocked(!conn.canRead || !conn.canWrite);
+    });
 
     const firstSnapshot = {
       resolutions: true,
@@ -1071,6 +1079,28 @@ export default function App() {
         }}
         onSendTestNotification={handleSendTestNotification}
       />
+
+      {/* Nur im Fehlerfall: Ohne Datenbankzugriff arbeitet die App still nur
+          lokal weiter - das darf nicht unbemerkt bleiben. */}
+      {syncBlocked && !isAuthModalOpen && (
+        <div className="bg-amber-500 text-amber-950 px-4 py-2.5 text-xs">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+            <span className="font-semibold">
+              Keine Verbindung zur Vereinsdatenbank – Änderungen bleiben nur auf diesem Gerät.
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setSettingsInitialTab('system');
+                setIsSettingsOpen(true);
+              }}
+              className="shrink-0 px-3 py-1 bg-amber-950/10 hover:bg-amber-950/20 rounded-lg font-bold transition-colors"
+            >
+              Prüfen
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Global System Banner Notification */}
       {systemBanner && (

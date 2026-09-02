@@ -170,6 +170,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       detail: firebaseConfig.projectId,
     });
 
+    // Der wichtigste Test: Ohne Lese- UND Schreibrecht gibt es keine
+    // Echtzeit-Synchronisation zwischen den Geraeten.
+    const conn = await FirebaseSync.checkConnection();
+    results.push({
+      label: 'Datenbank lesen',
+      ok: conn.canRead,
+      detail: conn.canRead ? 'möglich' : conn.error || 'blockiert',
+    });
+    results.push({
+      label: 'Datenbank schreiben',
+      ok: conn.canWrite,
+      detail: conn.canWrite
+        ? 'möglich – Echtzeit-Sync aktiv'
+        : conn.error || 'blockiert (Freigabeliste prüfen)',
+    });
+
     try {
       const res = await fetch('/api/health');
       const data = await res.json();
