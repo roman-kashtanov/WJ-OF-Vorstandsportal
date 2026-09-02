@@ -59,6 +59,27 @@ export function normalizeSecuritySettings<T extends { passcodeHash?: string }>(s
 }
 
 /**
+ * Vorberechneter SHA-256-Hash des Standard-Loeschcodes.
+ * Der Code selbst steht bewusst nirgends im Quelltext.
+ */
+export const DEFAULT_DELETE_CODE_HASH =
+  '9260f889a03c3de5a806b802afdcca308513328a90c44988955d8dc13dd93504';
+
+/**
+ * Prueft den Code fuer das endgueltige Loeschen archivierter Beschluesse.
+ * Getrennt vom Vorstandscode, weil Loeschen nicht rueckgaengig zu machen ist.
+ */
+export async function verifyDeleteCode(
+  enteredCode: string,
+  settings: SecuritySettings
+): Promise<boolean> {
+  const clean = (enteredCode || '').trim();
+  if (!clean) return false;
+  const hash = await sha256(clean);
+  return hash === (settings.deleteCodeHash || DEFAULT_DELETE_CODE_HASH);
+}
+
+/**
  * Verifies if the entered code matches the stored security settings (hashed or legacy).
  */
 export async function verifyPasscode(

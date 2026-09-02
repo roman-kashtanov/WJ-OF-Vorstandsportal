@@ -6,7 +6,8 @@ import {
   Invoice, 
   ResolutionStatus,
   ResolutionAttachment,
-  BookkeepingStatus
+  BookkeepingStatus,
+  SecuritySettings
 } from '../types';
 import { 
   formatCurrency, 
@@ -47,10 +48,14 @@ import {
   ExternalLink,
   Eye,
   Filter,
+  Archive,
+  ArchiveRestore,
+  Trash2,
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
 import { FirebaseSync } from '../utils/firebaseSync';
+import { verifyDeleteCode } from '../utils/security';
 import { downloadAttachment, getAttachmentType, formatFileSize } from '../utils/fileHelpers';
 
 interface ResolutionsViewProps {
@@ -69,6 +74,9 @@ interface ResolutionsViewProps {
   onUpdateResolutionBookkeepingStatus?: (resolutionId: string, status: BookkeepingStatus) => void;
   onUpdateInvoiceBookkeepingStatus?: (invoiceId: string, status: BookkeepingStatus) => void;
   onOpenNewInvoiceWithResolution?: (resolutionId: string) => void;
+  onArchiveResolution?: (resolutionId: string, archive: boolean) => void;
+  onDeleteResolution?: (resolutionId: string) => void;
+  securitySettings?: SecuritySettings;
 }
 
 const MONTH_OPTIONS = [
@@ -103,6 +111,9 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
   onUpdateResolutionBookkeepingStatus,
   onUpdateInvoiceBookkeepingStatus,
   onOpenNewInvoiceWithResolution,
+  onArchiveResolution,
+  onDeleteResolution,
+  securitySettings,
 }) => {
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -114,6 +125,33 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
   const [voteNoteInput, setVoteNoteInput] = useState<string>('');
   const [showVoteNoteField, setShowVoteNoteField] = useState<boolean>(false);
   const detailFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Archiv: standardmaessig ausgeblendet, damit die laufende Liste kurz bleibt
+  const [showArchived, setShowArchived] = useState<boolean>(false);
+
+  // Loeschen: erst nach Eingabe des Admin-Codes
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [deleteCode, setDeleteCode] = useState('');
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const confirmDelete = async () => {
+    if (!deleteTargetId || !securitySettings) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    const ok = await verifyDeleteCode(deleteCode, securitySettings);
+    setIsDeleting(false);
+
+    if (!ok) {
+      setDeleteError('Code ungültig.');
+      setDeleteCode('');
+      return;
+    }
+
+    onDeleteResolution?.(deleteTargetId);
+    setDeleteTargetId(null);
+    setDeleteCode('');
+  };
 
   const query = searchQuery.toLowerCase().trim();
 
@@ -154,6 +192,9 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
   // Comprehensive Full-Text Search across all resolution attributes, text, comments, attachments, votes, dates & years
   const filteredResolutions = useMemo(() => {
     return resolutions.filter((res) => {
+      // 0. Archiv: nur zeigen, wenn ausdruecklich gewuenscht
+      if (!!res.isArchived !== showArchived) return false;
+
       // 1. Status Filter
       if (filterStatus !== 'all' && res.status !== filterStatus) return false;
 
@@ -276,7 +317,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
 
       return false;
     });
-  }, [resolutions, filterStatus, filterYear, filterMonth, filterBookkeeping, query, members, invoices]);
+  }, [resolutions, filterStatus, filterYear, filterMonth, filterBookkeeping, query, members, invoices, showArchived]);
 
   // Selected resolution (defaults to first if selectedResolutionId is set, or active one)
   const activeResolution = resolutions.find((r) => r.id === selectedResolutionId) || (filteredResolutions.length > 0 ? filteredResolutions[0] : null);
@@ -345,8 +386,24 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
         </button>
       </div>
 
-      {/* Expandable Filter Toggle */}
-      <div className="flex justify-end">
+      {/* Archiv-Umschalter + Filter */}
+      <div className="flex justify-end items-center gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setShowArchived(!showArchived);
+            onSelectResolution(null);
+          }}
+          className={`flex items-center space-x-2 px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer ${
+            showArchived
+              ? 'bg-slate-800 text-white border border-slate-800'
+              : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+          }`}
+        >
+          <Archive className="w-4 h-4" strokeWidth={1.75} />
+          <span>{showArchived ? 'Archiv' : 'Archiv'}</span>
+        </button>
+
         <button
           type="button"
           onClick={() => setIsFiltersExpanded(!isFiltersExpanded)}
@@ -1406,6 +1463,53 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                   </button>
                 </form>
               </div>
+
+              {/* Archivieren / endgueltig loeschen */}
+              <div className="pt-4 border-t border-slate-200 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    onArchiveResolution?.(activeResolution.id, !activeResolution.isArchived)
+                  }
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  {activeResolution.isArchived ? (
+                    <>
+                      <ArchiveRestore className="w-3.5 h-3.5" strokeWidth={1.75} />
+                      <span>Aus dem Archiv holen</span>
+                    </>
+                  ) : (
+                    <>
+                      <Archive className="w-3.5 h-3.5" strokeWidth={1.75} />
+                      <span>Archivieren</span>
+                    </>
+                  )}
+                </button>
+
+                {/* Loeschen erst nach dem Archivieren - so kann nichts
+                    versehentlich aus der laufenden Liste verschwinden. */}
+                {activeResolution.isArchived && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeleteTargetId(activeResolution.id);
+                      setDeleteCode('');
+                      setDeleteError(null);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-rose-200 text-xs font-semibold text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    <span>Endgültig löschen</span>
+                  </button>
+                )}
+
+                {activeResolution.isArchived && activeResolution.archivedAt && (
+                  <span className="text-[11px] text-slate-400">
+                    Archiviert am {formatDate(activeResolution.archivedAt)}
+                    {activeResolution.archivedBy ? ` von ${activeResolution.archivedBy}` : ''}
+                  </span>
+                )}
+              </div>
             </div>
           ) : (
             <div className="bg-white p-12 text-center rounded-2xl border border-slate-200 text-slate-500 text-sm">
@@ -1414,6 +1518,69 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* Endgueltiges Loeschen - nur mit Admin-Code */}
+      {deleteTargetId && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-5">
+          <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl">
+            <div className="w-11 h-11 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-5 h-5" strokeWidth={1.75} />
+            </div>
+
+            <h3 className="mt-4 text-sm font-bold text-slate-900 text-center">
+              Beschluss endgültig löschen
+            </h3>
+            <p className="mt-1.5 text-[12px] text-slate-500 text-center leading-relaxed">
+              Der Beschluss wird mit allen Stimmen, Kommentaren und Anhängen
+              unwiderruflich entfernt. Zur Bestätigung den Admin-Code eingeben.
+            </p>
+
+            <input
+              type="password"
+              inputMode="numeric"
+              autoFocus
+              value={deleteCode}
+              onChange={(e) => {
+                setDeleteCode(e.target.value);
+                setDeleteError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void confirmDelete();
+              }}
+              placeholder="Admin-Code"
+              className="mt-4 w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-center text-base sm:text-sm tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-rose-500"
+            />
+
+            {deleteError && (
+              <div className="mt-2 text-center text-[12px] font-semibold text-rose-600">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="mt-5 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteTargetId(null);
+                  setDeleteCode('');
+                  setDeleteError(null);
+                }}
+                className="flex-1 py-3 rounded-2xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmDelete()}
+                disabled={!deleteCode.trim() || isDeleting}
+                className="flex-1 py-3 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold disabled:opacity-40 transition-colors cursor-pointer"
+              >
+                {isDeleting ? 'Prüfe …' : 'Löschen'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

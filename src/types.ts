@@ -37,6 +37,11 @@ export interface SecuritySettings {
   exemptEmails: string[]; // Email addresses that bypass code
   adminMemberId?: string; // Primary system administrator ID
   adminEmail?: string; // Primary system administrator email
+  /**
+   * SHA-256 des Codes zum endgueltigen Loeschen archivierter Beschluesse.
+   * Bewusst getrennt vom Vorstandscode: Loeschen ist unwiderruflich.
+   */
+  deleteCodeHash?: string;
   lastUpdated: string;
 }
 
@@ -173,6 +178,10 @@ export interface Resolution {
   attachments?: ResolutionAttachment[];
   bookkeepingStatus?: BookkeepingStatus; // 'bearbeitet' | 'nicht_bearbeitet' | 'nicht_notwendig'
   bookkeepingNote?: string;
+  /** Archiviert: aus der laufenden Liste ausgeblendet, aber vollstaendig erhalten. */
+  isArchived?: boolean;
+  archivedAt?: string;
+  archivedBy?: string;
   createdAt: string;
   passedAt?: string;
 }

@@ -591,6 +591,53 @@ export default function App() {
     handleVoteForMember(resolutionId, currentMember, voteType, note);
   };
 
+  // Handler: Beschluss archivieren bzw. wieder in die laufende Liste holen
+  const handleArchiveResolution = (resolutionId: string, archive: boolean) => {
+    setResolutions((prev) =>
+      prev.map((res) => {
+        if (res.id !== resolutionId) return res;
+        const updated: Resolution = {
+          ...res,
+          isArchived: archive,
+          archivedAt: archive ? new Date().toISOString() : undefined,
+          archivedBy: archive ? `${currentMember.name} (${currentMember.role})` : undefined,
+        };
+        FirebaseSync.saveResolution(updated).catch(() => {});
+        return updated;
+      })
+    );
+
+    if (archive && selectedResolutionId === resolutionId) {
+      setSelectedResolutionId(null);
+    }
+
+    setSystemBanner({
+      type: 'success',
+      title: archive ? 'Beschluss archiviert' : 'Beschluss wiederhergestellt',
+      message: archive
+        ? 'Er ist weiterhin über den Archiv-Filter auffindbar.'
+        : 'Er erscheint wieder in der laufenden Liste.',
+    });
+    setTimeout(() => setSystemBanner(null), 4000);
+  };
+
+  // Handler: Beschluss endgueltig loeschen (nur archivierte, nur mit Code)
+  const handleDeleteResolution = (resolutionId: string) => {
+    const target = resolutions.find((r) => r.id === resolutionId);
+    setResolutions((prev) => prev.filter((r) => r.id !== resolutionId));
+    FirebaseSync.deleteResolution(resolutionId).catch(() => {});
+    if (selectedResolutionId === resolutionId) setSelectedResolutionId(null);
+
+    setSystemBanner({
+      type: 'success',
+      title: 'Beschluss gelöscht',
+      message: target
+        ? `${target.number} wurde unwiderruflich entfernt.`
+        : 'Der Beschluss wurde unwiderruflich entfernt.',
+    });
+    setTimeout(() => setSystemBanner(null), 5000);
+  };
+
   // Handler: Add comment to resolution
   const handleAddComment = (resolutionId: string, content: string) => {
     const newComment = {
@@ -1174,6 +1221,9 @@ export default function App() {
             onSelectInvoice={(invId) => setSelectedInvoiceId(invId)}
             onOpenEmailVoteModal={handleOpenEmailVoteModal}
             onAddAttachment={handleAddAttachment}
+            onArchiveResolution={handleArchiveResolution}
+            onDeleteResolution={handleDeleteResolution}
+            securitySettings={securitySettings}
           />
         )}
 
