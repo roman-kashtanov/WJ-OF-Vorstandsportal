@@ -32,42 +32,31 @@ Grund, warum die Echtzeit-Synchronisation nicht funktioniert hat.
 Alle weiteren Vorstandsmitglieder werden danach bequem in der App unter
 *Portal → Vorstand* gepflegt; die Freigabeliste wird automatisch mitgeführt.
 
-### 1.2 Resend (E-Mail-Versand)
+### 1.2 E-Mail-Versand ueber das Vereins-Postfach
 
-Zu verifizieren ist die Vereinsdomain **`wj-offenbach.de`** (dort laeuft die
-Website). Das DNS liegt bei **IONOS** - dort werden die Eintraege hinterlegt.
+Die Mails aus dem Portal gehen ueber das vorhandene Gmail-Konto des Vereins
+raus. Damit ist **keine Domain-Verifizierung und kein DNS-Eintrag noetig** -
+Absender ist schlicht `offenbachwj@gmail.com`.
 
-> **Achtung, bestehende Vereins-Mails nicht zerstoeren.**
-> Die Domain hat bereits einen SPF-Eintrag, der den IONOS-Mailserver und
-> `vereinonline.org` (Mitgliederverwaltung) abdeckt:
-> `v=spf1 mx a:vereinonline.org include:vereinonline.org include:_spf.perfora.net
-> include:_spf-eu.ionos.com include:mx.kundenserver.de include:_spf.kundenserver.de ~all`
->
-> Eine Domain darf nur EINEN SPF-Eintrag haben. Ein zweiter macht SPF ungueltig -
-> dann landen auch die bestehenden Mitglieder-Mails im Spam.
+**App-Passwort erzeugen** (das normale Google-Passwort funktioniert nicht):
 
-**Empfohlener Weg: Subdomain verwenden.**
-Bei Resend unter *Domains -> Add Domain* nicht `wj-offenbach.de` eintragen,
-sondern **`send.wj-offenbach.de`**. Vorteile:
+1. Im WJ-Google-Konto die **Bestaetigung in zwei Schritten** aktivieren
+   (https://myaccount.google.com/security) - ohne sie gibt es keine App-Passwoerter.
+2. https://myaccount.google.com/apppasswords oeffnen, Name z. B. "Vorstandsportal",
+   erzeugen. Es erscheint ein 16-stelliges Passwort.
+3. Dieses Passwort in Netlify als `SMTP_PASSWORD` hinterlegen (siehe 1.3).
 
-- Die Eintraege betreffen ausschliesslich die Subdomain; der bestehende
-  Mailbetrieb des Vereins kann dadurch nicht kaputtgehen.
-- Resend liefert DKIM- und SPF-Eintraege, die bei IONOS unter
-  *Domains -> wj-offenbach.de -> DNS* als neue Eintraege angelegt werden.
+Grenzen: Gmail erlaubt rund 500 Empfaenger pro Tag - fuer einen Vorstand
+mehr als ausreichend. Als Absender akzeptiert Gmail nur das angemeldete
+Konto; ein abweichender Wert wuerde ueberschrieben.
 
-Absender ist danach z. B. `vorstand@send.wj-offenbach.de`
-(in Netlify als `RESEND_FROM` hinterlegen).
-
-**Alternative: Hauptdomain `wj-offenbach.de`.**
-Sieht mit `vorstand@wj-offenbach.de` schoener aus, erfordert aber, dass
-`include:_spf.resend.com` in den **bestehenden** SPF-Eintrag hineingeschrieben
-wird (vor dem abschliessenden `~all`) - kein zweiter Eintrag. Wer die
-IONOS-DNS-Verwaltung nicht sicher bedient, sollte den Subdomain-Weg nehmen.
-
-**Bis zur Verifizierung** funktioniert ausschliesslich `onboarding@resend.dev`
-als Absender, und Resend nimmt als Empfaenger nur die beim Konto registrierte
-Adresse an. Ein echter Rundversand an den Vorstand ist erst nach der
-Verifizierung moeglich.
+**Alternative Resend** (nur relevant, falls spaeter `vorstand@wj-offenbach.de`
+als Absender gewuenscht ist): Dafuer muesste eine Domain bei Resend verifiziert
+werden. Zu beachten waere dann, dass `wj-offenbach.de` bereits einen
+SPF-Eintrag fuer IONOS und vereinonline.org besitzt - ein zweiter SPF-Eintrag
+wuerde den bestehenden Vereins-Mailversand beschaedigen. Sauber waere in dem
+Fall eine Subdomain wie `send.wj-offenbach.de`. Solange SMTP konfiguriert ist,
+wird Resend nicht verwendet.
 
 ### 1.3 Netlify
 
@@ -75,8 +64,11 @@ Verifizierung moeglich.
 
 | Variable | Wert |
 |---|---|
-| `RESEND_API_KEY` | der neue Resend-Schlüssel (`re_…`) |
-| `RESEND_FROM` | `WJ Offenbach Vorstand <onboarding@resend.dev>` – später die eigene Domain |
+| `SMTP_HOST` | `smtp.gmail.com` |
+| `SMTP_PORT` | `465` |
+| `SMTP_USER` | `offenbachwj@gmail.com` |
+| `SMTP_PASSWORD` | das 16-stellige App-Passwort aus Schritt 1.2 |
+| `MAIL_FROM` | `WJ Offenbach Vorstand <offenbachwj@gmail.com>` |
 | `VAPID_PUBLIC_KEY` | `BARgUjgWCDkONgCMjD3qFOshYrFt_8oD61_sdcnX2ZbdwbM83uH0p_jbliHqRwXO2vY8Pd77FVOy26Ik4J3Xdy0` |
 | `VAPID_PRIVATE_KEY` | *(privater Schlüssel – wird separat übergeben, gehört nicht ins Repository)* |
 | `VAPID_SUBJECT` | `mailto:vorstand@wj-offenbach.de` |
