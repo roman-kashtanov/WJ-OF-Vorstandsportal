@@ -58,7 +58,34 @@ wuerde den bestehenden Vereins-Mailversand beschaedigen. Sauber waere in dem
 Fall eine Subdomain wie `send.wj-offenbach.de`. Solange SMTP konfiguriert ist,
 wird Resend nicht verwendet.
 
-### 1.3 Netlify
+### 1.3 Abstimmen direkt aus der E-Mail (ohne Anmeldung)
+
+Damit Vorstandsmitglieder in der E-Mail auf "Ja" tippen koennen, ohne die App
+zu oeffnen, muss die Stimme **serverseitig** in die Datenbank geschrieben
+werden - der Browser hat ohne Anmeldung keine Schreibrechte. Dafuer braucht
+der Server einen eigenen Datenbankzugang:
+
+1. Firebase Console -> **Projekteinstellungen -> Dienstkonten**
+2. **Neuen privaten Schluessel generieren** -> es wird eine JSON-Datei geladen
+3. Deren **kompletten Inhalt** in Netlify als `FIREBASE_SERVICE_ACCOUNT`
+   hinterlegen (eine Zeile, das gesamte JSON)
+
+Der Schluessel zum Signieren der Links (`VOTE_LINK_SECRET`) ist bereits gesetzt.
+
+**Wie es funktioniert:** Jede E-Mail enthaelt drei Links (Ja / Nein /
+Enthaltung), die kryptografisch signiert sind. Ein Klick verbucht die Stimme
+und zeigt eine Bestaetigungsseite. Die Links sind 21 Tage gueltig und lassen
+sich nur einmal verwenden.
+
+**Bewusste Einschraenkung:** Wer den Link besitzt, kann damit abstimmen - das
+liegt in der Natur einer Abstimmung ohne Anmeldung. Wird eine solche E-Mail
+weitergeleitet, kann der Empfaenger die Stimme abgeben. Abgefedert wird das
+durch die begrenzte Gueltigkeit, die Einmalverwendung und die Protokollierung
+("Stimmabgabe ueber den Link in der E-Mail"). Eine Korrektur ist jederzeit im
+Portal moeglich. Ohne `FIREBASE_SERVICE_ACCOUNT` funktionieren die Links nicht;
+die E-Mail verweist dann wie bisher ins Portal.
+
+### 1.4 Netlify
 
 **Site configuration → Environment variables** (Werte ohne Anführungszeichen):
 

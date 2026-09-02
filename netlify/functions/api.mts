@@ -14,7 +14,21 @@ export default async (req: Request, _context: Context): Promise<Response> => {
     payload = await req.json().catch(() => ({}));
   }
 
-  const result = await handleApiRequest(req.method, path, payload);
+  const result = await handleApiRequest(
+    req.method,
+    path,
+    payload,
+    url.searchParams,
+    url.origin
+  );
+
+  // Abstimmungslinks liefern eine Seite zum Ansehen, nicht JSON
+  if (result.html) {
+    return new Response(result.html, {
+      status: result.status,
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    });
+  }
 
   return new Response(JSON.stringify(result.body), {
     status: result.status,

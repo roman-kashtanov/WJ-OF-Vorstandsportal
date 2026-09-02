@@ -1,4 +1,10 @@
 import { BoardMember, Resolution, InvoiceRequest, VoteType } from '../types';
+
+export interface VoteLinks {
+  yes: string;
+  no: string;
+  abstain: string;
+}
 import { formatCurrency, formatDate } from './formatters';
 
 export const EmailService = {
@@ -35,11 +41,19 @@ export const EmailService = {
   /**
    * Generates formatted HTML email for a resolution vote request
    */
-  generateResolutionEmailHtml(resolution: Resolution, member: BoardMember, baseUrl?: string): string {
+  generateResolutionEmailHtml(
+    resolution: Resolution,
+    member: BoardMember,
+    baseUrl?: string,
+    links?: VoteLinks
+  ): string {
     const base = baseUrl || this.getBaseUrl();
-    const yesUrl = this.buildVoteUrl(resolution.id, member.id, 'yes', base);
-    const noUrl = this.buildVoteUrl(resolution.id, member.id, 'no', base);
-    const abstainUrl = this.buildVoteUrl(resolution.id, member.id, 'abstain', base);
+    // Bevorzugt die serverseitig signierten Einmal-Links: damit kann direkt
+    // aus der E-Mail abgestimmt werden, ohne sich anzumelden.
+    const yesUrl = links?.yes || this.buildVoteUrl(resolution.id, member.id, 'yes', base);
+    const noUrl = links?.no || this.buildVoteUrl(resolution.id, member.id, 'no', base);
+    const abstainUrl =
+      links?.abstain || this.buildVoteUrl(resolution.id, member.id, 'abstain', base);
     const detailUrl = `${base}?action=view_resolution&res=${encodeURIComponent(resolution.id)}`;
 
     return `<!DOCTYPE html>
@@ -177,11 +191,17 @@ export const EmailService = {
   /**
    * Generates plain text email for resolution vote
    */
-  generateResolutionEmailText(resolution: Resolution, member: BoardMember, baseUrl?: string): string {
+  generateResolutionEmailText(
+    resolution: Resolution,
+    member: BoardMember,
+    baseUrl?: string,
+    links?: VoteLinks
+  ): string {
     const base = baseUrl || this.getBaseUrl();
-    const yesUrl = this.buildVoteUrl(resolution.id, member.id, 'yes', base);
-    const noUrl = this.buildVoteUrl(resolution.id, member.id, 'no', base);
-    const abstainUrl = this.buildVoteUrl(resolution.id, member.id, 'abstain', base);
+    const yesUrl = links?.yes || this.buildVoteUrl(resolution.id, member.id, 'yes', base);
+    const noUrl = links?.no || this.buildVoteUrl(resolution.id, member.id, 'no', base);
+    const abstainUrl =
+      links?.abstain || this.buildVoteUrl(resolution.id, member.id, 'abstain', base);
     const detailUrl = `${base}?action=view_resolution&res=${encodeURIComponent(resolution.id)}`;
 
     return `WIRTSCHAFTSJUNIOREN OFFENBACH AM MAIN E.V.
@@ -752,11 +772,12 @@ export async function sendResolutionVoteMails(
   for (const member of recipients) {
     if (!member.email) continue;
     try {
+      const links = await fetchVoteLinks(resolution.id, member.id);
       await sendMail({
         to: [member.email],
         subject: `[Umlaufbeschluss ${resolution.number}] ${resolution.title}`,
-        html: EmailService.generateResolutionEmailHtml(resolution, member),
-        text: EmailService.generateResolutionEmailText(resolution, member),
+        html: EmailService.generateResolutionEmailHtml(resolution, member, undefined, links),
+        text: EmailService.generateResolutionEmailText(resolution, member, undefined, links),
       });
       result.sent++;
     } catch (err: any) {
@@ -767,4 +788,29 @@ export async function sendResolutionVoteMails(
   }
 
   return result;
+}
+
+/**
+ * Holt die serverseitig signierten Einmal-Links fuer die Stimmabgabe.
+ *
+ * Scheitert das (z.B. weil der Server-Schluessel fehlt), wird ohne Links
+ * weitergemacht: Die E-Mail enthaelt dann die bisherigen Links, die im Portal
+ * nach der Anmeldung greifen. Lieber eine E-Mail mit Umweg als gar keine.
+ */
+export async function fetchVoteLinks(
+  resolutionId: string,
+  memberId: string
+): Promise<VoteLinks | undefined> {
+  try {
+    const res = await fetch('/api/vote/links', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resolutionId, memberId }),
+    });
+    if (!res.ok) return undefined;
+    const data = await res.json();
+    return data?.yes ? (data as VoteLinks) : undefined;
+  } catch {
+    return undefined;
+  }
 }

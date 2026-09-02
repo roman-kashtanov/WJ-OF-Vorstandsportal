@@ -16,7 +16,14 @@ async function startServer() {
   app.use(express.json({ limit: '25mb' }));
 
   app.all(/^\/api\/.*/, async (req, res) => {
-    const result = await handleApiRequest(req.method, req.path, req.body);
+    const origin = `${req.protocol}://${req.get('host')}`;
+    const query = new URLSearchParams(req.query as Record<string, string>);
+    const result = await handleApiRequest(req.method, req.path, req.body, query, origin);
+
+    if (result.html) {
+      res.status(result.status).type('html').send(result.html);
+      return;
+    }
     res.status(result.status).json(result.body);
   });
 
