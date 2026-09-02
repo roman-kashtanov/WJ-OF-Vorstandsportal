@@ -574,120 +574,80 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
             return (
               <div
                 key={inv.id}
-                onClick={() => onSelectInvoice(inv.id)}
-                className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs hover:shadow-md hover:border-[#003594]/40 transition-all cursor-pointer space-y-3 relative group flex flex-col justify-between"
+                className="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-2xs hover:border-[#003594]/40 transition-all flex flex-col justify-between gap-3"
               >
-                {/* Card Header: Vendor, Amount, Date */}
-                <div className="space-y-1.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center flex-wrap gap-1.5">
-                        <span className="font-black text-slate-900 text-sm sm:text-base truncate block">
-                          {inv.vendor}
-                        </span>
-
-                        {folder && (
-                          <span className="px-2 py-0.5 bg-amber-100 text-amber-800 font-bold rounded-md text-[10px] flex items-center space-x-1 shrink-0">
-                            <Folder className="w-3 h-3 text-amber-600" />
-                            <span>{folder.name}</span>
-                          </span>
-                        )}
-
-                        {inv.hasResolution && linkedRes && (
-                          <span className="px-2 py-0.5 bg-indigo-100 text-indigo-800 font-bold rounded-md text-[10px] flex items-center space-x-1 shrink-0">
-                            <FileText className="w-3 h-3 text-indigo-600" />
-                            <span>{linkedRes.number}</span>
-                          </span>
-                        )}
-                      </div>
-
-                      <p className="text-xs text-slate-600 truncate mt-0.5">
-                        {inv.title}
-                      </p>
-                    </div>
-
-                    <div className="text-right shrink-0">
-                      <span className="font-black text-slate-900 text-base sm:text-lg text-[#003594] block">
-                        {formatCurrency(inv.amount)}
-                      </span>
-                      <span className="text-[11px] text-slate-400 block font-medium">
-                        {formatDate(inv.date)}
-                      </span>
-                    </div>
+                {/* Kopf: Lieferant und Betrag - das Wichtigste zuerst */}
+                <button
+                  type="button"
+                  onClick={() => onSelectInvoice(inv.id)}
+                  className="text-left cursor-pointer space-y-1"
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="font-bold text-slate-900 text-sm truncate">
+                      {inv.vendor}
+                    </span>
+                    <span className="font-bold text-[#003594] text-sm shrink-0">
+                      {formatCurrency(inv.amount)}
+                    </span>
                   </div>
 
-                  {inv.notes && (
-                    <p className="text-[11px] text-slate-500 bg-slate-50 p-2 rounded-lg truncate">
-                      {inv.notes}
-                    </p>
-                  )}
-                </div>
+                  <div className="flex items-baseline justify-between gap-2 text-[11px]">
+                    <span className="text-slate-500 truncate">{inv.title}</span>
+                    <span className="text-slate-400 shrink-0">{formatDate(inv.date)}</span>
+                  </div>
 
-                {/* Card Footer: 3-Way Bookkeeping Quick Switcher */}
-                <div 
-                  className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 text-xs"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {/* Folder Selector Dropdown */}
+                  {/* Zuordnung nur zeigen, wenn es eine gibt */}
+                  {(folder || linkedRes) && (
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      {folder && (
+                        <span className="text-[10px] text-amber-700 font-semibold">
+                          {folder.name}
+                        </span>
+                      )}
+                      {folder && linkedRes && <span className="text-[10px] text-slate-300">·</span>}
+                      {linkedRes && (
+                        <span className="text-[10px] text-indigo-700 font-semibold font-mono">
+                          {linkedRes.number}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </button>
+
+                {/* Fuss: Buchhaltung als ein Auswahlmenue statt dreier Knoepfe */}
+                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  <select
+                    value={currentBk}
+                    onChange={(e) =>
+                      onUpdateInvoiceBookkeepingStatus?.(inv.id, e.target.value as BookkeepingStatus)
+                    }
+                    className={`flex-1 min-w-0 text-[11px] font-semibold rounded-lg px-2 py-1.5 border cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#003594] ${
+                      currentBk === 'bearbeitet'
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                        : currentBk === 'nicht_notwendig'
+                        ? 'bg-slate-100 text-slate-600 border-slate-200'
+                        : 'bg-amber-50 text-amber-800 border-amber-200'
+                    }`}
+                  >
+                    <option value="nicht_bearbeitet">Buchhaltung offen</option>
+                    <option value="bearbeitet">Buchhaltung erledigt</option>
+                    <option value="nicht_notwendig">Nicht nötig</option>
+                  </select>
+
                   {onUpdateInvoiceFolder && !inv.hasResolution && (
                     <select
                       value={inv.folderId || ''}
                       onChange={(e) => onUpdateInvoiceFolder(inv.id, e.target.value || undefined)}
-                      className="text-[11px] font-semibold bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#003594] max-w-[130px] truncate cursor-pointer"
+                      className="flex-1 min-w-0 text-[11px] font-semibold bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#003594] cursor-pointer"
                     >
-                      <option value="">📁 Kein Ordner</option>
+                      <option value="">Kein Ordner</option>
                       {folders.map((f) => (
                         <option key={f.id} value={f.id}>
-                          📁 {f.name}
+                          {f.name}
                         </option>
                       ))}
                     </select>
                   )}
-
-                  {/* 3 Status Toggle Buttons */}
-                  <div className="flex items-center space-x-1 ml-auto">
-                    <button
-                      type="button"
-                      onClick={() => onUpdateInvoiceBookkeepingStatus?.(inv.id, 'bearbeitet')}
-                      className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center space-x-1 ${
-                        currentBk === 'bearbeitet'
-                          ? 'bg-emerald-600 text-white shadow-2xs'
-                          : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700'
-                      }`}
-                      title="Als in Buchhaltung erfasst markieren"
-                    >
-                      <CheckCircle2 className="w-3 h-3" />
-                      <span>Bearbeitet</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => onUpdateInvoiceBookkeepingStatus?.(inv.id, 'nicht_bearbeitet')}
-                      className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center space-x-1 ${
-                        currentBk === 'nicht_bearbeitet'
-                          ? 'bg-amber-600 text-white shadow-2xs'
-                          : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-amber-50 hover:text-amber-700'
-                      }`}
-                      title="Als noch offen markieren"
-                    >
-                      <Clock className="w-3 h-3" />
-                      <span>Offen</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => onUpdateInvoiceBookkeepingStatus?.(inv.id, 'nicht_notwendig')}
-                      className={`px-1.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center space-x-0.5 ${
-                        currentBk === 'nicht_notwendig'
-                          ? 'bg-slate-700 text-white shadow-2xs'
-                          : 'bg-slate-50 border border-slate-200 text-slate-400 hover:bg-slate-100 hover:text-slate-600'
-                      }`}
-                      title="Keine Buchhaltung erforderlich"
-                    >
-                      <MinusCircle className="w-3 h-3" />
-                      <span>Nicht nötig</span>
-                    </button>
-                  </div>
                 </div>
               </div>
             );

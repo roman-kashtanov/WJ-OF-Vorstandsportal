@@ -129,6 +129,9 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
   // Archiv: standardmaessig ausgeblendet, damit die laufende Liste kurz bleibt
   const [showArchived, setShowArchived] = useState<boolean>(false);
 
+  /** Welcher Listeneintrag zeigt gerade seine Kurzinfo? */
+  const [expandedListId, setExpandedListId] = useState<string | null>(null);
+
   // Loeschen: erst nach Eingabe des Admin-Codes
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [deleteCode, setDeleteCode] = useState('');
@@ -320,7 +323,17 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
   }, [resolutions, filterStatus, filterYear, filterMonth, filterBookkeeping, query, members, invoices, showArchived]);
 
   // Selected resolution (defaults to first if selectedResolutionId is set, or active one)
-  const activeResolution = resolutions.find((r) => r.id === selectedResolutionId) || (filteredResolutions.length > 0 ? filteredResolutions[0] : null);
+  /**
+   * Wurde ein Beschluss bewusst angetippt? Nur dann wechselt das Smartphone in
+   * die Detailansicht. Die Ersatzauswahl unten ist rein fuer breite Bildschirme
+   * gedacht, damit die rechte Spalte nicht leer bleibt - sie darf auf dem Handy
+   * nicht dazu fuehren, dass man nie zur Liste zurueckkommt.
+   */
+  const hasExplicitSelection = !!resolutions.find((r) => r.id === selectedResolutionId);
+
+  const activeResolution =
+    resolutions.find((r) => r.id === selectedResolutionId) ||
+    (filteredResolutions.length > 0 ? filteredResolutions[0] : null);
 
   const handleVoteClick = (voteType: VoteType) => {
     if (!activeResolution) return;
@@ -608,7 +621,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
         {/* Linke Spalte: Liste. Auf dem Smartphone wird sie ausgeblendet,
             sobald ein Beschluss geoeffnet ist - sonst stuenden Liste und
             Detailansicht untereinander. */}
-        <div className={`lg:col-span-5 space-y-3 ${activeResolution ? 'hidden lg:block' : ''}`}>
+        <div className={`lg:col-span-5 space-y-3 ${hasExplicitSelection ? 'hidden lg:block' : ''}`}>
           <div className="flex items-center justify-between">
             <p className="text-[11px] uppercase font-bold text-slate-400 tracking-wider">
               Beschlüsse ({filteredResolutions.length})
@@ -636,171 +649,154 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
           ) : (
             filteredResolutions.map((res) => {
               const isSelected = activeResolution?.id === res.id;
+              const isExpanded = expandedListId === res.id;
               const stats = calculateVoteStats(res, members.length);
               const hasVoted = !!res.votes[currentMember.id];
               const myVote = res.votes[currentMember.id]?.vote;
+              const isEligible =
+                !res.eligibleVoterIds ||
+                res.eligibleVoterIds.length === 0 ||
+                res.eligibleVoterIds.includes(currentMember.id);
+              const needsMyVote = res.status === 'in_abstimmung' && !hasVoted && isEligible;
 
               return (
                 <div
                   key={res.id}
-                  onClick={() => onSelectResolution(res.id)}
-                  className={`p-4 rounded-xl border transition-all cursor-pointer text-left relative ${
+                  className={`rounded-xl border transition-all ${
                     isSelected
-                      ? 'bg-blue-50/40 border-[#003594] shadow-xs'
-                      : 'bg-white border-slate-200 hover:border-slate-300'
+                      ? 'bg-blue-50/40 border-[#003594]'
+                      : 'bg-white border-slate-200'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <span className="text-xs font-mono font-bold text-[#003594] bg-blue-100/70 px-2 py-0.5 rounded">
-                        {res.number}
-                      </span>
-                      <h3 className="text-xs sm:text-sm font-bold text-slate-900 mt-1.5 line-clamp-2">
-                        {res.title}
-                      </h3>
-                    </div>
-
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
-                      res.status === 'angenommen'
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : res.status === 'in_abstimmung'
-                        ? 'bg-amber-100 text-amber-800'
-                        : 'bg-rose-100 text-rose-800'
-                    }`}>
-                      {res.status === 'angenommen' ? 'Angenommen' : res.status === 'in_abstimmung' ? 'In Abstimmung' : 'Abgelehnt'}
-                    </span>
-                  </div>
-
-                  {/* DEUTLICHE DATUM- & ZEITSTEMPEL-LEISTE */}
-                  <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-600 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100">
-                    <span className="flex items-center space-x-1 font-semibold text-slate-800">
-                      <Calendar className="w-3.5 h-3.5 text-[#003594]" />
-                      <span>{formatDate(res.createdAt)}</span>
-                    </span>
-                    <span className="flex items-center space-x-1 text-slate-600">
-                      <Clock className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{formatDateTime(res.createdAt).split(' ').slice(1).join(' ') || formatDateTime(res.createdAt)}</span>
-                    </span>
-                    {res.passedAt && (
-                      <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
-                        ✓ Beschlossen: {formatDate(res.passedAt)}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Buchhaltungsstatus & Belege Badge */}
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    {(() => {
-                      // Nur den erledigten bzw. bewusst ausgeklammerten Status
-                      // zeigen. "Offen" ist der Normalfall und wuerde die Liste
-                      // nur mit Warnfarben zupflastern.
-                      const bk = res.bookkeepingStatus || 'nicht_bearbeitet';
-                      if (bk === 'bearbeitet') {
-                        return (
-                          <span className="text-[10px] font-semibold text-emerald-700">
-                            ✓ Buchhaltung
-                          </span>
-                        );
-                      }
-                      if (bk === 'nicht_notwendig') {
-                        return (
-                          <span className="text-[10px] text-slate-400">
-                            Buchhaltung nicht nötig
-                          </span>
-                        );
-                      }
-                      return null;
-                    })()}
-
-                    {(() => {
-                      const resInvs = invoices.filter((i) => i.resolutionId === res.id);
-                      if (resInvs.length > 0) {
-                        const sum = resInvs.reduce((s, i) => s + i.amount, 0);
-                        return (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-[#003594] border border-blue-200 flex items-center space-x-1">
-                            <Receipt className="w-3 h-3" />
-                            <span>{resInvs.length} {resInvs.length === 1 ? 'Beleg' : 'Belege'} ({formatCurrency(sum)})</span>
-                          </span>
-                        );
-                      }
-                      return null;
-                    })()}
-                  </div>
-
-                  {/* Quorum and budget preview */}
-                  <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500">
-                    <span>
-                      Stimmen: <strong className="text-slate-800">{stats.totalVotesCast}/{members.length}</strong> ({stats.yesCount} Ja)
-                    </span>
-                    {res.requestedBudget ? (
-                      <span className="font-semibold text-slate-700">
-                        {formatCurrency(res.requestedBudget)}
-                      </span>
-                    ) : (
-                      <span>Kein Budget</span>
-                    )}
-                  </div>
-
-                  {/* Quorum visual bar */}
-                  <div className="mt-1.5 w-full bg-slate-200 h-1.5 rounded-full overflow-hidden flex">
-                    <div 
-                      className="bg-emerald-500 h-full" 
-                      style={{ width: `${(stats.yesCount / members.length) * 100}%` }}
-                    />
-                    <div 
-                      className="bg-rose-500 h-full" 
-                      style={{ width: `${(stats.noCount / members.length) * 100}%` }}
-                    />
-                    <div 
-                      className="bg-slate-400 h-full" 
-                      style={{ width: `${(stats.abstainCount / members.length) * 100}%` }}
-                    />
-                  </div>
-
-                  {/* Current Member Vote Indicator & Direct 1-Tap Mobile Voting */}
-                  <div className="mt-2.5 pt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[10px]">
-                    <span className="text-slate-500">
-                      Antrag: {res.applicant.name}
-                    </span>
-                    {hasVoted ? (
-                      <span className="font-semibold text-emerald-700 flex items-center space-x-1">
-                        <Check className="w-3 h-3" />
-                        <span>Du hast {myVote === 'yes' ? 'zugestimmt' : myVote === 'no' ? 'abgelehnt' : 'dich enthalten'}</span>
-                      </span>
-                    ) : res.status === 'in_abstimmung' ? (
-                      <div className="flex items-center space-x-1.5" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() => onVote(res.id, 'yes')}
-                          className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold rounded-lg text-[10px] flex items-center space-x-1 shadow-2xs transition-all touch-manipulation cursor-pointer"
-                          title="Mit Ja stimmen"
-                        >
-                          <CheckCircle2 className="w-3 h-3" />
-                          <span>Ja</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onVote(res.id, 'no')}
-                          className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold rounded-lg text-[10px] flex items-center space-x-1 shadow-2xs transition-all touch-manipulation cursor-pointer"
-                          title="Mit Nein stimmen"
-                        >
-                          <XCircle className="w-3 h-3" />
-                          <span>Nein</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onVote(res.id, 'abstain')}
-                          className="px-2 py-1 bg-slate-200 hover:bg-slate-300 active:scale-95 text-slate-700 font-bold rounded-lg text-[10px] flex items-center space-x-1 transition-all touch-manipulation cursor-pointer"
-                          title="Enthalten"
-                        >
-                          <MinusCircle className="w-3 h-3" />
-                          <span>Enth.</span>
-                        </button>
+                  {/* Kopfzeile: bewusst knapp - Nummer, Name, Status */}
+                  <div className="flex items-center gap-2 p-3">
+                    <button
+                      type="button"
+                      onClick={() => onSelectResolution(res.id)}
+                      className="flex-1 min-w-0 text-left cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono font-bold text-[#003594] shrink-0">
+                          {res.number}
+                        </span>
+                        {needsMyVote && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" title="Deine Stimme fehlt" />
+                        )}
                       </div>
-                    ) : (
-                      <span className="text-slate-400 font-medium">Abstimmung beendet</span>
-                    )}
+                      <div className="text-sm font-bold text-slate-900 truncate mt-0.5">
+                        {res.title}
+                      </div>
+                    </button>
+
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                        res.status === 'angenommen'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : res.status === 'in_abstimmung'
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-rose-100 text-rose-800'
+                      }`}
+                    >
+                      {res.status === 'angenommen'
+                        ? 'Angenommen'
+                        : res.status === 'in_abstimmung'
+                        ? 'Offen'
+                        : 'Abgelehnt'}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() => setExpandedListId(isExpanded ? null : res.id)}
+                      className="p-1 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer shrink-0"
+                      title={isExpanded ? 'Zuklappen' : 'Kurzinfo anzeigen'}
+                    >
+                      <ChevronDown
+                        className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                        strokeWidth={1.75}
+                      />
+                    </button>
                   </div>
+
+                  {/* Kurzinfo - nur auf Wunsch */}
+                  {isExpanded && (
+                    <div className="px-3 pb-3 pt-0 space-y-2.5 text-[11px] animate-in fade-in duration-150">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-500">
+                        <span>{formatDate(res.createdAt)}</span>
+                        <span>·</span>
+                        <span>{res.applicant.name}</span>
+                        {res.requestedBudget ? (
+                          <>
+                            <span>·</span>
+                            <span className="font-semibold text-slate-700">
+                              {formatCurrency(res.requestedBudget)}
+                            </span>
+                          </>
+                        ) : null}
+                      </div>
+
+                      <div className="flex items-center gap-2 text-slate-600">
+                        <span>
+                          {stats.yesCount} Ja · {stats.noCount} Nein · {stats.abstainCount} Enth.
+                        </span>
+                        {hasVoted && (
+                          <span className="text-emerald-700 font-semibold">
+                            (du: {myVote === 'yes' ? 'Ja' : myVote === 'no' ? 'Nein' : 'Enthaltung'})
+                          </span>
+                        )}
+                      </div>
+
+                      {res.bookkeepingStatus === 'bearbeitet' && (
+                        <div className="text-emerald-700 font-semibold">✓ Buchhaltung erledigt</div>
+                      )}
+
+                      {(() => {
+                        const resInvs = invoices.filter((i) => i.resolutionId === res.id);
+                        if (resInvs.length === 0) return null;
+                        const sum = resInvs.reduce((acc, i) => acc + i.amount, 0);
+                        return (
+                          <div className="text-slate-600">
+                            {resInvs.length} {resInvs.length === 1 ? 'Beleg' : 'Belege'} ·{' '}
+                            {formatCurrency(sum)}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Direkt abstimmen, ohne den Beschluss zu oeffnen */}
+                      {needsMyVote && (
+                        <div className="flex items-center gap-1.5 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => onVote(res.id, 'yes')}
+                            className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold rounded-lg text-[11px] transition-all cursor-pointer"
+                          >
+                            Ja
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onVote(res.id, 'no')}
+                            className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold rounded-lg text-[11px] transition-all cursor-pointer"
+                          >
+                            Nein
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onVote(res.id, 'abstain')}
+                            className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 active:scale-95 text-slate-700 font-bold rounded-lg text-[11px] transition-all cursor-pointer"
+                          >
+                            Enthaltung
+                          </button>
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => onSelectResolution(res.id)}
+                        className="text-[#003594] font-semibold hover:underline cursor-pointer"
+                      >
+                        Beschluss öffnen →
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })
@@ -808,7 +804,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
         </div>
 
         {/* Rechte Spalte: Detailansicht des gewaehlten Beschlusses */}
-        <div className={`lg:col-span-7 ${activeResolution ? '' : 'hidden lg:block'}`}>
+        <div className={`lg:col-span-7 ${hasExplicitSelection ? '' : 'hidden lg:block'}`}>
           {activeResolution && activeStats ? (
             <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs space-y-6">
               {/* Header Details: Nur Name und Nr oben */}
