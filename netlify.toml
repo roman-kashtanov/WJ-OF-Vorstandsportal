@@ -10,13 +10,13 @@
 [functions]
   node_bundler = "esbuild"
 
-# WICHTIG: /api/* muss VOR der SPA-Weiterleitung stehen,
-# sonst wuerden E-Mail- und Push-Aufrufe als HTML-Seite beantwortet.
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/api/:splat"
-  status = 200
-  force = true
+# Kein eigener Redirect fuer /api/* mehr noetig: die Function selbst
+# registriert ihre Route direkt ueber "export const config = { path: '/api/*' }"
+# (siehe netlify/functions/api.mts). Ein zusaetzlicher "force"-Redirect auf
+# denselben Pfad hat genau das verhindert - er hat die Anfrage auf
+# /.netlify/functions/api/:splat umgeschrieben, bevor die Function ueber
+# ihren eigenen Pfad erreicht werden konnte, wodurch am Ende die normale
+# React-Seite statt der Function-Antwort ausgeliefert wurde.
 
 # Single-Page-App: alle uebrigen Pfade auf index.html
 [[redirects]]
