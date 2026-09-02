@@ -12,11 +12,11 @@ Netlify Functions (E-Mail & Push) · PWA (Installation auf dem Smartphone).
 
 ### 1.1 Firebase (WJ-Google-Konto)
 
-Im Projekt **`wj-vorstandsportal`** fehlt bisher die Datenbank – das ist der
+Im Projekt **`vorstandsportal-wj-offenbach`** fehlen bisher Authentication und die Datenbank – das ist der
 Grund, warum die Echtzeit-Synchronisation nicht funktioniert hat.
 
 1. <https://console.firebase.google.com> mit dem **WJ-Google-Konto** öffnen,
-   Projekt `wj-vorstandsportal` auswählen.
+   Projekt `vorstandsportal-wj-offenbach` auswählen.
 2. **Firestore Database → Datenbank erstellen**
    · Modus: *Produktion* · Region: **eur3 (europe-west)**.
 3. **Firestore Database → Regeln**: Inhalt der Datei `firestore.rules`

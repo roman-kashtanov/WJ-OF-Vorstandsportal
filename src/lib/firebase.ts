@@ -16,12 +16,12 @@ import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 const env = (import.meta as any).env ?? {};
 
 export const firebaseConfig = {
-  apiKey: env.VITE_FIREBASE_API_KEY || 'AIzaSyCi92iJos8n_MFe2abLTMvhgoyfDpEvQCU',
-  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || 'wj-vorstandsportal.firebaseapp.com',
-  projectId: env.VITE_FIREBASE_PROJECT_ID || 'wj-vorstandsportal',
-  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || 'wj-vorstandsportal.firebasestorage.app',
-  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || '432246409434',
-  appId: env.VITE_FIREBASE_APP_ID || '1:432246409434:web:0bd8ff76721d99e4a2bde3',
+  apiKey: env.VITE_FIREBASE_API_KEY || 'AIzaSyA9pUq6DmHJiPxHwdT04EI7q7lxyRG8oJw',
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || 'vorstandsportal-wj-offenbach.firebaseapp.com',
+  projectId: env.VITE_FIREBASE_PROJECT_ID || 'vorstandsportal-wj-offenbach',
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || 'vorstandsportal-wj-offenbach.firebasestorage.app',
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || '357427510012',
+  appId: env.VITE_FIREBASE_APP_ID || '1:357427510012:web:5723721a3592ce771a3579',
   // '(default)' = die normale Firestore-Datenbank des Projekts
   firestoreDatabaseId: env.VITE_FIREBASE_DATABASE_ID || '(default)',
 };
