@@ -29,9 +29,14 @@ export async function hashPasscode(passcode: string): Promise<string> {
 }
 
 /**
- * Pre-computed SHA-256 for default passcode "19540"
+ * Vorberechneter SHA-256-Hash fuer den Standard-Vorstandscode "11111".
+ *
+ * Achtung: Der vorherige Wert hier stammte aus dem urspruenglichen
+ * AI-Studio-Build und war fehlerhaft - er passte zu keinem tatsaechlichen
+ * 5-stelligen Code (weder "19540" noch "11111"), obwohl der Kommentar das
+ * behauptete. Dieser Wert wurde neu berechnet und geprueft.
  */
-export const DEFAULT_PASSCODE_HASH = '5c95e1e82813589c32e9be4efebceea96dfdca7cbbadff08f4c4c233aaee8e4a';
+export const DEFAULT_PASSCODE_HASH = 'd17f25ecfbcc7857f7bebea469308be0b2580943e96d13a3ad98a13675c4bfc2';
 
 /**
  * Verifies if the entered code matches the stored security settings (hashed or legacy).

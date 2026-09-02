@@ -2,9 +2,9 @@ import { BoardMember, Resolution, Invoice, Meeting, SecuritySettings, InvoiceFol
 
 export const INITIAL_SECURITY_SETTINGS: SecuritySettings = {
   // Nur der SHA-256-Hash wird gespeichert - der Code selbst steht nirgends
-  // im Quelltext. Startwert ist "19540"; er sollte nach der Wahl in den
-  // Einstellungen geaendert werden.
-  passcodeHash: '5c95e1e82813589c32e9be4efebceea96dfdca7cbbadff08f4c4c233aaee8e4a',
+  // im Quelltext. Startwert ist "11111"; unbedingt in den Einstellungen
+  // aendern, sobald der erste echte Vorstand angelegt ist.
+  passcodeHash: 'd17f25ecfbcc7857f7bebea469308be0b2580943e96d13a3ad98a13675c4bfc2',
   exemptMemberIds: [],
   exemptEmails: [],
   adminMemberId: '',
