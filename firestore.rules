@@ -1,0 +1,36 @@
+rules_version = '2';
+
+// Sicherheitsregeln fuer das WJOF Vorstandsportal
+//
+// Zugriff hat nur, wer
+//   1. mit einem Google-Konto angemeldet ist UND
+//   2. mit dieser E-Mail-Adresse in der Sammlung "allowlist" eingetragen ist.
+//
+// EINMALIGE EINRICHTUNG (Firebase Console -> Firestore Database -> Daten):
+//   Sammlung "allowlist" anlegen und ein Dokument mit der eigenen
+//   E-Mail-Adresse als Dokument-ID erstellen (Feld: aktiv = true).
+//   Danach koennen weitere Mitglieder bequem in der App gepflegt werden.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isBoardMember() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && exists(/databases/$(database)/documents/allowlist/$(request.auth.token.email));
+    }
+
+    // Die Freigabeliste darf jeder Angemeldete lesen (fuer die Pruefung oben),
+    // aendern jedoch nur, wer selbst freigegeben ist.
+    match /allowlist/{email} {
+      allow read: if request.auth != null;
+      allow write: if isBoardMember();
+    }
+
+    // Alle uebrigen Daten (Beschluesse, Belege, Sitzungen, Mitglieder,
+    // Push-Abos, Einstellungen) nur fuer freigegebene Vorstandsmitglieder.
+    match /{document=**} {
+      allow read, write: if isBoardMember();
+    }
+  }
+}

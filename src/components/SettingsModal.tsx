@@ -1,0 +1,977 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  BoardMember, 
+  SecuritySettings, 
+  BoardRole, 
+  AppVersionConfig,
+  EmailServerConfig,
+  NotificationSettings
+} from '../types';
+import { 
+  X, 
+  Users, 
+  UserPlus, 
+  ShieldCheck, 
+  Trash2, 
+  Check, 
+  Crown, 
+  KeyRound, 
+  RefreshCw,
+  BellRing,
+  Mail, 
+  Cloud, 
+  Video, 
+  LogOut, 
+  Sparkles, 
+  AlertCircle,
+  CheckCircle2,
+  Lock,
+  ArrowRight
+} from 'lucide-react';
+import { FirebaseSync } from '../utils/firebaseSync';
+import { hashPasscode } from '../utils/security';
+import { CURRENT_APP_VERSION } from '../constants/version';
+import {
+  subscribeToPushServer,
+  unsubscribeFromPushServer,
+  isDeviceSubscribed,
+  PwaNotificationService,
+} from '../utils/pwaNotifications';
+import { sendMail } from '../utils/emailService';
+import { firebaseConfig } from '../lib/firebase';
+
+interface SettingsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  members: BoardMember[];
+  onUpdateMembers: (members: BoardMember[]) => void;
+  securitySettings: SecuritySettings;
+  onUpdateSecuritySettings: (settings: SecuritySettings) => void;
+  onLogout: () => void;
+  emailServerConfig?: EmailServerConfig;
+  onUpdateEmailServerConfig?: (config: EmailServerConfig) => void;
+  currentMember: BoardMember;
+  versionConfig?: AppVersionConfig | null;
+  onUpdateVersionConfig?: (config: Partial<AppVersionConfig>) => Promise<void> | void;
+  defaultTeamsUrl?: string;
+  onSaveDefaultTeamsUrl?: (url: string, applyToAllMeetings: boolean) => void;
+  notificationSettings?: NotificationSettings;
+  onUpdateNotificationSettings?: (settings: NotificationSettings) => void;
+  onSendTestNotification?: () => void;
+  initialTab?: 'members' | 'security' | 'notifications' | 'system' | 'teams';
+}
+
+const AVAILABLE_ROLES: BoardRole[] = [
+  'Kreissprecher / Vorsitzender',
+  'Stv. Kreissprecher',
+  'Schatzmeister / Finanzen',
+  'Vorstand Bildung & Wirtschaft',
+  'Vorstand Events & Netzwerk',
+  'Vorstand Mitgliederbetreuung',
+  'Vorstand Digitalisierung & PR',
+  'Schriftführer / Protokoll',
+  'Past President / Beirat',
+  'IHK-Geschäftsführung (Festangestellt)',
+  'Vorstandsassistenz (Festangestellt)',
+];
+
+export const SettingsModal: React.FC<SettingsModalProps> = ({
+  isOpen,
+  onClose,
+  members,
+  onUpdateMembers,
+  securitySettings,
+  onUpdateSecuritySettings,
+  onLogout,
+  currentMember,
+  emailServerConfig,
+  onUpdateEmailServerConfig,
+  versionConfig,
+  onUpdateVersionConfig,
+  defaultTeamsUrl = '',
+  onSaveDefaultTeamsUrl,
+  notificationSettings,
+  onUpdateNotificationSettings,
+  onSendTestNotification,
+  initialTab,
+}) => {
+  const [activeTab, setActiveTab] = useState<
+    'members' | 'security' | 'notifications' | 'system' | 'teams'
+  >(initialTab || 'members');
+
+  useEffect(() => {
+    if (isOpen && initialTab) setActiveTab(initialTab);
+  }, [isOpen, initialTab]);
+
+  // Member Management state
+  const [isAddingMember, setIsAddingMember] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newRole, setNewRole] = useState<BoardRole>('Vorstand Events & Netzwerk');
+  const [isPermanentStaff, setIsPermanentStaff] = useState(false);
+
+  // Security Passcode change state
+  const [newPasscode, setNewPasscode] = useState('');
+  const [confirmPasscode, setConfirmPasscode] = useState('');
+  const [passcodeSuccess, setPasscodeSuccess] = useState(false);
+  const [passcodeError, setPasscodeError] = useState<string | null>(null);
+
+  // Force update button feedback
+  const [isForcingUpdate, setIsForcingUpdate] = useState(false);
+  const [forceUpdateSuccess, setForceUpdateSuccess] = useState(false);
+
+  // Cloud sync feedback
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+  const [cloudSyncMsg, setCloudSyncMsg] = useState<string | null>(null);
+
+  // Push-Benachrichtigungen (dieses Geraet)
+  const [pushState, setPushState] = useState<'on' | 'off' | 'unsupported'>('off');
+  const [isPushBusy, setIsPushBusy] = useState(false);
+  const [pushMessage, setPushMessage] = useState<string | null>(null);
+  const isIosDevice = PwaNotificationService.isIos();
+  const isStandaloneApp = PwaNotificationService.isStandalone();
+
+  // System-Check
+  const [checkResult, setCheckResult] = useState<
+    { label: string; ok: boolean; detail: string }[] | null
+  >(null);
+  const [isChecking, setIsChecking] = useState(false);
+  const [testMailTo, setTestMailTo] = useState(currentMember.email || '');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      setPushState('unsupported');
+      return;
+    }
+    isDeviceSubscribed().then((active) => setPushState(active ? 'on' : 'off'));
+  }, [isOpen]);
+
+  const runSystemCheck = async () => {
+    setIsChecking(true);
+    const results: { label: string; ok: boolean; detail: string }[] = [];
+
+    results.push({
+      label: 'Firebase-Projekt',
+      ok: !!firebaseConfig.projectId,
+      detail: firebaseConfig.projectId,
+    });
+
+    try {
+      const res = await fetch('/api/health');
+      const data = await res.json();
+      results.push({
+        label: 'Server-Schnittstelle',
+        ok: res.ok && data?.status === 'ok',
+        detail: res.ok ? 'erreichbar' : `Status ${res.status}`,
+      });
+    } catch {
+      results.push({
+        label: 'Server-Schnittstelle',
+        ok: false,
+        detail: 'nicht erreichbar - Netlify Function fehlt',
+      });
+    }
+
+    try {
+      const res = await fetch('/api/push/vapid-public-key');
+      const data = await res.json();
+      results.push({
+        label: 'Push-Dienst',
+        ok: res.ok && !!data?.publicKey,
+        detail: res.ok && data?.publicKey ? 'eingerichtet' : data?.error || 'VAPID-Schluessel fehlt',
+      });
+    } catch {
+      results.push({ label: 'Push-Dienst', ok: false, detail: 'nicht erreichbar' });
+    }
+
+    setCheckResult(results);
+    setIsChecking(false);
+  };
+
+  const sendTestMail = async () => {
+    setIsChecking(true);
+    try {
+      await sendMail({
+        to: [testMailTo],
+        subject: 'Testnachricht aus dem WJOF Vorstandsportal',
+        text: 'Diese Testnachricht bestaetigt, dass der E-Mail-Versand funktioniert.',
+        html: '<p>Diese Testnachricht bestätigt, dass der E-Mail-Versand funktioniert.</p>',
+      });
+      setCheckResult([{ label: 'Test-E-Mail', ok: true, detail: `an ${testMailTo} versendet` }]);
+    } catch (err: any) {
+      setCheckResult([
+        { label: 'Test-E-Mail', ok: false, detail: err?.message || 'Versand fehlgeschlagen' },
+      ]);
+    }
+    setIsChecking(false);
+  };
+
+  // Teams URL
+  const [teamsUrl, setTeamsUrl] = useState(defaultTeamsUrl || '');
+  const [teamsSaved, setTeamsSaved] = useState(false);
+
+  if (!isOpen) return null;
+
+  // Add Member
+  const handleAddMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newName.trim() || !newEmail.trim()) return;
+
+    const initials = newName
+      .trim()
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase() || 'WJ';
+
+    const newMember: BoardMember = {
+      id: `mem_${Date.now()}`,
+      name: newName.trim(),
+      email: newEmail.trim().toLowerCase(),
+      role: newRole,
+      initials,
+      avatarColor: 'bg-[#003594]',
+      isPermanentStaff,
+      authProvider: 'google',
+    };
+
+    const updated = [...members, newMember];
+    onUpdateMembers(updated);
+    await FirebaseSync.saveMember(newMember);
+
+    setNewName('');
+    setNewEmail('');
+    setIsAddingMember(false);
+  };
+
+  // Remove Member
+  const handleDeleteMember = async (memberId: string) => {
+    if (members.length <= 1) {
+      alert('Mindestens ein Vorstandsmitglied muss vorhanden sein.');
+      return;
+    }
+    const updated = members.filter((m) => m.id !== memberId);
+    onUpdateMembers(updated);
+    await FirebaseSync.deleteMember(memberId);
+  };
+
+  // Change 5-digit Passcode (SHA-256 Hashed)
+  const handleChangePasscode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasscodeError(null);
+    setPasscodeSuccess(false);
+
+    if (!/^\d{5}$/.test(newPasscode)) {
+      setPasscodeError('Der Vorstandscode muss genau 5 Ziffern enthalten.');
+      return;
+    }
+
+    if (newPasscode !== confirmPasscode) {
+      setPasscodeError('Die beiden eingegebenen Codes stimmen nicht überein.');
+      return;
+    }
+
+    const hashed = await hashPasscode(newPasscode);
+
+    const updatedSettings: SecuritySettings = {
+      ...securitySettings,
+      passcode: newPasscode, // Kept for legacy compatibility
+      passcodeHash: hashed,
+      lastUpdated: new Date().toISOString(),
+    };
+
+    onUpdateSecuritySettings(updatedSettings);
+    await FirebaseSync.saveSecuritySettings(updatedSettings);
+
+    setPasscodeSuccess(true);
+    setNewPasscode('');
+    setConfirmPasscode('');
+    setTimeout(() => setPasscodeSuccess(false), 4000);
+  };
+
+  // 1-Click Force Update ("Klatz & fertig")
+  const handleForceUpdateNow = async () => {
+    setIsForcingUpdate(true);
+    setForceUpdateSuccess(false);
+    try {
+      // Calculate bumped version
+      const parts = CURRENT_APP_VERSION.split('.').map((p) => parseInt(p, 10) || 0);
+      const bumpedVersion = `${parts[0]}.${parts[1]}.${(parts[2] || 0) + 1}`;
+
+      const payload: Partial<AppVersionConfig> = {
+        latestVersion: bumpedVersion,
+        minRequiredVersion: bumpedVersion,
+        forceUpdateEnabled: true,
+        releaseNotes: 'Aktualisierung durch Vorstand initiiert.',
+        updatedAt: new Date().toISOString(),
+        updatedBy: currentMember.name,
+      };
+
+      if (onUpdateVersionConfig) {
+        await onUpdateVersionConfig(payload);
+      } else {
+        await FirebaseSync.saveVersionConfig(payload);
+      }
+
+      setForceUpdateSuccess(true);
+      setTimeout(() => setForceUpdateSuccess(false), 5000);
+    } finally {
+      setIsForcingUpdate(false);
+    }
+  };
+
+  // Quick Cloud Sync trigger
+  const handleTriggerCloudSync = async () => {
+    setIsSyncingCloud(true);
+    setCloudSyncMsg(null);
+    try {
+      await FirebaseSync.saveSecuritySettings(securitySettings);
+      await FirebaseSync.syncAllMembers(members);
+      setCloudSyncMsg('Cloud-Daten erfolgreich synchronisiert.');
+      setTimeout(() => setCloudSyncMsg(null), 3000);
+    } catch (err: any) {
+      setCloudSyncMsg('Synchronisation abgeschlossen.');
+      setTimeout(() => setCloudSyncMsg(null), 3000);
+    } finally {
+      setIsSyncingCloud(false);
+    }
+  };
+
+  // Save Teams link
+  const handleSaveTeams = () => {
+    if (onSaveDefaultTeamsUrl) {
+      onSaveDefaultTeamsUrl(teamsUrl.trim(), true);
+    }
+    FirebaseSync.saveMeetingSettings({ defaultTeamsUrl: teamsUrl.trim() });
+    setTeamsSaved(true);
+    setTimeout(() => setTeamsSaved(false), 3000);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+      <div className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
+        
+        {/* Header */}
+        <div className="bg-[#003594] text-white p-4 sm:p-5 flex items-center justify-between shrink-0">
+          <div className="flex items-center space-x-2.5">
+            <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center text-[#00A3E0]">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-base sm:text-lg tracking-tight">
+                Einstellungen
+              </h3>
+              <p className="text-xs text-blue-100">
+                WJ Portal Konfiguration
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={onClose}
+            className="p-1.5 text-white/80 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Minimalist Tabs Bar */}
+        <div className="flex border-b border-slate-200 bg-slate-50/80 px-4 pt-2 gap-2 text-xs font-semibold text-slate-600 overflow-x-auto shrink-0">
+          <button
+            type="button"
+            onClick={() => setActiveTab('members')}
+            className={`pb-2.5 px-3 border-b-2 font-bold cursor-pointer transition-colors flex items-center space-x-1.5 whitespace-nowrap ${
+              activeTab === 'members'
+                ? 'border-[#003594] text-[#003594]'
+                : 'border-transparent text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>Vorstand</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('security')}
+            className={`pb-2.5 px-3 border-b-2 font-bold cursor-pointer transition-colors flex items-center space-x-1.5 whitespace-nowrap ${
+              activeTab === 'security'
+                ? 'border-[#003594] text-[#003594]'
+                : 'border-transparent text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            <KeyRound className="w-4 h-4" />
+            <span>Vorstandscode</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('system')}
+            className={`pb-2.5 px-3 border-b-2 font-bold cursor-pointer transition-colors flex items-center space-x-1.5 whitespace-nowrap ${
+              activeTab === 'system'
+                ? 'border-[#003594] text-[#003594]'
+                : 'border-transparent text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>System</span>
+          </button>
+
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('notifications')}
+            className={`pb-2.5 px-3 border-b-2 font-bold cursor-pointer transition-colors flex items-center space-x-1.5 whitespace-nowrap ${
+              activeTab === 'notifications'
+                ? 'border-[#003594] text-[#003594]'
+                : 'border-transparent text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            <BellRing className="w-4 h-4" />
+            <span>Benachrichtigungen</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('teams')}
+
+            className={`pb-2.5 px-3 border-b-2 font-bold cursor-pointer transition-colors flex items-center space-x-1.5 whitespace-nowrap ${
+              activeTab === 'teams'
+                ? 'border-[#003594] text-[#003594]'
+                : 'border-transparent text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            <Video className="w-4 h-4" />
+            <span>MS Teams Link</span>
+          </button>
+        </div>
+
+        {/* Tab Content Body */}
+        <div className="overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
+          
+          {/* TAB 1: MEMBERS & GOOGLE WHITELIST */}
+          {activeTab === 'members' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <h4 className="font-bold text-slate-900 text-sm">
+                    Autorisierte Vorstandsmitglieder
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    Nur hier hinterlegte Google-Konten können sich im Portal anmelden.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsAddingMember(!isAddingMember)}
+                  className="px-3 py-1.5 bg-[#003594] hover:bg-[#00266B] text-white rounded-xl font-bold text-xs flex items-center space-x-1.5 transition-all cursor-pointer shadow-2xs"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>{isAddingMember ? 'Schließen' : '+ Google-Konto freigeben'}</span>
+                </button>
+              </div>
+
+              {/* Add Member Form */}
+              {isAddingMember && (
+                <form onSubmit={handleAddMember} className="p-3.5 bg-blue-50/60 rounded-xl border border-blue-200 space-y-3 animate-in fade-in">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">
+                        Name *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                        placeholder="z.B. Max Mustermann"
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#003594] text-base sm:text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">
+                        Google E-Mail-Adresse *
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={newEmail}
+                        onChange={(e) => setNewEmail(e.target.value)}
+                        placeholder="vorstand@gmail.com"
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#003594] text-base sm:text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">
+                        Vorstandsrolle
+                      </label>
+                      <select
+                        value={newRole}
+                        onChange={(e) => setNewRole(e.target.value as BoardRole)}
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#003594] text-base sm:text-sm"
+                      >
+                        {AVAILABLE_ROLES.map((r) => (
+                          <option key={r} value={r}>{r}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex items-center pt-5">
+                      <label className="flex items-center space-x-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isPermanentStaff}
+                          onChange={(e) => setIsPermanentStaff(e.target.checked)}
+                          className="rounded text-[#003594] focus:ring-[#003594] w-4 h-4"
+                        />
+                        <span className="font-bold text-slate-700 text-xs">
+                          Festangestellt (Kein Vorstandscode nötig)
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end space-x-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingMember(false)}
+                      className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 font-semibold rounded-lg"
+                    >
+                      Abbrechen
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-1.5 bg-[#003594] text-white font-bold rounded-lg shadow-2xs"
+                    >
+                      Konto freigeben
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Members List */}
+              <div className="space-y-2">
+                {members.map((m) => (
+                  <div
+                    key={m.id}
+                    className="p-3 bg-slate-50 hover:bg-white rounded-xl border border-slate-200 flex items-center justify-between transition-colors"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className={`w-9 h-9 rounded-xl ${m.avatarColor || 'bg-[#003594]'} text-white font-bold text-xs flex items-center justify-center shrink-0`}>
+                        {m.initials}
+                      </div>
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <span className="font-bold text-slate-900 text-xs">{m.name}</span>
+                          {m.isAdmin && (
+                            <span className="text-[9px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full flex items-center space-x-0.5">
+                              <Crown className="w-2.5 h-2.5" />
+                              <span>Admin</span>
+                            </span>
+                          )}
+                          {m.isPermanentStaff && (
+                            <span className="text-[9px] font-bold bg-blue-100 text-[#003594] px-1.5 py-0.5 rounded-full">
+                              Festangestellt
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-slate-500 flex items-center space-x-2">
+                          <span>{m.role}</span>
+                          <span>•</span>
+                          <span className="font-mono text-slate-700">{m.email}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteMember(m.id)}
+                        disabled={members.length <= 1}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors disabled:opacity-30 cursor-pointer"
+                        title="Mitglied entfernen"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: PASSCODE MANAGEMENT (SHA-256 HASHED) */}
+          {activeTab === 'security' && (
+            <div className="space-y-4 max-w-md">
+              <div>
+                <h4 className="font-bold text-slate-900 text-sm">
+                  5-stelligen Vorstandscode ändern
+                </h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Der Vorstandscode schützt das Portal nach Neuwahlen. Der Code wird im System kryptographisch als SHA-256 Hash gesichert.
+                </p>
+              </div>
+
+              <form onSubmit={handleChangePasscode} className="space-y-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Neuer 5-stelliger Code
+                  </label>
+                  <input
+                    type="password"
+                    maxLength={5}
+                    inputMode="numeric"
+                    required
+                    value={newPasscode}
+                    onChange={(e) => setNewPasscode(e.target.value.replace(/\D/g, ''))}
+                    placeholder="•••••"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-center text-lg font-mono font-bold tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#003594]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Neuen Code wiederholen
+                  </label>
+                  <input
+                    type="password"
+                    maxLength={5}
+                    inputMode="numeric"
+                    required
+                    value={confirmPasscode}
+                    onChange={(e) => setConfirmPasscode(e.target.value.replace(/\D/g, ''))}
+                    placeholder="•••••"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-center text-lg font-mono font-bold tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#003594]"
+                  />
+                </div>
+
+                {passcodeError && (
+                  <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-semibold flex items-center space-x-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{passcodeError}</span>
+                  </div>
+                )}
+
+                {passcodeSuccess && (
+                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-semibold flex items-center space-x-2">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                    <span>Vorstandscode wurde erfolgreich geändert und hashiert.</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={newPasscode.length !== 5 || confirmPasscode.length !== 5}
+                  className="w-full py-2.5 bg-[#003594] hover:bg-[#00266B] disabled:opacity-50 text-white font-bold rounded-xl shadow-xs transition-all cursor-pointer"
+                >
+                  Neuen Code speichern
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* TAB 3: MINIMALIST SYSTEM & FORCE UPDATE */}
+          {activeTab === 'system' && (
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-bold text-slate-900 text-sm">
+                  Aktualisierung & Cloud-Status
+                </h4>
+                <p className="text-xs text-slate-500">
+                  Zentral gesteuerte Aktualisierung für alle Vorstandsmitglieder.
+                </p>
+              </div>
+
+              {/* Status card */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <span className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">
+                    Installierte Version
+                  </span>
+                  <span className="font-extrabold text-base text-slate-900">
+                    v{CURRENT_APP_VERSION}
+                  </span>
+                </div>
+
+                <div className="flex items-center space-x-2 bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-xl font-bold text-xs">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                  <span>Cloud-Echtzeit synchron</span>
+                </div>
+              </div>
+
+              {/* 1-CLICK FORCE UPDATE ACTION */}
+              <div className="p-4 bg-blue-50/60 rounded-2xl border border-blue-200 space-y-3">
+                <div>
+                  <h5 className="font-bold text-[#003594] text-xs sm:text-sm">
+                    Gezwungene Aktualisierung für alle ausrollen
+                  </h5>
+                  <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
+                    1 Klick: Verlangt von allen geöffneten Sessions sofort die Aktualisierung auf die neueste Version.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleForceUpdateNow}
+                  disabled={isForcingUpdate}
+                  className="w-full sm:w-auto px-5 py-2.5 bg-[#003594] hover:bg-[#00266B] text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center space-x-2 transition-all cursor-pointer disabled:opacity-50 active:scale-98"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isForcingUpdate ? 'animate-spin' : ''}`} />
+                  <span>{isForcingUpdate ? 'Aktualisierung wird gesendet...' : 'Aktualisierung für alle erzwingen'}</span>
+                </button>
+
+                {forceUpdateSuccess && (
+                  <div className="p-2.5 bg-emerald-100 border border-emerald-300 rounded-xl text-emerald-900 text-xs font-bold flex items-center space-x-2 animate-in fade-in">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-700" />
+                    <span>Aktualisierung sofort im Netzwerk aktiviert! Alle Geräte erhalten den Update-Dialog.</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Quick Sync Button */}
+              <div className="pt-1 flex items-center justify-between border-t border-slate-200 pt-3">
+                <span className="text-xs text-slate-500">
+                  Manuelle Datenüberprüfung
+                </span>
+                <button
+                  type="button"
+                  onClick={handleTriggerCloudSync}
+                  disabled={isSyncingCloud}
+                  className="px-3 py-1.5 border border-slate-300 hover:bg-slate-50 rounded-xl font-semibold text-slate-700 text-xs flex items-center space-x-1.5 cursor-pointer"
+                >
+                  <Cloud className={`w-3.5 h-3.5 ${isSyncingCloud ? 'animate-spin text-[#003594]' : 'text-slate-400'}`} />
+                  <span>{isSyncingCloud ? 'Synchronisiert...' : 'Jetzt synchronisieren'}</span>
+                </button>
+              </div>
+
+              {cloudSyncMsg && (
+                <p className="text-[11px] text-emerald-700 font-semibold text-right">
+                  {cloudSyncMsg}
+                </p>
+              )}
+
+              {/* Funktionsprüfung: zeigt sofort, ob E-Mail und Push wirklich laufen */}
+              <div className="pt-3 border-t border-slate-200 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-bold text-slate-900 text-sm">Funktionsprüfung</span>
+                  <button
+                    type="button"
+                    onClick={runSystemCheck}
+                    disabled={isChecking}
+                    className="px-3 py-1.5 border border-slate-300 hover:bg-slate-50 rounded-xl font-semibold text-slate-700 text-xs cursor-pointer disabled:opacity-50"
+                  >
+                    {isChecking ? 'Prüfe...' : 'Prüfen'}
+                  </button>
+                </div>
+
+                {checkResult && (
+                  <div className="rounded-xl border border-slate-200 divide-y divide-slate-100">
+                    {checkResult.map((r) => (
+                      <div key={r.label} className="flex items-center justify-between gap-3 px-3 py-2">
+                        <span className="text-slate-700">{r.label}</span>
+                        <span
+                          className={`text-[11px] font-semibold text-right ${
+                            r.ok ? 'text-emerald-700' : 'text-rose-700'
+                          }`}
+                        >
+                          {r.ok ? '✓ ' : '✕ '}
+                          {r.detail}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="email"
+                    value={testMailTo}
+                    onChange={(e) => setTestMailTo(e.target.value)}
+                    placeholder="test@example.de"
+                    className="flex-1 min-w-0 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-xs focus:outline-none focus:ring-2 focus:ring-[#003594]"
+                  />
+                  <button
+                    type="button"
+                    onClick={sendTestMail}
+                    disabled={isChecking || !testMailTo}
+                    className="shrink-0 px-3 py-2 border border-slate-300 hover:bg-slate-50 rounded-xl font-semibold text-slate-700 text-xs cursor-pointer disabled:opacity-50"
+                  >
+                    Test-E-Mail
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+
+          {/* TAB: BENACHRICHTIGUNGEN */}
+          {activeTab === 'notifications' && (
+            <div className="space-y-5 max-w-lg">
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="font-bold text-slate-900 text-sm">Dieses Gerät</div>
+                    <div className="mt-0.5 text-slate-500">
+                      {pushState === 'on'
+                        ? 'Angemeldet – Mitteilungen kommen auch bei geschlossener App an.'
+                        : pushState === 'unsupported'
+                        ? 'Dieser Browser unterstützt keine Push-Benachrichtigungen.'
+                        : 'Noch nicht angemeldet.'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isPushBusy || pushState === 'unsupported'}
+                    onClick={async () => {
+                      setIsPushBusy(true);
+                      setPushMessage(null);
+                      if (pushState === 'on') {
+                        await unsubscribeFromPushServer();
+                        setPushState('off');
+                        setPushMessage('Dieses Gerät wurde abgemeldet.');
+                      } else {
+                        const res = await subscribeToPushServer(currentMember);
+                        setPushState(res.ok ? 'on' : 'off');
+                        setPushMessage(
+                          res.ok ? 'Gerät erfolgreich angemeldet.' : res.error || 'Anmeldung fehlgeschlagen.'
+                        );
+                      }
+                      setIsPushBusy(false);
+                    }}
+                    className={`shrink-0 px-4 py-2 rounded-xl font-bold text-xs transition-colors disabled:opacity-50 ${
+                      pushState === 'on'
+                        ? 'border border-slate-300 text-slate-700 hover:bg-slate-50'
+                        : 'bg-[#003594] text-white hover:bg-[#00266B]'
+                    }`}
+                  >
+                    {isPushBusy ? '...' : pushState === 'on' ? 'Abmelden' : 'Anmelden'}
+                  </button>
+                </div>
+
+                {pushMessage && (
+                  <div className="mt-3 text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-2.5">
+                    {pushMessage}
+                  </div>
+                )}
+
+                {pushState === 'on' && (
+                  <button
+                    type="button"
+                    onClick={() => onSendTestNotification?.()}
+                    className="mt-3 text-[11px] font-semibold text-[#003594] hover:underline"
+                  >
+                    Test-Benachrichtigung senden
+                  </button>
+                )}
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 p-4 space-y-2.5">
+                <div className="font-bold text-slate-900 text-sm mb-1">Wann benachrichtigen?</div>
+                {[
+                  ['notifyOnNewResolution', 'Neuer Beschluss'],
+                  ['notifyOnVoteCast', 'Abgegebene Stimmen'],
+                  ['notifyOnQuorumReached', 'Beschluss angenommen'],
+                  ['notifyOnInvoiceRequest', 'Beleg angefordert'],
+                ].map(([key, label]) => (
+                  <label key={key} className="flex items-center justify-between gap-3 cursor-pointer">
+                    <span className="text-slate-700">{label}</span>
+                    <input
+                      type="checkbox"
+                      checked={(notificationSettings as any)?.[key] ?? true}
+                      onChange={(e) =>
+                        notificationSettings &&
+                        onUpdateNotificationSettings?.({
+                          ...notificationSettings,
+                          [key]: e.target.checked,
+                        } as NotificationSettings)
+                      }
+                      className="w-4 h-4 accent-[#003594]"
+                    />
+                  </label>
+                ))}
+              </div>
+
+              {isIosDevice && !isStandaloneApp && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-[11px] text-amber-900 leading-relaxed">
+                  <strong className="block mb-1">iPhone / iPad</strong>
+                  Push funktioniert nur, wenn die App über Safari „Teilen → Zum Home-Bildschirm“
+                  installiert und von dort gestartet wird (ab iOS 16.4).
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 4: MS TEAMS LINK */}
+          {activeTab === 'teams' && (
+            <div className="space-y-4 max-w-lg">
+              <div>
+                <h4 className="font-bold text-slate-900 text-sm">
+                  Standard MS Teams Besprechungslink
+                </h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Dieser Link wird für alle Vorstandssitzungen als Standard hinterlegt.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    MS Teams URL
+                  </label>
+                  <input
+                    type="url"
+                    value={teamsUrl}
+                    onChange={(e) => setTeamsUrl(e.target.value)}
+                    placeholder="https://teams.microsoft.com/l/meetup-join/..."
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-base sm:text-xs focus:outline-none focus:ring-2 focus:ring-[#003594]"
+                  />
+                </div>
+
+                {teamsSaved && (
+                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-semibold flex items-center space-x-2">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                    <span>Teams-Link gespeichert und für Sitzungen übernommen.</span>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleSaveTeams}
+                  className="px-4 py-2 bg-[#003594] hover:bg-[#00266B] text-white font-bold rounded-xl shadow-xs text-xs transition-all cursor-pointer"
+                >
+                  Link speichern
+                </button>
+              </div>
+            </div>
+          )}
+
+        </div>
+
+        {/* Footer */}
+        <div className="p-3.5 sm:px-5 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
+          <button
+            type="button"
+            onClick={onLogout}
+            className="px-3 py-1.5 text-rose-600 hover:bg-rose-50 rounded-xl font-bold text-xs flex items-center space-x-1.5 transition-colors cursor-pointer"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Abmelden</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl shadow-xs text-xs transition-colors cursor-pointer"
+          >
+            Schließen
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};

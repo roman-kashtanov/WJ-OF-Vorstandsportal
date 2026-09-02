@@ -1,0 +1,299 @@
+export type BoardRole = 
+  | 'Kreissprecher / Vorsitzender'
+  | 'Stv. Kreissprecher'
+  | 'Schatzmeister / Finanzen'
+  | 'Vorstand Bildung & Wirtschaft'
+  | 'Vorstand Events & Netzwerk'
+  | 'Vorstand Mitgliederbetreuung'
+  | 'Vorstand Digitalisierung & PR'
+  | 'Schriftführer / Protokoll'
+  | 'Past President / Beirat'
+  | 'IHK-Geschäftsführung (Festangestellt)'
+  | 'Vorstandsassistenz (Festangestellt)';
+
+export interface BoardMember {
+  id: string;
+  name: string;
+  role: BoardRole;
+  email: string;
+  phone?: string;
+  initials: string;
+  avatarColor: string;
+  isCurrentUser?: boolean;
+  isPermanentStaff?: boolean; // If true, exempt from 5-digit code
+  isAdmin?: boolean; // System Administrator privileges
+  password?: string; // User login password
+  credentialsSentAt?: string; // Timestamp when access credentials were sent via email
+  authProvider?: 'google' | 'email' | 'demo';
+  order?: number;
+  pushSubscriptions?: any[];
+}
+
+export interface SecuritySettings {
+  /** Nicht mehr verwendet - der Code wird ausschliesslich als Hash gespeichert. */
+  passcode?: string; // Legacy fallback / clear representation
+  passcodeHash?: string; // SHA-256 secure hash of 5-digit passcode
+  exemptMemberIds: string[]; // BoardMember IDs who don't need the code
+  exemptEmails: string[]; // Email addresses that bypass code
+  adminMemberId?: string; // Primary system administrator ID
+  adminEmail?: string; // Primary system administrator email
+  lastUpdated: string;
+}
+
+export interface AuthSession {
+  isAuthenticated: boolean;
+  isCodeVerified: boolean;
+  user: BoardMember | null;
+}
+
+export type VoteType = 'yes' | 'no' | 'abstain';
+
+export interface Vote {
+  memberId: string;
+  memberName: string;
+  memberRole: string;
+  vote: VoteType;
+  timestamp: string;
+  note?: string;
+}
+
+export interface Comment {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorRole: string;
+  content: string;
+  timestamp: string;
+}
+
+export type BookkeepingStatus = 'bearbeitet' | 'nicht_bearbeitet' | 'nicht_notwendig';
+
+export type InvoiceRecurrence = 'monatlich' | 'quartalsweise' | 'halbjaehrlich' | 'jaehrlich' | 'einmalig';
+
+export interface InvoiceFolder {
+  id: string;
+  name: string; // e.g. "IONOS & Webhosting"
+  description?: string;
+  color?: string; // hex or tailwind color class
+  icon?: string;
+  recurrence?: InvoiceRecurrence;
+  expectedAmount?: number;
+  expectedDayOfMonth?: number; // e.g. 15
+  vendor?: string;
+  createdAt: string;
+  createdBy?: string;
+  updatedAt?: string;
+}
+
+export type InvoiceCategory = 
+  | 'Events & Projekte'
+  | 'Marketing & PR'
+  | 'IT, Web & Lizenzen'
+  | 'Verwaltung & IHK'
+  | 'Konferenzen (LAKO/BUKO)'
+  | 'Sonstiges';
+
+export type InvoiceStatus = 'eingereicht' | 'geprueft' | 'freigegeben' | 'ausgezahlt';
+
+export interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  title: string;
+  vendor: string;
+  amount: number;
+  date: string;
+  category: InvoiceCategory;
+  status: InvoiceStatus;
+  hasResolution: boolean;
+  resolutionId?: string;
+  resolutionNumber?: string;
+  resolutionTitle?: string;
+  folderId?: string; // Folder for recurring or non-resolution invoices
+  recurrence?: InvoiceRecurrence;
+  bookkeepingStatus?: BookkeepingStatus; // 'bearbeitet' | 'nicht_bearbeitet' | 'nicht_notwendig'
+  isBookkeepingRecorded?: boolean; // legacy compatibility
+  bookkeepingRecordedAt?: string; // Zeitstempel der Erfassung
+  bookkeepingRecordedBy?: string; // Wer hat es erfasst (z.B. Schatzmeister)
+  submittedBy: {
+    id: string;
+    name: string;
+    role: string;
+  };
+  fileUrl?: string; // Data URL or Image URL
+  fileName?: string;
+  fileSize?: string;
+  fileType?: 'image' | 'pdf';
+  notes?: string;
+  createdAt: string;
+  paidAt?: string;
+  reviewedBy?: string;
+}
+
+export type ResolutionStatus = 'in_abstimmung' | 'angenommen' | 'abgelehnt' | 'entwurf';
+
+export type ResolutionCategory = 
+  | 'Finanzen & Budget'
+  | 'Veranstaltungen & Projekte'
+  | 'Marketing & PR'
+  | 'Satzung & Verband'
+  | 'Kooperationen & Sponsoring'
+  | 'Mitglieder & Ehrungen'
+  | 'Sonstiges';
+
+export interface ResolutionAttachment {
+  id: string;
+  name: string;
+  size: string;
+  type: 'pdf' | 'excel' | 'word' | 'image' | 'powerpoint' | 'other';
+  mimeType?: string;
+  dataUrl?: string; // base64 or blob URL
+  uploadedAt: string;
+}
+
+export interface Resolution {
+  id: string;
+  number: string; // e.g. "VB-2025-004"
+  title: string;
+  description: string;
+  motionText: string; // Antragswortlaut: "Der Vorstand beschließt..."
+  category?: ResolutionCategory;
+  applicant: {
+    id: string;
+    name: string;
+    role: string;
+  };
+  requestedBudget?: number;
+  deadline?: string;
+  status: ResolutionStatus;
+  requiredQuorum: number; // Minimal percentage or number of votes needed (default 50% / simple majority)
+  eligibleVoterIds?: string[]; // Stimmberechtigte Vorstandsmitglieder (IDs). Wenn nicht angegeben, alle Mitglieder mit Stimmrecht.
+  votes: Record<string, Vote>; // memberId -> Vote
+  comments: Comment[];
+  linkedInvoiceIds: string[];
+  attachments?: ResolutionAttachment[];
+  bookkeepingStatus?: BookkeepingStatus; // 'bearbeitet' | 'nicht_bearbeitet' | 'nicht_notwendig'
+  bookkeepingNote?: string;
+  createdAt: string;
+  passedAt?: string;
+}
+
+export interface AgendaItem {
+  id: string;
+  topNumber: string;
+  title: string;
+  presenter: string;
+  durationMin: number;
+  resolutionId?: string;
+  resolutionNumber?: string;
+  notes?: string;
+}
+
+export interface MeetingAttendee {
+  memberId: string;
+  memberName: string;
+  status: 'accepted' | 'declined' | 'tentative';
+  updatedAt: string;
+}
+
+export interface Meeting {
+  id: string;
+  title: string;
+  type: 'Reguläre Vorstandssitzung' | 'Außerordentliche Sitzung' | 'Klausurtagung' | 'Jour Fixe';
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:mm
+  endTime: string; // HH:mm
+  location: string;
+  teamsUrl: string;
+  description: string;
+  agenda: AgendaItem[];
+  attendees: MeetingAttendee[];
+  protocol?: string;
+  isUpcoming: boolean;
+}
+
+export type ActiveTab = 'dashboard' | 'resolutions' | 'invoices' | 'meetings' | 'email-center' | 'storage-guide';
+
+export interface EmailNotificationLog {
+  id: string;
+  type: 'resolution_vote' | 'invoice_request' | 'resolution_result' | 'meeting_invite' | 'user_credentials' | 'admin_transferred';
+  recipientEmail: string;
+  recipientName: string;
+  subject: string;
+  sentAt: string;
+  status: 'gesendet' | 'zugestellt' | 'abgestimmt';
+  relatedId?: string; // resolutionId or invoiceRequestId
+  resolutionId?: string;
+  relatedNumber?: string; // e.g. "VB-2025-004"
+  actionTaken?: string; // e.g. "Ja-Stimme erfasst", "Rechnung eingereicht"
+  details?: string;
+}
+
+export interface InvoiceRequest {
+  id: string;
+  recipientName: string;
+  recipientEmail: string;
+  projectTitle: string;
+  expectedAmount?: number;
+  deadline: string;
+  notes?: string;
+  resolutionId?: string;
+  resolutionNumber?: string;
+  requestedBy: {
+    id: string;
+    name: string;
+    role: string;
+  };
+  createdAt: string;
+  status: 'offen' | 'erledigt';
+}
+
+export type NotificationType = 'resolution' | 'vote' | 'invoice' | 'meeting' | 'system';
+
+export interface InAppNotification {
+  id: string;
+  title: string;
+  message: string;
+  type: NotificationType;
+  timestamp: string;
+  isRead: boolean;
+  targetTab?: ActiveTab;
+  targetId?: string;
+  actionUrl?: string;
+  iconType?: 'vote' | 'invoice' | 'meeting' | 'mail' | 'shield' | 'check' | 'bell';
+}
+
+export interface NotificationSettings {
+  pushNotificationsEnabled: boolean;
+  inAppNotificationsEnabled: boolean;
+  notifyOnNewResolution: boolean;
+  notifyOnVoteSubmitted: boolean;
+  notifyOnQuorumReached: boolean;
+  notifyOnInvoiceRequest: boolean;
+  notifyOnUpcomingMeeting: boolean;
+  autoRemindHoursBeforeDeadline: number; // e.g. 24
+}
+
+export interface EmailServerConfig {
+  provider: 'resend' | 'smtp' | 'browser_mailto';
+  /** Nicht mehr im Browser gespeichert - der Schluessel liegt auf dem Server. */
+  resendApiKey?: string;
+  senderEmail: string;
+  senderName: string;
+  smtpHost?: string;
+  smtpPort?: number;
+  smtpUser?: string;
+  smtpPassword?: string;
+  smtpSecure?: boolean;
+  isConfigured: boolean;
+}
+
+export interface AppVersionConfig {
+  latestVersion: string;
+  minRequiredVersion: string;
+  forceUpdateEnabled: boolean;
+  releaseNotes?: string;
+  updatedAt: string;
+  updatedBy?: string;
+}
+
+
