@@ -8,11 +8,7 @@ import {
   InvoiceStatus,
   SecuritySettings,
   AuthSession,
-  EmailNotificationLog,
   InvoiceRequest,
-  InAppNotification,
-  NotificationSettings,
-  EmailServerConfig,
   ResolutionAttachment,
   AppVersionConfig,
   BookkeepingStatus,
@@ -24,7 +20,6 @@ import {
 import { AppStorage } from './utils/storage';
 import { PwaNotificationService } from './utils/pwaNotifications';
 import { sendResolutionVoteMails } from './utils/emailService';
-import { notifyAllDevices } from './utils/webPushHelper';
 import { FirebaseSync, FirebaseSyncStatus } from './utils/firebaseSync';
 import { CURRENT_APP_VERSION, DEFAULT_VERSION_CONFIG } from './constants/version';
 import { normalizeSecuritySettings } from './utils/security';
@@ -55,6 +50,7 @@ import { SubsidyPayoutModal } from './components/SubsidyPayoutModal';
 import { BundleSubsidiesModal } from './components/BundleSubsidiesModal';
 import { useSubsidies } from './hooks/useSubsidies';
 import { useMeetings } from './hooks/useMeetings';
+import { useNotifications } from './hooks/useNotifications';
 import { Biometric } from './utils/biometric';
 import { calculateVoteStats, formatDate } from './utils/formatters';
 import { CheckCircle2, AlertCircle, Mail, Sparkles, X, Bell, Settings, Video } from 'lucide-react';
@@ -71,11 +67,7 @@ export default function App() {
   const [invoices, setInvoices] = useState<Invoice[]>(() => AppStorage.getInvoices());
   const [folders, setFolders] = useState<InvoiceFolder[]>(() => AppStorage.getInvoiceFolders());
   const [securitySettings, setSecuritySettings] = useState<SecuritySettings>(() => AppStorage.getSecuritySettings());
-  const [emailLogs, setEmailLogs] = useState<EmailNotificationLog[]>(() => AppStorage.getEmailLogs());
   const [invoiceRequests, setInvoiceRequests] = useState<InvoiceRequest[]>(() => AppStorage.getInvoiceRequests());
-  const [notifications, setNotifications] = useState<InAppNotification[]>(() => AppStorage.getNotifications());
-  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(() => AppStorage.getNotificationSettings());
-  const [emailServerConfig, setEmailServerConfig] = useState<EmailServerConfig>(() => AppStorage.getEmailServerConfig());
   const [versionConfig, setVersionConfig] = useState<AppVersionConfig | null>(() => DEFAULT_VERSION_CONFIG);
   const [cloudStatus, setCloudStatus] = useState<FirebaseSyncStatus>(() => FirebaseSync.getStatus());
   /** Nur gesetzt, wenn die Cloud-Synchronisation tatsaechlich blockiert ist. */
@@ -320,100 +312,8 @@ export default function App() {
   }, [authSession]);
 
   useEffect(() => {
-    AppStorage.saveEmailLogs(emailLogs);
-  }, [emailLogs]);
-
-  useEffect(() => {
     AppStorage.saveInvoiceRequests(invoiceRequests);
   }, [invoiceRequests]);
-
-  useEffect(() => {
-    AppStorage.saveNotifications(notifications);
-  }, [notifications]);
-
-  useEffect(() => {
-    AppStorage.saveNotificationSettings(notificationSettings);
-  }, [notificationSettings]);
-
-  useEffect(() => {
-    AppStorage.saveEmailServerConfig(emailServerConfig);
-  }, [emailServerConfig]);
-
-  const addInAppAndPushNotification = (notif: {
-    title: string;
-    message: string;
-    type: 'resolution' | 'vote' | 'invoice' | 'meeting' | 'system';
-    targetTab?: ActiveTab;
-    targetId?: string;
-    /**
-     * Wenn gesetzt, erhalten nur diese Mitglieder eine Push-Nachricht.
-     * Bei Beschluessen sind das die Stimmberechtigten - alle anderen sollen
-     * nicht fuer etwas benachrichtigt werden, wozu sie nichts beitragen.
-     */
-    recipientMemberIds?: string[];
-  }) => {
-    const newEntry: InAppNotification = {
-      id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      timestamp: new Date().toISOString(),
-      isRead: false,
-      title: notif.title,
-      message: notif.message,
-      type: notif.type,
-      targetTab: notif.targetTab,
-      targetId: notif.targetId,
-    };
-    setNotifications((prev) => [newEntry, ...prev]);
-
-    // Eigenes Geraet: Systemmeldung nur, wenn lokal gewuenscht
-    if (notificationSettings.pushNotificationsEnabled) {
-      PwaNotificationService.showPushNotification({
-        title: notif.title,
-        body: notif.message,
-      });
-    }
-
-    // Alle anderen Geraete: echte Push-Nachricht ueber den Server.
-    // Bewusst unabhaengig von den lokalen Einstellungen des Absenders -
-    // sonst wuerde die eigene Einstellung die Benachrichtigung der anderen
-    // Vorstandsmitglieder unterdruecken.
-    notifyAllDevices(
-      {
-        title: notif.title,
-        body: notif.message,
-        url: '/',
-      },
-      currentMember.id,
-      notif.recipientMemberIds
-    ).catch(() => {});
-  };
-
-  const handleMarkAsRead = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
-    );
-  };
-
-  const handleMarkAllAsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-  };
-
-  const handleClearReadNotifications = () => {
-    setNotifications((prev) => prev.filter((n) => !n.isRead));
-  };
-
-  const handleSendTestNotification = () => {
-    addInAppAndPushNotification({
-      title: '⚡ Test-Umlaufbeschluss',
-      message: `Hallo ${currentMember.name}, dies ist eine Test-Benachrichtigung für das WJ Vorstandsportal.`,
-      type: 'resolution',
-      targetTab: 'resolutions',
-    });
-    setSystemBanner({
-      type: 'info',
-      title: 'Test-Benachrichtigung ausgelöst!',
-      message: 'Eine Benachrichtigung wurde in die Mitteilungszentrale und an dein Gerät übertragen.',
-    });
-  };
 
   const handleUpdateVersionConfig = async (newConfig: Partial<AppVersionConfig>) => {
     await FirebaseSync.saveVersionConfig(newConfig);
@@ -440,6 +340,26 @@ export default function App() {
       initials: '–',
       avatarColor: 'bg-slate-400',
     };
+
+  // --- Benachrichtigungen/E-Mail-Protokoll: siehe
+  // src/hooks/useNotifications.ts (dritter extrahierter Bereich der
+  // App.tsx-Modularisierung, Details in CLAUDE.md) ------------------------
+  const {
+    notifications,
+    setNotifications,
+    notificationSettings,
+    setNotificationSettings,
+    emailLogs,
+    setEmailLogs,
+    emailServerConfig,
+    setEmailServerConfig,
+    addInAppAndPushNotification,
+    handleMarkAsRead,
+    handleMarkAllAsRead,
+    handleClearReadNotifications,
+    handleSendTestNotification,
+    handleAddEmailLog,
+  } = useNotifications({ currentMember, setSystemBanner });
 
   // 1-Klick-Aktionen aus E-Mails (?action=vote&...).
   //
@@ -1043,16 +963,6 @@ export default function App() {
   const handleUpdateSecuritySettings = (newSettings: SecuritySettings) => {
     setSecuritySettings(newSettings);
     FirebaseSync.saveSecuritySettings(newSettings).catch(() => {});
-  };
-
-  // Handler: Add Email Log
-  const handleAddEmailLog = (log: Omit<EmailNotificationLog, 'id' | 'sentAt'>) => {
-    const newEntry: EmailNotificationLog = {
-      ...log,
-      id: `elog_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      sentAt: new Date().toISOString(),
-    };
-    setEmailLogs((prev) => [newEntry, ...prev]);
   };
 
   // Handler: Create Invoice Request
