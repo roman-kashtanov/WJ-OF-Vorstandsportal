@@ -1,17 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  BoardMember, 
-  Resolution, 
-  Invoice,
+  BoardMember,
+  Resolution,
   ActiveTab,
-  VoteType, 
-  InvoiceStatus,
-  InvoiceRequest,
+  VoteType,
   ResolutionAttachment,
   AppVersionConfig,
   BookkeepingStatus,
-  InvoiceFolder,
-  InvoiceRecurrence,
   Subsidy,
   SubsidyPerson
 } from './types';
@@ -50,7 +45,8 @@ import { useSubsidies } from './hooks/useSubsidies';
 import { useMembers } from './hooks/useMembers';
 import { useMeetings } from './hooks/useMeetings';
 import { useNotifications } from './hooks/useNotifications';
-import { calculateVoteStats, formatDate } from './utils/formatters';
+import { useInvoices } from './hooks/useInvoices';
+import { calculateVoteStats } from './utils/formatters';
 import { CheckCircle2, AlertCircle, Mail, Sparkles, X, Bell, Settings, Video } from 'lucide-react';
 
 /** Stimme als Wort - fuer Rueckfragen und Meldungen. */
@@ -85,9 +81,6 @@ export default function App() {
   } = useMembers();
 
   const [resolutions, setResolutions] = useState<Resolution[]>(() => AppStorage.getResolutions());
-  const [invoices, setInvoices] = useState<Invoice[]>(() => AppStorage.getInvoices());
-  const [folders, setFolders] = useState<InvoiceFolder[]>(() => AppStorage.getInvoiceFolders());
-  const [invoiceRequests, setInvoiceRequests] = useState<InvoiceRequest[]>(() => AppStorage.getInvoiceRequests());
   const [versionConfig, setVersionConfig] = useState<AppVersionConfig | null>(() => DEFAULT_VERSION_CONFIG);
   const [cloudStatus, setCloudStatus] = useState<FirebaseSyncStatus>(() => FirebaseSync.getStatus());
   /** Nur gesetzt, wenn die Cloud-Synchronisation tatsaechlich blockiert ist. */
@@ -249,13 +242,10 @@ export default function App() {
   
   // Modals state
   const [isNewResolutionOpen, setIsNewResolutionOpen] = useState(false);
-  const [isNewInvoiceOpen, setIsNewInvoiceOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isEmailVoteModalOpen, setIsEmailVoteModalOpen] = useState(false);
   const [emailVoteResolution, setEmailVoteResolution] = useState<Resolution | null>(null);
-  const [isInvoiceRequestModalOpen, setIsInvoiceRequestModalOpen] = useState(false);
 
-  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [selectedResolutionId, setSelectedResolutionId] = useState<string | null>(null);
   
   // Notification Banner State
@@ -289,18 +279,6 @@ export default function App() {
     AppStorage.saveResolutions(resolutions);
   }, [resolutions]);
 
-  useEffect(() => {
-    AppStorage.saveInvoices(invoices);
-  }, [invoices]);
-
-  useEffect(() => {
-    AppStorage.saveInvoiceFolders(folders);
-  }, [folders]);
-
-  useEffect(() => {
-    AppStorage.saveInvoiceRequests(invoiceRequests);
-  }, [invoiceRequests]);
-
   const handleUpdateVersionConfig = async (newConfig: Partial<AppVersionConfig>) => {
     await FirebaseSync.saveVersionConfig(newConfig);
     setVersionConfig((prev) => (prev ? { ...prev, ...newConfig } : { ...DEFAULT_VERSION_CONFIG, ...newConfig }));
@@ -332,6 +310,40 @@ export default function App() {
     handleSendTestNotification,
     handleAddEmailLog,
   } = useNotifications({ currentMember, setSystemBanner });
+
+  // --- Belege: siehe src/hooks/useInvoices.ts (fuenfter extrahierter
+  // Bereich der App.tsx-Modularisierung, Details in CLAUDE.md) -----------
+  const {
+    invoices,
+    setInvoices,
+    folders,
+    setFolders,
+    invoiceRequests,
+    setInvoiceRequests,
+    isNewInvoiceOpen,
+    setIsNewInvoiceOpen,
+    isInvoiceRequestModalOpen,
+    setIsInvoiceRequestModalOpen,
+    selectedInvoiceId,
+    setSelectedInvoiceId,
+    handleCreateInvoice,
+    handleToggleBookkeepingRecorded,
+    handleUpdateInvoiceBookkeepingStatus,
+    handleCreateFolder,
+    handleDeleteFolder,
+    handleUpdateInvoiceFolder,
+    handleUpdateInvoiceRecurrence,
+    handleUpdateInvoiceStatus,
+    handleCreateInvoiceRequest,
+  } = useInvoices({
+    currentMember,
+    setResolutions,
+    addInAppAndPushNotification,
+    handleAddEmailLog,
+    notificationSettings,
+    setSystemBanner,
+    setActiveTab,
+  });
 
   // 1-Klick-Aktionen aus E-Mails (?action=vote&...).
   //
@@ -717,81 +729,6 @@ export default function App() {
     addResolutionAttachment: handleAddAttachment,
   });
 
-  // Handler: Create new invoice
-  const handleCreateInvoice = (data: Omit<Invoice, 'id' | 'createdAt'>) => {
-    const newInvId = `inv_${Date.now()}`;
-    const newInvoice: Invoice = {
-      ...data,
-      id: newInvId,
-      createdAt: new Date().toISOString(),
-    };
-
-    setInvoices((prev) => [newInvoice, ...prev]);
-    FirebaseSync.saveInvoice(newInvoice).catch(() => {});
-
-    // If linked to a resolution, update that resolution's linkedInvoiceIds
-    if (data.resolutionId) {
-      setResolutions((prev) =>
-        prev.map((res) => {
-          if (res.id === data.resolutionId) {
-            const updatedRes = {
-              ...res,
-              linkedInvoiceIds: [...res.linkedInvoiceIds, newInvId],
-            };
-            FirebaseSync.saveResolution(updatedRes).catch(() => {});
-            return updatedRes;
-          }
-          return res;
-        })
-      );
-    }
-
-    // Check if there was an open invoice request for this title and mark as completed
-    setInvoiceRequests((prev) =>
-      prev.map((req) =>
-        req.projectTitle.toLowerCase() === data.title.toLowerCase() ||
-        (data.resolutionId && req.resolutionId === data.resolutionId)
-          ? { ...req, status: 'erledigt' as const }
-          : req
-      )
-    );
-
-    // Add In-App notification
-    addInAppAndPushNotification({
-      title: `📥 Neuer Beleg eingereicht: ${newInvoice.invoiceNumber}`,
-      message: `${newInvoice.submittedBy.name} hat Beleg für "${newInvoice.title}" (${newInvoice.amount.toFixed(2)} €) hochgeladen.`,
-      type: 'invoice',
-      targetTab: 'invoices',
-      targetId: newInvoice.id,
-    });
-
-    setActiveTab('invoices');
-  };
-
-  // Handler: Toggle invoice bookkeeping status
-  const handleToggleBookkeepingRecorded = (invoiceId: string, isRecorded: boolean) => {
-    handleUpdateInvoiceBookkeepingStatus(invoiceId, isRecorded ? 'bearbeitet' : 'nicht_bearbeitet');
-  };
-
-  // Handler: Update invoice bookkeeping status (3 options: 'bearbeitet' | 'nicht_bearbeitet' | 'nicht_notwendig')
-  const handleUpdateInvoiceBookkeepingStatus = (invoiceId: string, status: BookkeepingStatus) => {
-    setInvoices((prev) =>
-      prev.map((inv) => {
-        if (inv.id !== invoiceId) return inv;
-        const isBearbeitet = status === 'bearbeitet';
-        const updatedInv: Invoice = {
-          ...inv,
-          bookkeepingStatus: status,
-          isBookkeepingRecorded: isBearbeitet,
-          bookkeepingRecordedAt: isBearbeitet ? new Date().toISOString() : undefined,
-          bookkeepingRecordedBy: isBearbeitet ? `${currentMember.name} (${currentMember.role})` : undefined,
-        };
-        FirebaseSync.saveInvoice(updatedInv).catch(() => {});
-        return updatedInv;
-      })
-    );
-  };
-
   // Handler: Update resolution bookkeeping status
   const handleUpdateResolutionBookkeepingStatus = (resolutionId: string, status: BookkeepingStatus) => {
     setResolutions((prev) =>
@@ -807,117 +744,6 @@ export default function App() {
     );
   };
 
-  // Handler: Create a new invoice folder
-  const handleCreateFolder = (name: string, color?: string, icon?: string) => {
-    const newFolder: InvoiceFolder = {
-      id: `folder_${Date.now()}`,
-      name,
-      color: color || '#003594',
-      icon: icon || 'folder',
-      createdAt: new Date().toISOString(),
-      createdBy: currentMember.id,
-    };
-    setFolders((prev) => [...prev, newFolder]);
-    FirebaseSync.saveInvoiceFolder(newFolder).catch(() => {});
-    return newFolder;
-  };
-
-  // Handler: Delete invoice folder
-  const handleDeleteFolder = (folderId: string) => {
-    setFolders((prev) => prev.filter((f) => f.id !== folderId));
-    FirebaseSync.deleteInvoiceFolder(folderId).catch(() => {});
-    // Unassign invoices in this folder
-    setInvoices((prev) =>
-      prev.map((inv) => {
-        if (inv.folderId === folderId) {
-          const updated = { ...inv, folderId: undefined };
-          FirebaseSync.saveInvoice(updated).catch(() => {});
-          return updated;
-        }
-        return inv;
-      })
-    );
-  };
-
-  // Handler: Assign invoice to folder
-  const handleUpdateInvoiceFolder = (invoiceId: string, folderId: string | undefined) => {
-    setInvoices((prev) =>
-      prev.map((inv) => {
-        if (inv.id !== invoiceId) return inv;
-        const updated = { ...inv, folderId };
-        FirebaseSync.saveInvoice(updated).catch(() => {});
-        return updated;
-      })
-    );
-  };
-
-  // Handler: Update invoice recurrence
-  const handleUpdateInvoiceRecurrence = (invoiceId: string, recurrence: InvoiceRecurrence | undefined) => {
-    setInvoices((prev) =>
-      prev.map((inv) => {
-        if (inv.id !== invoiceId) return inv;
-        const updated = { ...inv, recurrence };
-        FirebaseSync.saveInvoice(updated).catch(() => {});
-        return updated;
-      })
-    );
-  };
-
-  // Handler: Update invoice status
-  const handleUpdateInvoiceStatus = (invoiceId: string, newStatus: InvoiceStatus) => {
-    setInvoices((prev) =>
-      prev.map((inv) => {
-        if (inv.id !== invoiceId) return inv;
-        const updatedInv = {
-          ...inv,
-          status: newStatus,
-          reviewedBy: `${currentMember.name} (${currentMember.role})`,
-          paidAt: newStatus === 'ausgezahlt' ? new Date().toISOString() : inv.paidAt,
-        };
-        FirebaseSync.saveInvoice(updatedInv).catch(() => {});
-        return updatedInv;
-      })
-    );
-  };
-
-
-  // Handler: Create Invoice Request
-  const handleCreateInvoiceRequest = (request: Omit<InvoiceRequest, 'id' | 'createdAt'>) => {
-    const newReq: InvoiceRequest = {
-      ...request,
-      id: `req_${Date.now()}`,
-      createdAt: new Date().toISOString(),
-    };
-    setInvoiceRequests((prev) => [newReq, ...prev]);
-    FirebaseSync.saveInvoiceRequest(newReq).catch(() => {});
-
-    // Log the email notification
-    handleAddEmailLog({
-      type: 'invoice_request',
-      recipientName: request.recipientName,
-      recipientEmail: request.recipientEmail,
-      subject: `[WJ Offenbach Beleg-Anforderung] ${request.projectTitle}`,
-      status: 'zugestellt',
-      resolutionId: request.resolutionId,
-      details: `Beleg angefordert bis ${formatDate(request.deadline)} von ${currentMember.name}`,
-    });
-
-    // Dispatch In-App & Push notification
-    if (notificationSettings.notifyOnInvoiceRequest) {
-      addInAppAndPushNotification({
-        title: `📩 Beleg-Anforderung: ${request.projectTitle}`,
-        message: `Anforderung zur Einreichung an ${request.recipientName} (${request.recipientEmail}) versendet.`,
-        type: 'invoice',
-        targetTab: 'invoices',
-      });
-    }
-
-    setSystemBanner({
-      type: 'success',
-      title: 'Rechnungsanforderung gespeichert & versendet',
-      message: `Anforderung für "${request.projectTitle}" an ${request.recipientName} (${request.recipientEmail}) versendet.`,
-    });
-  };
 
   // Open Email Vote Modal for a resolution
   const handleOpenEmailVoteModal = (resolution: Resolution) => {
