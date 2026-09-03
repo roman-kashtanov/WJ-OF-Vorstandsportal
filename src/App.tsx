@@ -2,9 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   BoardMember, 
   Resolution, 
-  Invoice, 
-  Meeting, 
-  ActiveTab, 
+  Invoice,
+  ActiveTab,
   VoteType, 
   InvoiceStatus,
   SecuritySettings,
@@ -55,6 +54,7 @@ import { SubsidyPeopleModal } from './components/SubsidyPeopleModal';
 import { SubsidyPayoutModal } from './components/SubsidyPayoutModal';
 import { BundleSubsidiesModal } from './components/BundleSubsidiesModal';
 import { useSubsidies } from './hooks/useSubsidies';
+import { useMeetings } from './hooks/useMeetings';
 import { Biometric } from './utils/biometric';
 import { calculateVoteStats, formatDate } from './utils/formatters';
 import { CheckCircle2, AlertCircle, Mail, Sparkles, X, Bell, Settings, Video } from 'lucide-react';
@@ -70,8 +70,6 @@ export default function App() {
   const [resolutions, setResolutions] = useState<Resolution[]>(() => AppStorage.getResolutions());
   const [invoices, setInvoices] = useState<Invoice[]>(() => AppStorage.getInvoices());
   const [folders, setFolders] = useState<InvoiceFolder[]>(() => AppStorage.getInvoiceFolders());
-  const [meetings, setMeetings] = useState<Meeting[]>(() => AppStorage.getMeetings());
-  const [defaultTeamsUrl, setDefaultTeamsUrl] = useState<string>(() => AppStorage.getDefaultTeamsUrl());
   const [securitySettings, setSecuritySettings] = useState<SecuritySettings>(() => AppStorage.getSecuritySettings());
   const [emailLogs, setEmailLogs] = useState<EmailNotificationLog[]>(() => AppStorage.getEmailLogs());
   const [invoiceRequests, setInvoiceRequests] = useState<InvoiceRequest[]>(() => AppStorage.getInvoiceRequests());
@@ -258,10 +256,7 @@ export default function App() {
   // Modals state
   const [isNewResolutionOpen, setIsNewResolutionOpen] = useState(false);
   const [isNewInvoiceOpen, setIsNewInvoiceOpen] = useState(false);
-  const [isNewMeetingOpen, setIsNewMeetingOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isTeamsSettingsOpen, setIsTeamsSettingsOpen] = useState(false);
-  const [isQuickAgendaOpen, setIsQuickAgendaOpen] = useState(false);
   const [isEmailVoteModalOpen, setIsEmailVoteModalOpen] = useState(false);
   const [emailVoteResolution, setEmailVoteResolution] = useState<Resolution | null>(null);
   const [isInvoiceRequestModalOpen, setIsInvoiceRequestModalOpen] = useState(false);
@@ -275,6 +270,25 @@ export default function App() {
     title: string;
     message: string;
   } | null>(null);
+
+  // --- Sitzungen: siehe src/hooks/useMeetings.ts (zweiter extrahierter
+  // Bereich der App.tsx-Modularisierung, Details in CLAUDE.md) -----------
+  const {
+    meetings,
+    setMeetings,
+    defaultTeamsUrl,
+    setDefaultTeamsUrl,
+    isNewMeetingOpen,
+    setIsNewMeetingOpen,
+    isTeamsSettingsOpen,
+    setIsTeamsSettingsOpen,
+    isQuickAgendaOpen,
+    setIsQuickAgendaOpen,
+    handleCreateMeeting,
+    handleUpdateAttendeeStatus,
+    handleUpdateMeetingTeamsLink,
+    handleSaveDefaultTeamsUrl,
+  } = useMeetings({ members, setSystemBanner, setActiveTab });
 
   // Sync to storage
   useEffect(() => {
@@ -296,10 +310,6 @@ export default function App() {
   useEffect(() => {
     AppStorage.saveInvoiceFolders(folders);
   }, [folders]);
-
-  useEffect(() => {
-    AppStorage.saveMeetings(meetings);
-  }, [meetings]);
 
   useEffect(() => {
     AppStorage.saveSecuritySettings(securitySettings);
@@ -1023,50 +1033,6 @@ export default function App() {
     );
   };
 
-  // Handler: Create new meeting
-  const handleCreateMeeting = (data: Omit<Meeting, 'id'>) => {
-    const newMeeting: Meeting = {
-      ...data,
-      id: `meet_${Date.now()}`,
-    };
-    setMeetings((prev) => [newMeeting, ...prev]);
-    FirebaseSync.saveMeeting(newMeeting).catch(() => {});
-    setActiveTab('meetings');
-  };
-
-  // Handler: Update meeting attendee RSVP
-  const handleUpdateAttendeeStatus = (
-    meetingId: string,
-    memberId: string,
-    status: 'accepted' | 'declined' | 'tentative'
-  ) => {
-    setMeetings((prev) => {
-      const updatedList = prev.map((m) => {
-        if (m.id !== meetingId) return m;
-        const exists = m.attendees.some((a) => a.memberId === memberId);
-        const updatedAttendees = exists
-          ? m.attendees.map((a) =>
-              a.memberId === memberId
-                ? { ...a, status, updatedAt: new Date().toISOString() }
-                : a
-            )
-          : [
-              ...m.attendees,
-              {
-                memberId,
-                memberName: members.find((x) => x.id === memberId)?.name || 'Vorstand',
-                status,
-                updatedAt: new Date().toISOString(),
-              },
-            ];
-        const updatedMeeting = { ...m, attendees: updatedAttendees };
-        FirebaseSync.saveMeeting(updatedMeeting).catch(() => {});
-        return updatedMeeting;
-      });
-      return updatedList;
-    });
-  };
-
   // Handler: Update members list
   const handleUpdateMembers = (newMembers: BoardMember[]) => {
     setMembers(newMembers);
@@ -1077,47 +1043,6 @@ export default function App() {
   const handleUpdateSecuritySettings = (newSettings: SecuritySettings) => {
     setSecuritySettings(newSettings);
     FirebaseSync.saveSecuritySettings(newSettings).catch(() => {});
-  };
-
-  // Handler: Update meeting MS Teams link
-  const handleUpdateMeetingTeamsLink = (meetingId: string, newUrl: string) => {
-    setMeetings((prev) =>
-      prev.map((m) => {
-        if (m.id === meetingId) {
-          const updatedMeeting = { ...m, teamsUrl: newUrl };
-          FirebaseSync.saveMeeting(updatedMeeting).catch(() => {});
-          return updatedMeeting;
-        }
-        return m;
-      })
-    );
-  };
-
-  // Handler: Save default Teams URL
-  const handleSaveDefaultTeamsUrl = async (url: string, applyToAllMeetings: boolean) => {
-    setDefaultTeamsUrl(url);
-    AppStorage.saveDefaultTeamsUrl(url);
-    await FirebaseSync.saveMeetingSettings({ defaultTeamsUrl: url });
-
-    if (applyToAllMeetings) {
-      setMeetings((prev) => {
-        const updated = prev.map((m) => (m.isUpcoming ? { ...m, teamsUrl: url } : m));
-        AppStorage.saveMeetings(updated);
-        for (const m of updated) {
-          if (m.isUpcoming) {
-            FirebaseSync.saveMeeting(m).catch(() => {});
-          }
-        }
-        return updated;
-      });
-    }
-
-    setSystemBanner({
-      type: 'success',
-      title: 'MS Teams Link aktualisiert',
-      message: 'Der Besprechungslink wurde erfolgreich gespeichert und synchronisiert.',
-    });
-    setTimeout(() => setSystemBanner(null), 4000);
   };
 
   // Handler: Add Email Log
