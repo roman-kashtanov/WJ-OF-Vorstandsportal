@@ -20,8 +20,7 @@ import {
   InvoiceFolder,
   InvoiceRecurrence,
   Subsidy,
-  SubsidyPerson,
-  SubsidyStatus
+  SubsidyPerson
 } from './types';
 import { AppStorage } from './utils/storage';
 import { PwaNotificationService } from './utils/pwaNotifications';
@@ -55,8 +54,7 @@ import { NewSubsidyModal } from './components/NewSubsidyModal';
 import { SubsidyPeopleModal } from './components/SubsidyPeopleModal';
 import { SubsidyPayoutModal } from './components/SubsidyPayoutModal';
 import { BundleSubsidiesModal } from './components/BundleSubsidiesModal';
-import { generateSubsidyReceiptPdf } from './utils/subsidyReceipt';
-import { SubsidyStorage } from './utils/storage';
+import { useSubsidies } from './hooks/useSubsidies';
 import { Biometric } from './utils/biometric';
 import { calculateVoteStats, formatDate } from './utils/formatters';
 import { CheckCircle2, AlertCircle, Mail, Sparkles, X, Bell, Settings, Video } from 'lucide-react';
@@ -643,165 +641,6 @@ export default function App() {
   };
 
   /** Offene Rueckfrage zum Aendern einer bereits abgegebenen Stimme. */
-  // --- Zuschuesse ---------------------------------------------------------
-  const [subsidies, setSubsidies] = useState<Subsidy[]>(() => SubsidyStorage.getSubsidies());
-  const [subsidyPeople, setSubsidyPeople] = useState<SubsidyPerson[]>(() =>
-    SubsidyStorage.getPeople()
-  );
-  const [subsidyYear, setSubsidyYear] = useState<number>(new Date().getFullYear());
-  const [clubAccount, setClubAccount] = useState(() => SubsidyStorage.getClubAccount());
-  const [isSubsidyModalOpen, setIsSubsidyModalOpen] = useState(false);
-  const [editingSubsidy, setEditingSubsidy] = useState<Subsidy | null>(null);
-  const [isSubsidyPeopleOpen, setIsSubsidyPeopleOpen] = useState(false);
-  const [isPayoutOpen, setIsPayoutOpen] = useState(false);
-  const [isBundleModalOpen, setIsBundleModalOpen] = useState(false);
-
-  useEffect(() => SubsidyStorage.saveSubsidies(subsidies), [subsidies]);
-  useEffect(() => SubsidyStorage.savePeople(subsidyPeople), [subsidyPeople]);
-
-  const handleSaveSubsidy = (s: Subsidy) => {
-    setSubsidies((prev) => {
-      const exists = prev.some((x) => x.id === s.id);
-      return exists ? prev.map((x) => (x.id === s.id ? s : x)) : [s, ...prev];
-    });
-    FirebaseSync.saveSubsidy(s).catch(() => {});
-    setEditingSubsidy(null);
-  };
-
-  const handleDeleteSubsidy = (id: string) => {
-    setSubsidies((prev) => prev.filter((x) => x.id !== id));
-    FirebaseSync.deleteSubsidy(id).catch(() => {});
-  };
-
-  const handleUpdateSubsidyStatus = (id: string, status: SubsidyStatus) => {
-    setSubsidies((prev) =>
-      prev.map((x) => {
-        if (x.id !== id) return x;
-        const now = new Date().toISOString();
-        const updated: Subsidy = {
-          ...x,
-          status,
-          approvedAt:
-            status === 'bestaetigt' || status === 'bezahlt' ? x.approvedAt || now : x.approvedAt,
-          paidAt: status === 'bezahlt' ? x.paidAt || now : undefined,
-          bundledAt: status === 'im_beschluss' ? x.bundledAt || now : x.bundledAt,
-          releasedAt: status === 'zur_zahlung_freigegeben' ? x.releasedAt || now : x.releasedAt,
-        };
-        FirebaseSync.saveSubsidy(updated).catch(() => {});
-        return updated;
-      })
-    );
-  };
-
-  /**
-   * Buendelt mehrere geprueften Zuschuesse zu einem neuen Vorstandsbeschluss
-   * und markiert sie als "im_beschluss". Erst wenn dieser Beschluss
-   * angenommen wird, greift die Kaskade weiter unten und gibt sie zur
-   * Zahlung frei - siehe die Statuskette in SubsidyStatus (types.ts).
-   */
-  const handleBundleSubsidies = (
-    subsidyIds: string[],
-    resolutionData: Omit<Resolution, 'id' | 'votes' | 'comments' | 'linkedInvoiceIds' | 'createdAt'>
-  ) => {
-    const newRes = handleCreateResolution(resolutionData);
-    const now = new Date().toISOString();
-    setSubsidies((prev) =>
-      prev.map((s) => {
-        if (!subsidyIds.includes(s.id)) return s;
-        const updated: Subsidy = {
-          ...s,
-          status: 'im_beschluss',
-          resolutionId: newRes.id,
-          bundledAt: now,
-        };
-        FirebaseSync.saveSubsidy(updated).catch(() => {});
-        return updated;
-      })
-    );
-  };
-
-  /**
-   * Markiert Zuschuesse als bezahlt und haengt pro Zuschuss eine
-   * Nachweis-Zusammenfassung als PDF an den zugehoerigen Beschluss - das
-   * Original-Nachweisfoto haengt dort bereits separat (aus dem Buendeln).
-   */
-  const handleMarkSubsidiesPaid = (ids: string[]) => {
-    ids.forEach((id) => {
-      handleUpdateSubsidyStatus(id, 'bezahlt');
-
-      const subsidy = subsidies.find((s) => s.id === id);
-      if (!subsidy?.resolutionId) return;
-      const resolution = resolutions.find((r) => r.id === subsidy.resolutionId);
-      if (!resolution) return;
-      const person = subsidyPeople.find((p) => p.id === subsidy.personId);
-
-      const attachment = generateSubsidyReceiptPdf(subsidy, person, resolution);
-      handleAddAttachment(resolution.id, attachment);
-    });
-  };
-
-  /**
-   * Reaktive Kaskade: sobald ein Beschluss, an den Zuschuesse gebuendelt
-   * sind, angenommen oder abgelehnt wird, folgen die Zuschuesse automatisch.
-   *
-   * Bewusst NICHT in handleVoteForMember verdrahtet: Stimmen per E-Mail-Link
-   * aendern den Beschluss-Status serverseitig direkt in Firestore (api/vote.ts),
-   * nie ueber handleVoteForMember. Nur ein Effekt, der auf den resolutions-State
-   * selbst reagiert, erfasst beide Wege gleichermassen - egal ob der
-   * Statuswechsel lokal oder durch die Live-Firestore-Subscription hereinkam.
-   */
-  useEffect(() => {
-    setSubsidies((prev) => {
-      let changed = false;
-      const next = prev.map((s) => {
-        if (s.status !== 'im_beschluss' || !s.resolutionId) return s;
-        const res = resolutions.find((r) => r.id === s.resolutionId);
-        if (!res) return s;
-        if (res.status === 'angenommen') {
-          changed = true;
-          const updated: Subsidy = {
-            ...s,
-            status: 'zur_zahlung_freigegeben',
-            releasedAt: new Date().toISOString(),
-          };
-          FirebaseSync.saveSubsidy(updated).catch(() => {});
-          return updated;
-        }
-        if (res.status === 'abgelehnt') {
-          changed = true;
-          const updated: Subsidy = {
-            ...s,
-            status: 'bestaetigt',
-            resolutionId: undefined,
-            bundledAt: undefined,
-          };
-          FirebaseSync.saveSubsidy(updated).catch(() => {});
-          return updated;
-        }
-        return s;
-      });
-      return changed ? next : prev;
-    });
-  }, [resolutions]);
-
-  const handleSaveSubsidyPerson = (person: SubsidyPerson) => {
-    setSubsidyPeople((prev) => {
-      const exists = prev.some((p) => p.id === person.id);
-      return exists ? prev.map((p) => (p.id === person.id ? person : p)) : [...prev, person];
-    });
-    FirebaseSync.saveSubsidyPerson(person).catch(() => {});
-
-    // Name in bereits erfassten Zuschuessen mitfuehren
-    setSubsidies((prev) =>
-      prev.map((s) => (s.personId === person.id ? { ...s, personName: person.name } : s))
-    );
-  };
-
-  const handleDeleteSubsidyPerson = (id: string) => {
-    setSubsidyPeople((prev) => prev.filter((p) => p.id !== id));
-    FirebaseSync.deleteSubsidyPerson(id).catch(() => {});
-  };
-
   const [pendingVoteChange, setPendingVoteChange] = useState<{
     resolutionId: string;
     voteType: VoteType;
@@ -986,6 +825,40 @@ export default function App() {
 
     return newRes;
   };
+
+  // --- Zuschuesse: siehe src/hooks/useSubsidies.ts (erster extrahierter
+  // Bereich der App.tsx-Modularisierung, Details in CLAUDE.md) ------------
+  const {
+    subsidies,
+    setSubsidies,
+    subsidyPeople,
+    setSubsidyPeople,
+    subsidyYear,
+    setSubsidyYear,
+    clubAccount,
+    isSubsidyModalOpen,
+    setIsSubsidyModalOpen,
+    editingSubsidy,
+    setEditingSubsidy,
+    isSubsidyPeopleOpen,
+    setIsSubsidyPeopleOpen,
+    isPayoutOpen,
+    setIsPayoutOpen,
+    isBundleModalOpen,
+    setIsBundleModalOpen,
+    handleSaveSubsidy,
+    handleDeleteSubsidy,
+    handleUpdateSubsidyStatus,
+    handleBundleSubsidies,
+    handleMarkSubsidiesPaid,
+    handleSaveSubsidyPerson,
+    handleDeleteSubsidyPerson,
+    handleSaveClubAccount,
+  } = useSubsidies({
+    resolutions,
+    createResolution: handleCreateResolution,
+    addResolutionAttachment: handleAddAttachment,
+  });
 
   // Handler: Create new invoice
   const handleCreateInvoice = (data: Omit<Invoice, 'id' | 'createdAt'>) => {
@@ -1647,10 +1520,7 @@ export default function App() {
         people={subsidyPeople}
         year={subsidyYear}
         clubAccount={clubAccount}
-        onSaveClubAccount={(a) => {
-          setClubAccount(a);
-          SubsidyStorage.saveClubAccount(a);
-        }}
+        onSaveClubAccount={handleSaveClubAccount}
         onMarkPaid={handleMarkSubsidiesPaid}
       />
 
