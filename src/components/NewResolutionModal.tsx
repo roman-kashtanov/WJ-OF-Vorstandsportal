@@ -25,7 +25,8 @@ import {
   parseTeamsCopilotSummary
 } from '../utils/copilotParser';
 import { SpeechToTextHelper } from '../utils/speechToText';
-import { getAttachmentType, formatFileSize } from '../utils/fileHelpers';
+import { getAttachmentType } from '../utils/fileHelpers';
+import { prepareFileForStorage, formatBytes } from '../utils/fileStorage';
 import { isVotingMember } from '../utils/formatters';
 
 interface NewResolutionModalProps {
@@ -105,32 +106,35 @@ export const NewResolutionModal: React.FC<NewResolutionModalProps> = ({
 
   // Attachments (ALWAYS visible)
   const [attachments, setAttachments] = useState<ResolutionAttachment[]>([]);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFilesSelected = (files: FileList | null) => {
+  const handleFilesSelected = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    setAttachmentError(null);
 
-    Array.from(files).forEach((file) => {
-      const type = getAttachmentType(file.name, file.type);
-      const reader = new FileReader();
+    for (const file of Array.from(files)) {
+      // Bilder werden verkleinert, zu grosse Dateien abgelehnt - sonst
+      // scheitert das Speichern spaeter stillschweigend an der Groessengrenze.
+      const result = await prepareFileForStorage(file);
+      if (result.ok === false) {
+        setAttachmentError(`${file.name}: ${result.error}`);
+        continue;
+      }
 
-      reader.onload = (event) => {
-        const dataUrl = event.target?.result as string;
-        const newAttachment: ResolutionAttachment = {
+      setAttachments((prev) => [
+        ...prev,
+        {
           id: `att_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
           name: file.name,
-          size: formatFileSize(file.size),
-          type,
-          mimeType: file.type,
-          dataUrl,
+          size: formatBytes(result.file.bytes),
+          type: getAttachmentType(file.name, file.type),
+          mimeType: result.file.mimeType,
+          dataUrl: result.file.dataUrl,
           uploadedAt: new Date().toISOString(),
-        };
-
-        setAttachments((prev) => [...prev, newAttachment]);
-      };
-
-      reader.readAsDataURL(file);
-    });
+        },
+      ]);
+    }
   };
 
   const removeAttachment = (id: string) => {
@@ -472,6 +476,12 @@ export const NewResolutionModal: React.FC<NewResolutionModalProps> = ({
                 <span>Dateianhänge (optional)</span>
                 <span className="text-[10px] text-slate-400 font-normal">PDF, Excel, Word, Bild</span>
               </label>
+
+              {attachmentError && (
+                <div className="mb-2 rounded-xl bg-rose-50 border border-rose-200 p-2.5 text-[11px] leading-relaxed text-rose-800">
+                  {attachmentError}
+                </div>
+              )}
 
               <input
                 ref={fileInputRef}

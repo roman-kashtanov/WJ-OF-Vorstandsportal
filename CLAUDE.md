@@ -154,3 +154,28 @@ ausgenommen statt stillschweigend übersprungen.
 
 Umlaute im Verwendungszweck werden umschrieben (ae, oe, ue, ss), weil der
 SEPA-Zeichensatz sie nicht zulässt.
+
+## Speicher (wichtig)
+
+Belege liegen als Base64 **im Firestore-Dokument selbst**, nicht in einem
+Dateispeicher. Daraus folgen zwei harte Grenzen:
+
+- **1 MiB je Dokument** (Firestore). Base64 vergrößert um ein Drittel, also
+  passen höchstens ~700 KB Rohdaten. Ein normales Handyfoto (3–8 MB) sprengt
+  das um ein Vielfaches.
+- **~5 MB lokaler Browser-Speicher.** Deshalb werden Dateiinhalte
+  (`dataUrl`, `fileUrl`, `filePreview`) beim lokalen Ablegen **entfernt** —
+  sie liegen in Firestore. Sonst schlägt das Schreiben irgendwann fehl und
+  **alle** weiteren Änderungen gehen verloren.
+
+`src/utils/fileStorage.ts` verkleinert Bilder vor dem Speichern (max. 1600 px
+Kante, JPEG, Qualität wird gesenkt bis es passt). Ein Beleg landet damit bei
+80–300 KB. Zu große Nicht-Bilder werden mit klarer Meldung abgelehnt, statt
+still zu scheitern.
+
+Firebase Storage ist im Projekt **nicht** eingerichtet (404) und würde für neue
+Projekte den Blaze-Tarif erfordern. Solange die Komprimierung reicht, ist das
+nicht nötig.
+
+Gesamtkapazität im kostenlosen Tarif: 1 GiB. Bei ~150 KB je Beleg entspricht
+das grob 6.000–7.000 Belegen.

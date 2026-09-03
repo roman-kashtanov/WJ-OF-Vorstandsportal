@@ -65,6 +65,47 @@ const STORAGE_KEYS = {
   CLUB_ACCOUNT: 'wj_offenbach_club_account_v1',
 };
 
+
+/**
+ * Entfernt Dateiinhalte vor dem Ablegen im Browser-Speicher.
+ *
+ * Der lokale Speicher fasst rund 5 MB je Adresse. Belege als Base64 wuerden
+ * ihn nach wenigen Eintraegen sprengen - und weil das Schreiben dann
+ * fehlschlaegt, gingen ALLE weiteren Aenderungen verloren, ohne dass es
+ * jemand bemerkt. Die Dateien liegen ohnehin in Firestore; lokal genuegt der
+ * Verweis darauf.
+ */
+const FILE_PAYLOAD_KEYS = ['dataUrl', 'fileUrl', 'filePreview'];
+
+function stripFilePayloads<T>(value: T): T {
+  return JSON.parse(
+    JSON.stringify(value, (key, val) =>
+      FILE_PAYLOAD_KEYS.includes(key) && typeof val === 'string' && val.startsWith('data:')
+        ? undefined
+        : val
+    )
+  );
+}
+
+/** Meldet sich, wenn der Browser-Speicher voll ist. */
+let quotaWarningShown = false;
+function safeSet(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (err: any) {
+    const isQuota =
+      err?.name === 'QuotaExceededError' || err?.name === 'NS_ERROR_DOM_QUOTA_REACHED';
+    if (isQuota && !quotaWarningShown) {
+      quotaWarningShown = true;
+      console.warn(
+        'Der lokale Zwischenspeicher ist voll. Die Daten liegen weiterhin in der Cloud.'
+      );
+    } else if (!isQuota) {
+      console.warn('Lokales Speichern fehlgeschlagen:', err?.message);
+    }
+  }
+}
+
 export const AppStorage = {
   getMembers(): BoardMember[] {
     try {
@@ -162,11 +203,7 @@ export const AppStorage = {
   },
 
   saveResolutions(resolutions: Resolution[]) {
-    try {
-      localStorage.setItem(STORAGE_KEYS.RESOLUTIONS, JSON.stringify(resolutions));
-    } catch (e) {
-      console.error('Error saving resolutions', e);
-    }
+    safeSet(STORAGE_KEYS.RESOLUTIONS, stripFilePayloads(resolutions));
   },
 
   getInvoices(): Invoice[] {
@@ -182,11 +219,7 @@ export const AppStorage = {
   },
 
   saveInvoices(invoices: Invoice[]) {
-    try {
-      localStorage.setItem(STORAGE_KEYS.INVOICES, JSON.stringify(invoices));
-    } catch (e) {
-      console.error('Error saving invoices', e);
-    }
+    safeSet(STORAGE_KEYS.INVOICES, stripFilePayloads(invoices));
   },
 
   getInvoiceFolders(): InvoiceFolder[] {
@@ -397,9 +430,7 @@ export const SubsidyStorage = {
     }
   },
   saveSubsidies(list: any[]) {
-    try {
-      localStorage.setItem(STORAGE_KEYS.SUBSIDIES, JSON.stringify(list));
-    } catch {}
+    safeSet(STORAGE_KEYS.SUBSIDIES, stripFilePayloads(list));
   },
   getPeople(): any[] {
     try {

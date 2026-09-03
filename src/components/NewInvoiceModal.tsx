@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { prepareFileForStorage, formatBytes } from '../utils/fileStorage';
 import { 
   BoardMember, 
   Invoice, 
@@ -77,26 +78,39 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
   const [fileName, setFileName] = useState<string>('');
   const [fileSize, setFileSize] = useState<string>('');
   const [fileType, setFileType] = useState<'image' | 'pdf'>('pdf');
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [fileNotice, setFileNotice] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setFileError(null);
     setFileName(file.name);
-    const sizeInKb = Math.round(file.size / 1024);
-    setFileSize(sizeInKb > 1024 ? `${(sizeInKb / 1024).toFixed(1)} MB` : `${sizeInKb} KB`);
+    setFileType(file.type.startsWith('image/') ? 'image' : 'pdf');
 
-    const isImage = file.type.startsWith('image/');
-    setFileType(isImage ? 'image' : 'pdf');
+    // Fotos werden verkleinert: Ein Handyfoto sprengt sonst die Groessengrenze
+    // eines Datenbank-Dokuments und wuerde gar nicht erst gespeichert.
+    const result = await prepareFileForStorage(file);
+    if (result.ok === false) {
+      setFileError(result.error);
+      setFileName('');
+      setFilePreview(null);
+      return;
+    }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      setFilePreview(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    setFileSize(formatBytes(result.file.bytes));
+    setFilePreview(result.file.dataUrl);
+    if (result.file.wasCompressed && result.file.originalBytes > result.file.bytes * 1.5) {
+      setFileNotice(
+        `Foto verkleinert: ${formatBytes(result.file.originalBytes)} → ${formatBytes(result.file.bytes)}`
+      );
+    } else {
+      setFileNotice(null);
+    }
   };
 
   const handleCreateInlineResolution = () => {
@@ -258,6 +272,16 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
                 </div>
               )}
             </div>
+
+            {fileError && (
+              <div className="mt-2 rounded-xl bg-rose-50 border border-rose-200 p-2.5 text-[11px] leading-relaxed text-rose-800">
+                {fileError}
+              </div>
+            )}
+
+            {fileNotice && !fileError && (
+              <p className="mt-1.5 text-[11px] text-slate-500">{fileNotice}</p>
+            )}
           </div>
 
           {/* 1. BESCHLUSS-ZUORDNUNG */}

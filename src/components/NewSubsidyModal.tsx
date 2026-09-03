@@ -9,7 +9,7 @@ import {
 import { SUBSIDY_CATALOGUE, catalogueEntry, CATEGORY_LABEL } from '../data/subsidyCatalogue';
 import { checkSubsidy, STATUS_LABEL, personBudget } from '../utils/subsidies';
 import { formatCurrency } from '../utils/formatters';
-import { formatFileSize } from '../utils/fileHelpers';
+import { prepareFileForStorage, formatBytes } from '../utils/fileStorage';
 import { X, Paperclip, AlertTriangle, Info, Trash2 } from 'lucide-react';
 
 interface Props {
@@ -47,6 +47,7 @@ export const NewSubsidyModal: React.FC<Props> = ({
   const [proofFile, setProofFile] = useState(editing?.proofFile);
   const [note, setNote] = useState(editing?.note || '');
   const fileRef = useRef<HTMLInputElement>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
 
   const entry = catalogueEntry(eventKey);
   const category: SubsidyCategory = entry?.category || 'sonstiges';
@@ -83,21 +84,25 @@ export const NewSubsidyModal: React.FC<Props> = ({
     }
   };
 
-  const handleFile = (files: FileList | null) => {
+  const handleFile = async (files: FileList | null) => {
     const file = files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setProofFile({
-        name: file.name,
-        size: formatFileSize(file.size),
-        mimeType: file.type,
-        dataUrl: reader.result as string,
-        uploadedAt: new Date().toISOString(),
-      });
-      setProofState('hochgeladen');
-    };
-    reader.readAsDataURL(file);
+    setFileError(null);
+
+    const result = await prepareFileForStorage(file);
+    if (result.ok === false) {
+      setFileError(result.error);
+      return;
+    }
+
+    setProofFile({
+      name: file.name,
+      size: formatBytes(result.file.bytes),
+      mimeType: result.file.mimeType,
+      dataUrl: result.file.dataUrl,
+      uploadedAt: new Date().toISOString(),
+    });
+    setProofState('hochgeladen');
   };
 
   const proofIncomplete = proofState === 'anderweitig' && !proofNote.trim();
@@ -364,6 +369,11 @@ export const NewSubsidyModal: React.FC<Props> = ({
                   accept="image/*,application/pdf"
                   onChange={(e) => handleFile(e.target.files)}
                 />
+                {fileError && (
+                  <div className="mt-2 rounded-xl bg-rose-50 border border-rose-200 p-2.5 text-[11px] leading-relaxed text-rose-800">
+                    {fileError}
+                  </div>
+                )}
               </div>
             )}
 
