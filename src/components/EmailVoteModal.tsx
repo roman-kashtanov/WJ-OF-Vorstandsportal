@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { BoardMember, Resolution, VoteType, EmailServerConfig } from '../types';
 import { EmailService, sendResolutionVoteMails } from '../utils/emailService';
 import { isVotingMember } from '../utils/formatters';
@@ -45,8 +46,6 @@ export const EmailVoteModal: React.FC<EmailVoteModalProps> = ({
   onLogEmailSent,
   emailServerConfig,
 }) => {
-  if (!isOpen || !resolution) return null;
-
   // Stimmberechtigte und Nicht-Stimmberechtigte werden getrennt behandelt:
   // Nur Stimmberechtigte duerfen ueberhaupt eine gueltige Stimme abgeben,
   // daher sind nur sie standardmaessig vorausgewaehlt (und auch nur, wenn
@@ -58,15 +57,34 @@ export const EmailVoteModal: React.FC<EmailVoteModalProps> = ({
   const otherMembers = members.filter((m) => !isVotingMember(m));
 
   const [selectedMemberId, setSelectedMemberId] = useState<string>(eligibleMembers[0]?.id || members[0]?.id || '');
-  const [selectedRecipients, setSelectedRecipients] = useState<string[]>(
-    eligibleMembers.filter((m) => !resolution.votes[m.id]).map((m) => m.id)
-  );
+  const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
+
+  // Die Komponente bleibt im App-Baum dauerhaft gemountet (isOpen/resolution
+  // wechseln nur als Props) - useState-Startwerte wuerden deshalb nur EIN
+  // einziges Mal beim allerersten, noch resolution-losen Render berechnet und
+  // blieben danach fuer immer falsch (alle vorausgewaehlt statt nur offene
+  // Stimmberechtigte). Deshalb hier per Effekt bei jedem echten Oeffnen neu
+  // berechnen, nicht ueber den useState-Initialwert.
+  useEffect(() => {
+    if (!isOpen || !resolution) return;
+    setSelectedRecipients(
+      eligibleMembers.filter((m) => !resolution.votes?.[m.id]).map((m) => m.id)
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, resolution?.id]);
+
   const [showOtherMembers, setShowOtherMembers] = useState(false);
   const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
   const [showPreview, setShowPreview] = useState(false);
   const [copiedType, setCopiedType] = useState<'html' | 'text' | 'yes' | 'no' | null>(null);
   const [sentFeedback, setSentFeedback] = useState<string | null>(null);
   const [showTechGuide, setShowTechGuide] = useState<boolean>(false);
+  const [isSending, setIsSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+
+  useBodyScrollLock(isOpen);
+
+  if (!isOpen || !resolution) return null;
 
   const previewMember = members.find((m) => m.id === selectedMemberId) || eligibleMembers[0] || members[0];
   const emailHtml = EmailService.generateResolutionEmailHtml(resolution, previewMember);
@@ -124,9 +142,6 @@ export const EmailVoteModal: React.FC<EmailVoteModalProps> = ({
     setSentFeedback(`E-Mail Client mit ${recipients.length} Empfängern geöffnet und protokolliert.`);
     setTimeout(() => setSentFeedback(null), 4000);
   };
-
-  const [isSending, setIsSending] = useState(false);
-  const [sendError, setSendError] = useState<string | null>(null);
 
   const handleSimulateAutomatedSend = async () => {
     const recipientMembers = members.filter(

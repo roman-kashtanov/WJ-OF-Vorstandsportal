@@ -518,3 +518,39 @@ Schließen), Tab-Wechsel-Klasse `wj-expand` bestätigt, Exit-Klasse
 `animate-out fade-out` 30ms nach Schließen-Klick bestätigt, Bottom-Nav-
 Indikator wandert sichtbar zum neuen Tab, Antragslink-Karte inkl.
 Kopieren-Knopf erscheint korrekt in der Zuschüsse-Ansicht.
+
+## Hintergrund-Task erledigt + dabei gefundene Regression behoben (v3.3.1)
+
+Der zuvor angelegte Hintergrund-Task hat `EmailVoteModal.tsx` korrekt
+repariert: Hooks stehen jetzt vor dem `if (!isOpen || !resolution) return
+null;`, `resolution?.votes?.[m.id]` ist null-sicher, `useBodyScrollLock`
+eingebunden. Soweit sauber.
+
+**Beim Nachtesten aber eine echte, durch genau diese Umstellung neu
+entstandene Regression gefunden:** `EmailVoteModal` bleibt dauerhaft im
+App-Baum gemountet (`isOpen`/`resolution` wechseln nur als Props, das
+Modal wird nie neu erzeugt). `useState`-Startwerte werden aber nur **ein
+einziges Mal** beim allerersten Rendern der Komponente berechnet - und das
+geschieht bereits beim App-Start, lange bevor zum ersten Mal wirklich ein
+Beschluss geöffnet wird, also mit `resolution = null`. Die
+Empfänger-Vorauswahl `eligibleMembers.filter((m) => !resolution?.votes?.[m.id])`
+wertete `resolution` an dieser Stelle IMMER als `null` aus →
+`!undefined` ist immer `true` → **alle** Empfänger wurden vorausgewählt,
+für jeden jemals geöffneten Beschluss, unabhängig davon, wer schon
+abgestimmt hatte. Das hat genau die in v3.1.3 gebaute Funktion
+("nur offene Stimmberechtigte vorauswählen") wieder lautlos ausgehebelt.
+
+**Fix:** `selectedRecipients` startet jetzt leer; ein `useEffect` mit
+Abhängigkeit `[isOpen, resolution?.id]` berechnet die Vorauswahl bei jedem
+tatsächlichen Öffnen neu. Live getestet: Beschluss mit 2 bereits
+abgestimmten und 1 offenen Mitglied geöffnet → nur das offene Mitglied ist
+vorausgewählt; manuell alles abgewählt, Fenster geschlossen und erneut
+geöffnet → Vorauswahl stellt sich zuverlässig wieder korrekt her (nicht nur
+beim allerersten Öffnen).
+
+**Lehre für ähnliche Fälle:** Bei Fenstern, die dauerhaft gemountet bleiben
+und nur über eine `isOpen`-Prop sichtbar/unsichtbar geschaltet werden,
+dürfen von Props abhängige Vorauswahlen NIE als reiner `useState`-
+Startwert berechnet werden - das läuft nur beim allerersten Mount, nicht
+bei jedem "Öffnen". Immer per `useEffect`, das auf die relevante Prop
+(hier `resolution?.id`/`isOpen`) reagiert.
