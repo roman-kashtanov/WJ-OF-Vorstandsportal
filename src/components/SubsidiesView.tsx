@@ -10,6 +10,7 @@ import {
 } from '../utils/subsidies';
 import { CATEGORY_LABEL, SUBSIDY_LIMITS } from '../data/subsidyCatalogue';
 import { formatIban } from '../utils/sepa';
+import { EmailService } from '../utils/emailService';
 import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
 import {
   HandCoins,
@@ -23,6 +24,9 @@ import {
   Trash2,
   Download,
   Vote,
+  Link as LinkIcon,
+  Copy,
+  Check,
 } from 'lucide-react';
 
 interface Props {
@@ -69,6 +73,16 @@ export const SubsidiesView: React.FC<Props> = ({
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<PreviewableFile | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const antragUrl = `${window.location.origin}/antrag`;
+  const handleCopyAntragUrl = async () => {
+    const ok = await EmailService.copyToClipboard(antragUrl);
+    if (ok) {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2500);
+    }
+  };
 
   const years = useMemo(() => {
     const set = new Set<number>(subsidies.map((s) => s.year));
@@ -176,6 +190,35 @@ export const SubsidiesView: React.FC<Props> = ({
             <span>Erfassen</span>
           </button>
         </div>
+      </div>
+
+      {/* Öffentlicher Antragslink - zum Weitergeben, z. B. als Antwort auf
+          eine E-Mail-Anfrage: "Bitte die Daten über diesen Link erfassen." */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-2xs flex items-center gap-2.5">
+        <div className="w-8 h-8 rounded-lg bg-blue-50 text-[#003594] flex items-center justify-center shrink-0">
+          <LinkIcon className="w-4 h-4" strokeWidth={1.75} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] font-bold text-slate-700">Öffentlicher Antragslink</div>
+          <div className="text-[11px] text-slate-400 truncate font-mono">{antragUrl}</div>
+        </div>
+        <button
+          type="button"
+          onClick={handleCopyAntragUrl}
+          className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer flex items-center gap-1.5 text-[11px] font-semibold shrink-0"
+        >
+          {linkCopied ? (
+            <>
+              <Check className="w-3.5 h-3.5 text-emerald-600" strokeWidth={2} />
+              <span>Kopiert</span>
+            </>
+          ) : (
+            <>
+              <Copy className="w-3.5 h-3.5" strokeWidth={1.75} />
+              <span>Kopieren</span>
+            </>
+          )}
+        </button>
       </div>
 
       {/* Budget */}

@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { BoardMember, Resolution, ResolutionAttachment, Subsidy, SubsidyPerson } from '../types';
 import { formatCurrency } from '../utils/formatters';
 import { isVotingMember } from '../utils/formatters';
@@ -48,6 +49,7 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
     return Object.fromEntries(eligible.map((s) => [s.id, true]));
   }, [selected, eligible]);
 
+  useBodyScrollLock(isOpen);
   if (!isOpen) return null;
 
   const chosen = eligible.filter((s) => effectiveSelected[s.id]);

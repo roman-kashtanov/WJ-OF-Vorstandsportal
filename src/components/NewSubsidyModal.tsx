@@ -1,4 +1,5 @@
 import React, { useState, useRef, useMemo } from 'react';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import {
   Subsidy,
   SubsidyPerson,
@@ -73,6 +74,7 @@ export const NewSubsidyModal: React.FC<Props> = ({
 
   const budget = personId ? personBudget(subsidies, personId, year) : null;
 
+  useBodyScrollLock(isOpen);
   if (!isOpen) return null;
 
   const pickEvent = (key: string) => {

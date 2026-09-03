@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { Meeting } from '../types';
 import { 
   Video, 
@@ -48,6 +49,7 @@ export const TeamsSettingsModal: React.FC<TeamsSettingsModalProps> = ({
     }
   }, [isOpen, defaultTeamsUrl]);
 
+  useBodyScrollLock(isOpen);
   if (!isOpen) return null;
 
   const handleCopy = () => {

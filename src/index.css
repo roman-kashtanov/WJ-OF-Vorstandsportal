@@ -61,11 +61,29 @@
   50% { opacity: 0.45; }
 }
 
+/* Gegenstueck zu wj-enter: fuer das Schliessen von Fenstern. Ohne das
+   gab es keine Moeglichkeit, vor dem Entfernen aus dem DOM noch eine
+   Animation abzuspielen - das Fenster verschwand schlagartig. */
+@keyframes wj-exit {
+  to {
+    opacity: var(--wj-exit-opacity, 1);
+    transform: translate3d(var(--wj-exit-x, 0), var(--wj-exit-y, 0), 0)
+      scale3d(var(--wj-exit-scale, 1), var(--wj-exit-scale, 1), 1);
+  }
+}
+
 @layer utilities {
   .animate-in {
     animation-name: wj-enter;
     animation-duration: 180ms;
     animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+    animation-fill-mode: both;
+  }
+
+  .animate-out {
+    animation-name: wj-exit;
+    animation-duration: 150ms;
+    animation-timing-function: cubic-bezier(0.4, 0, 1, 1);
     animation-fill-mode: both;
   }
 
@@ -78,6 +96,14 @@
   .slide-in-from-bottom-2 { --wj-enter-y: 0.5rem; }
   .slide-in-from-right { --wj-enter-x: 1rem; }
   .slide-in-from-left { --wj-enter-x: -1rem; }
+
+  .fade-out { --wj-exit-opacity: 0; }
+  .zoom-out-95 { --wj-exit-scale: 0.95; }
+  .zoom-out-90 { --wj-exit-scale: 0.9; }
+  .slide-out-to-top { --wj-exit-y: -0.5rem; }
+  .slide-out-to-bottom { --wj-exit-y: 0.5rem; }
+  .slide-out-to-right { --wj-exit-x: 1rem; }
+  .slide-out-to-left { --wj-exit-x: -1rem; }
 
   /* Sanftes Einblenden ganzer Bereiche beim Wechsel */
   .wj-view-enter {

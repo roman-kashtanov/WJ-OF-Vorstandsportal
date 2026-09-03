@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { SubsidyPerson, SubsidyPersonType, Subsidy } from '../types';
 import { formatCurrency } from '../utils/formatters';
 import { PERSON_TYPE_LABEL, personBudget } from '../utils/subsidies';
@@ -41,6 +42,7 @@ export const SubsidyPeopleModal: React.FC<Props> = ({
   const [draft, setDraft] = useState<SubsidyPerson | null>(null);
   const [ibanError, setIbanError] = useState<string | null>(null);
 
+  useBodyScrollLock(isOpen);
   if (!isOpen) return null;
 
   const startNew = () => {

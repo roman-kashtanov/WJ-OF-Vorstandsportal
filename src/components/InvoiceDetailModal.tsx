@@ -1,5 +1,6 @@
 import React from 'react';
-import { 
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
+import {
   BoardMember, 
   Invoice, 
   Resolution, 
@@ -55,6 +56,7 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
   onUpdateBookkeepingStatus,
   onSelectResolution,
 }) => {
+  useBodyScrollLock(!!invoice);
   if (!invoice) return null;
 
   const linkedResolution = invoice.resolutionId 

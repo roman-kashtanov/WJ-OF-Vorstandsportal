@@ -1,4 +1,5 @@
 import React from 'react';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { Meeting } from '../types';
 import { 
   X, 
@@ -27,6 +28,7 @@ export const QuickAgendaModal: React.FC<QuickAgendaModalProps> = ({
   onOpenResolution,
   onNavigateToMeetings,
 }) => {
+  useBodyScrollLock(isOpen && !!meeting);
   if (!isOpen || !meeting) return null;
 
   return (

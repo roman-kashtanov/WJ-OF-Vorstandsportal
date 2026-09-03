@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { 
   BoardMember, 
   Meeting, 
@@ -59,6 +60,7 @@ export const NewMeetingModal: React.FC<NewMeetingModalProps> = ({
     { id: '4', topNumber: 'TOP 4', title: 'Verschiedenes', presenter: 'Alle', durationMin: 10 },
   ]);
 
+  useBodyScrollLock(isOpen);
   if (!isOpen) return null;
 
   const handleAddTop = () => {

@@ -67,10 +67,29 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
     },
   ];
 
+  // Fuer die gleitende Indikator-Leiste: Index unter den "echten" Tabs
+  // (Portal/Settings hat keinen eigenen aktiven Zustand, oeffnet nur ein Fenster).
+  const activeIndex = navItems.findIndex(
+    (item) => item.id !== 'settings' && activeTab === item.id
+  );
+
   return (
     <div className="md:hidden fixed bottom-0 left-0 right-0 w-full max-w-full overflow-hidden z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-lg pb-[env(safe-area-inset-bottom)]">
       {/* Main Tab Buttons */}
-      <nav className="flex items-center justify-around h-14 px-1">
+      <nav className="relative flex items-center justify-around h-14 px-1">
+        {/* Aktiv-Indikator gleitet zum neuen Tab, statt abrupt zu springen -
+            eine gemeinsame Leiste statt je Knopf eine eigene, per Tab-Breite
+            positioniert (alle Knoepfe sind gleich breit: flex-1). */}
+        {activeIndex >= 0 && (
+          <span
+            aria-hidden="true"
+            className="absolute top-0 h-0.5 w-8 bg-[#003594] rounded-b-full transition-[left] duration-300 ease-out"
+            style={{
+              left: `calc((${activeIndex} + 0.5) * (100% / ${navItems.length}) - 1rem)`,
+            }}
+          />
+        )}
+
         {navItems.map((item) => {
           const isActive = item.id !== 'settings' && activeTab === item.id;
           return (
@@ -91,11 +110,6 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              {/* Active Tab Accent Bar on Top */}
-              {isActive && (
-                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-[#003594] rounded-b-full" />
-              )}
-
               {/* Icon Container with Badge */}
               <div className="relative">
                 <div className={`transition-colors ${

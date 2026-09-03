@@ -462,3 +462,59 @@ Bilder, direkter Download-Button. Eingebunden in `ResolutionsView.tsx`
 
 Live im Browser mit allen drei Fällen getestet (Bild-Vorschau, PDF-Link,
 fehlende Datei) - jeweils korrektes Verhalten bestätigt.
+
+## UI-Politur: Scroll-Sperre, Ein-/Ausblend-Animationen, gleitender Tab-Indikator, Antragslink sichtbar (v3.3.0)
+
+**Hintergrund scrollte mit, wenn ein Fenster offen war.** Ursache: Fenster
+sind `fixed inset-0`, aber `document.body` blieb selbst scrollbar - ein
+Mausrad-/Wisch-Ereignis, das der innere Scrollbereich des Fensters am Rand
+nicht mehr aufnehmen konnte, wanderte weiter zu body/html. Neuer Hook
+`src/hooks/useBodyScrollLock.ts` (zählt mehrere gleichzeitig offene Fenster
+mit, sperrt `body.style.overflow` erst beim letzten Öffnen, entsperrt erst
+beim letzten Schließen) - eingebunden in `SettingsModal.tsx` und alle
+Formular-Fenster mit sicherer Hook-Reihenfolge (NewResolutionModal,
+NewSubsidyModal, SubsidyPayoutModal, BundleSubsidiesModal, NewInvoiceModal,
+InvoiceDetailModal, NewMeetingModal, QuickAgendaModal, InvoiceRequestModal,
+SubsidyPeopleModal, TeamsSettingsModal). **Bewusst ausgenommen:**
+`EmailVoteModal.tsx` hat ein vorbestehendes Rules-of-Hooks-Problem (früher
+Return-Guard *vor* den `useState`-Aufrufen) - dafür wurde ein separater
+Hintergrund-Task angelegt, nicht hier mit-repariert.
+
+**Keine Animation beim Wechseln/Schließen von Fenstern.** `index.css` hatte
+bisher nur "enter"-Animationen (`animate-in`, `fade-in`, `zoom-in-95` ...),
+kein Gegenstück zum Schließen. Neu: `@keyframes wj-exit` + `.animate-out`,
+`.fade-out`, `.zoom-out-95` usw., exakt spiegelbildlich zu den bestehenden
+enter-Klassen. Neuer Hook `src/hooks/useModalTransition.ts` haelt ein
+Fenster nach `isOpen=false` noch kurz (150ms) weitergerendert, damit die
+Exit-Animation ablaufen kann, bevor es aus dem DOM verschwindet - bisher
+riss React es beim Schliessen sofort raus, keine Zeit für eine Animation.
+In `SettingsModal.tsx` eingebunden; die 5 Tab-Inhalte (Vorstand,
+Vorstandscode, System, Benachrichtigungen, MS Teams Link) tragen jetzt
+`wj-expand` (bereits vorhandene Klasse für "sanftes Einblenden ganzer
+Bereiche", war aber dort noch nirgends verwendet).
+
+**Bottom-Nav-Indikator sprang statt zu gleiten.** `MobileBottomNav.tsx`
+zeichnete den blauen Aktiv-Strich bisher pro Knopf einzeln (`{isActive &&
+<span .../>}`) - beim Tab-Wechsel verschwand er auf dem alten Knopf und
+erschien sofort auf dem neuen, keine Bewegung dazwischen. Jetzt **eine**
+gemeinsame Leiste als Geschwister der Knöpfe, über `left` (berechnet aus
+Tab-Index, alle Knöpfe sind gleich breit dank `flex-1`) mit
+`transition-[left]` positioniert - sie gleitet jetzt sichtbar zum neuen Tab.
+Die Inhalts-Wechsel-Animation (`wj-view-enter` auf `<main key={activeTab}>`
+in `App.tsx`) existierte bereits von früher, war aber vermutlich zu subtil,
+um als "Animation" wahrgenommen zu werden - unverändert gelassen.
+
+**Öffentlicher Zuschuss-Antragslink jetzt im Portal sichtbar.** Neue Karte
+oben in `SubsidiesView.tsx`: zeigt `${origin}/antrag` mit Kopieren-Knopf
+(`EmailService.copyToClipboard`), damit jedes Vorstandsmitglied den Link
+selbst abrufen kann - z. B. um ihn als Antwort auf eine
+E-Mail-Zuschussanfrage direkt mitzuschicken ("bitte die Daten über diesen
+Link erfassen"). Der Zugangscode selbst wird bewusst nicht angezeigt (liegt
+nur als SHA-256-Hash vor, nicht rückholbar) - nur die URL.
+
+Live im Browser getestet (Mobile-Ansicht + Desktop): Scroll-Sperre aktiv
+(`body.style.overflow === 'hidden'` bei offenem Fenster, zurückgesetzt nach
+Schließen), Tab-Wechsel-Klasse `wj-expand` bestätigt, Exit-Klasse
+`animate-out fade-out` 30ms nach Schließen-Klick bestätigt, Bottom-Nav-
+Indikator wandert sichtbar zum neuen Tab, Antragslink-Karte inkl.
+Kopieren-Knopf erscheint korrekt in der Zuschüsse-Ansicht.

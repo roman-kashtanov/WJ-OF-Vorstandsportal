@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { prepareFileForStorage, formatBytes } from '../utils/fileStorage';
 import { 
   BoardMember, 
@@ -82,6 +83,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
   const [fileNotice, setFileNotice] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  useBodyScrollLock(isOpen);
   if (!isOpen) return null;
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {

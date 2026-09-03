@@ -29,6 +29,8 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { FirebaseSync } from '../utils/firebaseSync';
+import { useModalTransition } from '../hooks/useModalTransition';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { hashPasscode } from '../utils/security';
 import { CURRENT_APP_VERSION } from '../constants/version';
 import {
@@ -259,7 +261,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [teamsUrl, setTeamsUrl] = useState(defaultTeamsUrl || '');
   const [teamsSaved, setTeamsSaved] = useState(false);
 
-  if (!isOpen) return null;
+  const { shouldRender, isClosing } = useModalTransition(isOpen);
+  useBodyScrollLock(shouldRender);
+
+  if (!shouldRender) return null;
 
   // Add Member
   const handleAddMember = async (e: React.FormEvent) => {
@@ -475,8 +480,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-      <div className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
+    <div
+      className={`fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 ${
+        isClosing ? 'animate-out fade-out' : 'animate-in fade-in'
+      }`}
+    >
+      <div
+        className={`bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden duration-150 flex flex-col max-h-[90vh] ${
+          isClosing ? 'animate-out fade-out zoom-out-95' : 'animate-in fade-in zoom-in-95'
+        }`}
+      >
         
         {/* Header */}
         <div className="bg-[#003594] text-white p-4 sm:p-5 flex items-center justify-between shrink-0">
@@ -572,11 +585,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Tab Content Body */}
-        <div className="overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
+        <div className="overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4 text-xs">
           
           {/* TAB 1: MEMBERS & GOOGLE WHITELIST */}
           {activeTab === 'members' && (
-            <div className="space-y-4">
+            <div key="members" className="space-y-4 wj-expand">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
                   <h4 className="font-bold text-slate-900 text-sm">
@@ -773,7 +786,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* TAB 2: PASSCODE MANAGEMENT (SHA-256 HASHED) */}
           {activeTab === 'security' && (
-            <div className="space-y-5 max-w-md">
+            <div key="security" className="space-y-5 max-w-md wj-expand">
               {/* Entsperrung dieses Geraets */}
               <div className="rounded-2xl border border-slate-200 p-4">
                 <div className="flex items-start justify-between gap-4">
@@ -940,7 +953,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* TAB 3: MINIMALIST SYSTEM & FORCE UPDATE */}
           {activeTab === 'system' && (
-            <div className="space-y-4">
+            <div key="system" className="space-y-4 wj-expand">
               <div>
                 <h4 className="font-bold text-slate-900 text-sm">
                   Aktualisierung & Cloud-Status
@@ -1130,7 +1143,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* TAB: BENACHRICHTIGUNGEN */}
           {activeTab === 'notifications' && (
-            <div className="space-y-5 max-w-lg">
+            <div key="notifications" className="space-y-5 max-w-lg wj-expand">
               <div className="rounded-2xl border border-slate-200 p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
@@ -1227,7 +1240,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* TAB 4: MS TEAMS LINK */}
           {activeTab === 'teams' && (
-            <div className="space-y-4 max-w-lg">
+            <div key="teams" className="space-y-4 max-w-lg wj-expand">
               <div>
                 <h4 className="font-bold text-slate-900 text-sm">
                   Standard MS Teams Besprechungslink

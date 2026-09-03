@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { BoardMember, Resolution, InvoiceRequest } from '../types';
 import { EmailService } from '../utils/emailService';
 import { 
@@ -35,6 +36,7 @@ export const InvoiceRequestModal: React.FC<InvoiceRequestModalProps> = ({
   currentMember,
   onSubmitRequest,
 }) => {
+  useBodyScrollLock(isOpen);
   if (!isOpen) return null;
 
   const [recipientType, setRecipientType] = useState<'member' | 'external'>('member');

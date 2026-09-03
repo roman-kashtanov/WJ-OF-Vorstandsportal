@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { Subsidy, SubsidyPerson } from '../types';
 import { formatCurrency } from '../utils/formatters';
 import { paymentReference } from '../utils/subsidies';
@@ -66,6 +67,7 @@ export const SubsidyPayoutModal: React.FC<Props> = ({
     return Object.fromEntries(groups.filter((g) => g.hasValidIban).map((g) => [g.personId, true]));
   }, [selected, groups]);
 
+  useBodyScrollLock(isOpen);
   if (!isOpen) return null;
 
   const chosen = groups.filter((g) => effectiveSelected[g.personId] && g.hasValidIban);

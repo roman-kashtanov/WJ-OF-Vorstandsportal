@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { 
   BoardMember, 
   Resolution, 
@@ -147,6 +148,7 @@ export const NewResolutionModal: React.FC<NewResolutionModalProps> = ({
     }
   }, [initialTitle, initialBudget]);
 
+  useBodyScrollLock(isOpen);
   if (!isOpen) return null;
 
   // Voice recording toggle
