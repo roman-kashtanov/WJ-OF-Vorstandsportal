@@ -18,7 +18,10 @@ import {
   AppVersionConfig,
   BookkeepingStatus,
   InvoiceFolder,
-  InvoiceRecurrence
+  InvoiceRecurrence,
+  Subsidy,
+  SubsidyPerson,
+  SubsidyStatus
 } from './types';
 import { AppStorage } from './utils/storage';
 import { PwaNotificationService } from './utils/pwaNotifications';
@@ -47,6 +50,11 @@ import { InvoiceRequestModal } from './components/InvoiceRequestModal';
 import { ForceUpdateModal } from './components/ForceUpdateModal';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { BiometricLock } from './components/BiometricLock';
+import { SubsidiesView } from './components/SubsidiesView';
+import { NewSubsidyModal } from './components/NewSubsidyModal';
+import { SubsidyPeopleModal } from './components/SubsidyPeopleModal';
+import { SubsidyPayoutModal } from './components/SubsidyPayoutModal';
+import { SubsidyStorage } from './utils/storage';
 import { Biometric } from './utils/biometric';
 import { calculateVoteStats, formatDate } from './utils/formatters';
 import { CheckCircle2, AlertCircle, Mail, Sparkles, X, Bell, Settings, Video } from 'lucide-react';
@@ -98,6 +106,8 @@ export default function App() {
       invoiceRequests,
       securitySettings,
       folders,
+      subsidies,
+      subsidyPeople,
     };
 
     FirebaseSync.autoInitCloudIfEmpty(local);
@@ -115,6 +125,8 @@ export default function App() {
       meetings: true,
       members: true,
       requests: true,
+      subsidies: true,
+      subsidyPeople: true,
     };
 
     /** Uebernimmt Cloud-Daten - ausser die Cloud ist beim ersten Mal leer. */
@@ -178,6 +190,22 @@ export default function App() {
       )
     );
 
+    const unsubSubs = FirebaseSync.subscribeSubsidies((remote) =>
+      applyRemote('subsidies', remote as Subsidy[], local.subsidies, setSubsidies, (x) =>
+        FirebaseSync.saveSubsidy(x).catch(() => {})
+      )
+    );
+
+    const unsubSubPeople = FirebaseSync.subscribeSubsidyPeople((remote) =>
+      applyRemote(
+        'subsidyPeople',
+        remote as SubsidyPerson[],
+        local.subsidyPeople,
+        setSubsidyPeople,
+        (x) => FirebaseSync.saveSubsidyPerson(x).catch(() => {})
+      )
+    );
+
     const unsubSec = FirebaseSync.subscribeSecuritySettings((remoteSec) => {
       // Auch aus der Cloud kann noch der kaputte Alt-Hash kommen, wenn die
       // Einstellungen vor dem Fix einmal hochgeladen wurden.
@@ -200,6 +228,8 @@ export default function App() {
       unsubMeet();
       unsubMem();
       unsubReq();
+      unsubSubs();
+      unsubSubPeople();
       unsubSec();
       unsubMeetingConfig();
     };
@@ -611,6 +641,71 @@ export default function App() {
   };
 
   /** Offene Rueckfrage zum Aendern einer bereits abgegebenen Stimme. */
+  // --- Zuschuesse ---------------------------------------------------------
+  const [subsidies, setSubsidies] = useState<Subsidy[]>(() => SubsidyStorage.getSubsidies());
+  const [subsidyPeople, setSubsidyPeople] = useState<SubsidyPerson[]>(() =>
+    SubsidyStorage.getPeople()
+  );
+  const [subsidyYear, setSubsidyYear] = useState<number>(new Date().getFullYear());
+  const [clubAccount, setClubAccount] = useState(() => SubsidyStorage.getClubAccount());
+  const [isSubsidyModalOpen, setIsSubsidyModalOpen] = useState(false);
+  const [editingSubsidy, setEditingSubsidy] = useState<Subsidy | null>(null);
+  const [isSubsidyPeopleOpen, setIsSubsidyPeopleOpen] = useState(false);
+  const [isPayoutOpen, setIsPayoutOpen] = useState(false);
+
+  useEffect(() => SubsidyStorage.saveSubsidies(subsidies), [subsidies]);
+  useEffect(() => SubsidyStorage.savePeople(subsidyPeople), [subsidyPeople]);
+
+  const handleSaveSubsidy = (s: Subsidy) => {
+    setSubsidies((prev) => {
+      const exists = prev.some((x) => x.id === s.id);
+      return exists ? prev.map((x) => (x.id === s.id ? s : x)) : [s, ...prev];
+    });
+    FirebaseSync.saveSubsidy(s).catch(() => {});
+    setEditingSubsidy(null);
+  };
+
+  const handleDeleteSubsidy = (id: string) => {
+    setSubsidies((prev) => prev.filter((x) => x.id !== id));
+    FirebaseSync.deleteSubsidy(id).catch(() => {});
+  };
+
+  const handleUpdateSubsidyStatus = (id: string, status: SubsidyStatus) => {
+    setSubsidies((prev) =>
+      prev.map((x) => {
+        if (x.id !== id) return x;
+        const now = new Date().toISOString();
+        const updated: Subsidy = {
+          ...x,
+          status,
+          approvedAt:
+            status === 'bestaetigt' || status === 'bezahlt' ? x.approvedAt || now : x.approvedAt,
+          paidAt: status === 'bezahlt' ? x.paidAt || now : undefined,
+        };
+        FirebaseSync.saveSubsidy(updated).catch(() => {});
+        return updated;
+      })
+    );
+  };
+
+  const handleSaveSubsidyPerson = (person: SubsidyPerson) => {
+    setSubsidyPeople((prev) => {
+      const exists = prev.some((p) => p.id === person.id);
+      return exists ? prev.map((p) => (p.id === person.id ? person : p)) : [...prev, person];
+    });
+    FirebaseSync.saveSubsidyPerson(person).catch(() => {});
+
+    // Name in bereits erfassten Zuschuessen mitfuehren
+    setSubsidies((prev) =>
+      prev.map((s) => (s.personId === person.id ? { ...s, personName: person.name } : s))
+    );
+  };
+
+  const handleDeleteSubsidyPerson = (id: string) => {
+    setSubsidyPeople((prev) => prev.filter((p) => p.id !== id));
+    FirebaseSync.deleteSubsidyPerson(id).catch(() => {});
+  };
+
   const [pendingVoteChange, setPendingVoteChange] = useState<{
     resolutionId: string;
     voteType: VoteType;
@@ -1296,6 +1391,27 @@ export default function App() {
           />
         )}
 
+        {activeTab === 'subsidies' && (
+          <SubsidiesView
+            subsidies={subsidies}
+            people={subsidyPeople}
+            year={subsidyYear}
+            onChangeYear={setSubsidyYear}
+            onOpenNew={() => {
+              setEditingSubsidy(null);
+              setIsSubsidyModalOpen(true);
+            }}
+            onEdit={(s) => {
+              setEditingSubsidy(s);
+              setIsSubsidyModalOpen(true);
+            }}
+            onDelete={handleDeleteSubsidy}
+            onUpdateStatus={handleUpdateSubsidyStatus}
+            onManagePeople={() => setIsSubsidyPeopleOpen(true)}
+            onOpenPayout={() => setIsPayoutOpen(true)}
+          />
+        )}
+
         {activeTab === 'email-center' && (
           <EmailCenterView
             currentMember={currentMember}
@@ -1399,6 +1515,46 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {isSubsidyModalOpen && (
+        <NewSubsidyModal
+          isOpen={isSubsidyModalOpen}
+          onClose={() => {
+            setIsSubsidyModalOpen(false);
+            setEditingSubsidy(null);
+          }}
+          people={subsidyPeople}
+          subsidies={subsidies}
+          editing={editingSubsidy}
+          year={subsidyYear}
+          onSubmit={handleSaveSubsidy}
+          onManagePeople={() => setIsSubsidyPeopleOpen(true)}
+        />
+      )}
+
+      <SubsidyPeopleModal
+        isOpen={isSubsidyPeopleOpen}
+        onClose={() => setIsSubsidyPeopleOpen(false)}
+        people={subsidyPeople}
+        subsidies={subsidies}
+        year={subsidyYear}
+        onSave={handleSaveSubsidyPerson}
+        onDelete={handleDeleteSubsidyPerson}
+      />
+
+      <SubsidyPayoutModal
+        isOpen={isPayoutOpen}
+        onClose={() => setIsPayoutOpen(false)}
+        subsidies={subsidies}
+        people={subsidyPeople}
+        year={subsidyYear}
+        clubAccount={clubAccount}
+        onSaveClubAccount={(a) => {
+          setClubAccount(a);
+          SubsidyStorage.saveClubAccount(a);
+        }}
+        onMarkPaid={(ids) => ids.forEach((id) => handleUpdateSubsidyStatus(id, 'bezahlt'))}
+      />
 
       <BiometricLock
         isOpen={isDeviceLocked && !isAuthModalOpen}

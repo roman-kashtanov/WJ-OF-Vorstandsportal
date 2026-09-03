@@ -5,6 +5,7 @@ import {
   Vote, 
   Receipt, 
   Calendar, 
+  HandCoins,
   Sliders
 } from 'lucide-react';
 
@@ -47,6 +48,11 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       label: 'Belege',
       icon: <Receipt className="w-5 h-5" strokeWidth={1.75} />,
       badge: openInvoicesCount > 0 ? openInvoicesCount : undefined,
+    },
+    {
+      id: 'subsidies',
+      label: 'Zuschüsse',
+      icon: <HandCoins className="w-5 h-5" strokeWidth={1.75} />,
     },
     {
       id: 'meetings',

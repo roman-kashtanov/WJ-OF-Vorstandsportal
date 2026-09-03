@@ -14,6 +14,7 @@ import {
   Download,
   Sliders,
   CalendarDays,
+  HandCoins,
   Cloud
 } from 'lucide-react';
 import { NotificationCenter } from './NotificationCenter';
@@ -100,6 +101,11 @@ export const Header: React.FC<HeaderProps> = ({
       label: 'Belege', 
       icon: <Receipt className="w-4 h-4" strokeWidth={1.75} />,
       badge: openInvoicesCount > 0 ? openInvoicesCount : undefined,
+    },
+    {
+      id: 'subsidies',
+      label: 'Zuschüsse',
+      icon: <HandCoins className="w-4 h-4" strokeWidth={1.75} />,
     },
     {
       id: 'meetings',

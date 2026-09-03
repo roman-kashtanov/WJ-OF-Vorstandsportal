@@ -119,3 +119,38 @@ Alternative im Code und greift nur, wenn kein SMTP hinterlegt ist.
 
 Gmail erlaubt rund 500 Empfänger pro Tag und akzeptiert nur das angemeldete
 Konto als Absender.
+
+## Zuschüsse
+
+Eigener Bereich nach der Zuschuss-Richtlinie 01.2026 (liegt als PDF im Ordner).
+Beträge und Grenzen stehen in `src/data/subsidyCatalogue.ts`.
+
+Grenzen je Kalenderjahr: Academies 200 €, Trainings 75 €, Konferenzen 200 €,
+je Person 475 €, Gesamtbudget 2.500 €. Nicht verbrauchtes Budget verfällt zum
+01.01.
+
+Die Prüfung in `src/utils/subsidies.ts` erzeugt **Hinweise, keine Sperren** —
+der Vorstand darf im Einzelfall abweichen (§ 3, § 5 Abs. 3), soll es aber
+bewusst tun. Geprüft wird: Kategorie- und Personengrenze, Gesamtbudget,
+Zuschuss höher als die tatsächlichen Kosten (§ 9) und dieselbe Veranstaltung
+mehrfach je Mitgliedschaft (§ 5 Abs. 5, § 6 Abs. 3).
+
+**Abweichungen von der Richtlinie auf Wunsch des Vorstands:** Die
+Vier-Wochen-Frist für den Nachweis entfällt, und ein Zuschuss darf auch nach
+der Veranstaltung beantragt werden. Beträge sind frei überschreibbar — in der
+Praxis gibt es auch Kleinbeträge (5 € für ein Kurztraining).
+
+Die Personen hier sind **nicht** die Vorstandsmitglieder aus den Einstellungen,
+sondern eine eigene Liste (Mitglieder, Fördermitglieder, Interessenten) mit
+Bankverbindung.
+
+### Sammelüberweisung
+
+`src/utils/sepa.ts` erzeugt SEPA-XML im Format **pain.001.001.03** — das lesen
+Sparkasse und VR-Bank im Online-Banking ein. Mehrere Zuschüsse derselben Person
+werden zu einer Überweisung zusammengefasst. IBANs werden über die Prüfziffer
+(Modulo 97) geprüft; ohne gültige IBAN wird eine Person von der Auszahlung
+ausgenommen statt stillschweigend übersprungen.
+
+Umlaute im Verwendungszweck werden umschrieben (ae, oe, ue, ss), weil der
+SEPA-Zeichensatz sie nicht zulässt.

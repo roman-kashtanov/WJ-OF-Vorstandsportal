@@ -229,7 +229,7 @@ export interface Meeting {
   isUpcoming: boolean;
 }
 
-export type ActiveTab = 'dashboard' | 'resolutions' | 'invoices' | 'meetings' | 'email-center' | 'storage-guide';
+export type ActiveTab = 'dashboard' | 'resolutions' | 'invoices' | 'meetings' | 'subsidies' | 'email-center' | 'storage-guide';
 
 export interface EmailNotificationLog {
   id: string;
@@ -315,3 +315,77 @@ export interface AppVersionConfig {
 }
 
 
+
+// ---------------------------------------------------------------------------
+// Zuschüsse (Academy-, Trainings- und Konferenzzuschüsse)
+// Grundlage: Zuschuss-Richtlinie 01.2026
+// ---------------------------------------------------------------------------
+
+export type SubsidyCategory = 'academy' | 'training' | 'konferenz' | 'sonstiges';
+
+/** § 2 und § 3 der Richtlinie: Interessenten nur per Einzelfallbeschluss. */
+export type SubsidyPersonType = 'mitglied' | 'foerdermitglied' | 'interessent';
+
+export interface SubsidyPerson {
+  id: string;
+  name: string;
+  type: SubsidyPersonType;
+  email?: string;
+  /** Bankverbindung für die Auszahlung */
+  iban?: string;
+  bic?: string;
+  /** Nur nötig, wenn abweichend vom Namen */
+  accountHolder?: string;
+  isActive?: boolean;
+  note?: string;
+  createdAt: string;
+}
+
+export type SubsidyStatus =
+  | 'beantragt'
+  | 'bestaetigt'
+  | 'nicht_stattgefunden'
+  | 'bezahlt'
+  | 'abgelehnt';
+
+/** Wie liegt der Teilnahme-/Zahlungsnachweis vor? */
+export type SubsidyProofState = 'offen' | 'hochgeladen' | 'anderweitig';
+
+export interface SubsidyProofFile {
+  name: string;
+  size: string;
+  mimeType?: string;
+  dataUrl?: string;
+  uploadedAt: string;
+}
+
+export interface Subsidy {
+  id: string;
+  personId: string;
+  /** Mitgeführt, damit Listen ohne Nachschlagen lesbar bleiben */
+  personName: string;
+  category: SubsidyCategory;
+  /** Schlüssel aus dem Katalog der Richtlinie, falls zutreffend */
+  eventKey?: string;
+  eventName: string;
+  eventDate?: string;
+  /** Gewährter Zuschuss */
+  amount: number;
+  /** Tatsächlich gezahlte Kosten - § 9: der Zuschuss darf sie nicht übersteigen */
+  actualCost?: number;
+  status: SubsidyStatus;
+  /** § 4 Abs. 5: Anträge werden in der Reihenfolge des Eingangs entschieden */
+  appliedAt: string;
+  approvedAt?: string;
+  paidAt?: string;
+  /** Verknüpfter Vorstandsbeschluss (Interessenten, Einzelfälle) */
+  resolutionId?: string;
+  proofState: SubsidyProofState;
+  /** Pflicht, wenn der Nachweis anderweitig abgelegt ist */
+  proofNote?: string;
+  proofFile?: SubsidyProofFile;
+  note?: string;
+  /** Haushaltsjahr - das Budget verfällt zum 01.01. */
+  year: number;
+  createdAt: string;
+}

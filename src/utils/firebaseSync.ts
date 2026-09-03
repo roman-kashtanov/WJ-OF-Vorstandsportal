@@ -762,6 +762,74 @@ export const FirebaseSync = {
     }
   },
 
+
+  // ---------------------------------------------------------------------------
+  // Zuschuesse und die zugehoerigen Personen
+  // ---------------------------------------------------------------------------
+  subscribeSubsidies(callback: (list: any[]) => void) {
+    try {
+      return onSnapshot(
+        collection(db, 'subsidies'),
+        (snap) => {
+          const list = snap.docs.map((d) => d.data() as any);
+          list.sort((a, b) => (b.appliedAt || '').localeCompare(a.appliedAt || ''));
+          callback(list);
+        },
+        (err) => console.warn('Zuschuesse-Sync:', err.message)
+      );
+    } catch {
+      return () => {};
+    }
+  },
+
+  async saveSubsidy(subsidy: any) {
+    try {
+      await setDoc(doc(db, 'subsidies', subsidy.id), cleanData(subsidy));
+      return { success: true };
+    } catch (err: any) {
+      console.warn('Zuschuss konnte nicht gespeichert werden:', err?.message);
+      return { success: false, error: err?.message };
+    }
+  },
+
+  async deleteSubsidy(id: string) {
+    try {
+      await deleteDoc(doc(db, 'subsidies', id));
+    } catch (err: any) {
+      console.warn('Zuschuss konnte nicht geloescht werden:', err?.message);
+    }
+  },
+
+  subscribeSubsidyPeople(callback: (list: any[]) => void) {
+    try {
+      return onSnapshot(
+        collection(db, 'subsidyPeople'),
+        (snap) => callback(snap.docs.map((d) => d.data() as any)),
+        (err) => console.warn('Personen-Sync:', err.message)
+      );
+    } catch {
+      return () => {};
+    }
+  },
+
+  async saveSubsidyPerson(person: any) {
+    try {
+      await setDoc(doc(db, 'subsidyPeople', person.id), cleanData(person));
+      return { success: true };
+    } catch (err: any) {
+      console.warn('Person konnte nicht gespeichert werden:', err?.message);
+      return { success: false, error: err?.message };
+    }
+  },
+
+  async deleteSubsidyPerson(id: string) {
+    try {
+      await deleteDoc(doc(db, 'subsidyPeople', id));
+    } catch (err: any) {
+      console.warn('Person konnte nicht geloescht werden:', err?.message);
+    }
+  },
+
   // Subscribe to Version & Force-Update Config
   subscribeVersionConfig(callback: (config: AppVersionConfig) => void) {
     try {

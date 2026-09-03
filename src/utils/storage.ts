@@ -60,6 +60,9 @@ const STORAGE_KEYS = {
   NOTIFICATION_SETTINGS: 'wj_offenbach_notif_settings_v1',
   EMAIL_CONFIG: 'wj_offenbach_email_config_v1',
   DEFAULT_TEAMS_URL: 'wj_offenbach_default_teams_url_v1',
+  SUBSIDIES: 'wj_offenbach_subsidies_v1',
+  SUBSIDY_PEOPLE: 'wj_offenbach_subsidy_people_v1',
+  CLUB_ACCOUNT: 'wj_offenbach_club_account_v1',
 };
 
 export const AppStorage = {
@@ -380,5 +383,47 @@ export const AppStorage = {
     localStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
     localStorage.removeItem(STORAGE_KEYS.NOTIFICATION_SETTINGS);
     localStorage.removeItem(STORAGE_KEYS.EMAIL_CONFIG);
+  },
+};
+
+// --- Zuschuesse -------------------------------------------------------------
+
+export const SubsidyStorage = {
+  getSubsidies(): any[] {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEYS.SUBSIDIES) || '[]');
+    } catch {
+      return [];
+    }
+  },
+  saveSubsidies(list: any[]) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.SUBSIDIES, JSON.stringify(list));
+    } catch {}
+  },
+  getPeople(): any[] {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEYS.SUBSIDY_PEOPLE) || '[]');
+    } catch {
+      return [];
+    }
+  },
+  savePeople(list: any[]) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.SUBSIDY_PEOPLE, JSON.stringify(list));
+    } catch {}
+  },
+  /** Auftraggeberkonto fuer die Sammelueberweisung. */
+  getClubAccount(): { name: string; iban: string; bic?: string } {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.CLUB_ACCOUNT);
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return { name: 'Wirtschaftsjunioren Offenbach am Main e.V.', iban: '', bic: '' };
+  },
+  saveClubAccount(account: { name: string; iban: string; bic?: string }) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.CLUB_ACCOUNT, JSON.stringify(account));
+    } catch {}
   },
 };
