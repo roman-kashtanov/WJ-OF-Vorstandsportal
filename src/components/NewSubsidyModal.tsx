@@ -10,6 +10,7 @@ import { SUBSIDY_CATALOGUE, catalogueEntry, CATEGORY_LABEL } from '../data/subsi
 import { checkSubsidy, STATUS_LABEL, PIPELINE_MANAGED_STATUSES, personBudget } from '../utils/subsidies';
 import { formatCurrency } from '../utils/formatters';
 import { prepareFileForStorage, formatBytes } from '../utils/fileStorage';
+import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
 import { X, Paperclip, AlertTriangle, Info, Trash2 } from 'lucide-react';
 
 interface Props {
@@ -48,6 +49,7 @@ export const NewSubsidyModal: React.FC<Props> = ({
   const [note, setNote] = useState(editing?.note || '');
   const fileRef = useRef<HTMLInputElement>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [previewFile, setPreviewFile] = useState<PreviewableFile | null>(null);
 
   const entry = catalogueEntry(eventKey);
   const category: SubsidyCategory = entry?.category || 'sonstiges';
@@ -348,10 +350,14 @@ export const NewSubsidyModal: React.FC<Props> = ({
               <div className="mt-2">
                 {proofFile ? (
                   <div className="flex items-center justify-between gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
-                    <span className="truncate text-slate-700">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewFile(proofFile)}
+                      className="truncate text-left text-[#003594] font-semibold hover:underline cursor-pointer"
+                    >
                       {proofFile.name}{' '}
-                      <span className="text-slate-400">({proofFile.size})</span>
-                    </span>
+                      <span className="text-slate-400 font-normal">({proofFile.size})</span>
+                    </button>
                     <button
                       type="button"
                       onClick={() => setProofFile(undefined)}
@@ -435,6 +441,8 @@ export const NewSubsidyModal: React.FC<Props> = ({
           </button>
         </div>
       </div>
+
+      <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
     </div>
   );
 };

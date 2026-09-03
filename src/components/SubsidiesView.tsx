@@ -10,6 +10,7 @@ import {
 } from '../utils/subsidies';
 import { CATEGORY_LABEL, SUBSIDY_LIMITS } from '../data/subsidyCatalogue';
 import { formatIban } from '../utils/sepa';
+import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
 import {
   HandCoins,
   Plus,
@@ -67,6 +68,7 @@ export const SubsidiesView: React.FC<Props> = ({
   const [filterStatus, setFilterStatus] = useState<'all' | SubsidyStatus>('all');
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [previewFile, setPreviewFile] = useState<PreviewableFile | null>(null);
 
   const years = useMemo(() => {
     const set = new Set<number>(subsidies.map((s) => s.year));
@@ -453,14 +455,22 @@ export const SubsidiesView: React.FC<Props> = ({
                   <div className="text-slate-600">
                     Nachweis:{' '}
                     {s.proofState === 'hochgeladen' && s.proofFile ? (
-                      <a
-                        href={s.proofFile.dataUrl}
-                        download={s.proofFile.name}
-                        className="text-[#003594] font-semibold hover:underline inline-flex items-center gap-1"
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const file = s.proofFile!;
+                          const isImage = file.mimeType?.startsWith('image/');
+                          if (!file.dataUrl || isImage) {
+                            setPreviewFile(file);
+                          } else {
+                            window.open(file.dataUrl, '_blank');
+                          }
+                        }}
+                        className="text-[#003594] font-semibold hover:underline inline-flex items-center gap-1 cursor-pointer"
                       >
                         <Paperclip className="w-3 h-3" strokeWidth={1.75} />
                         {s.proofFile.name}
-                      </a>
+                      </button>
                     ) : s.proofState === 'anderweitig' ? (
                       <span className="text-slate-700">{s.proofNote}</span>
                     ) : (
@@ -526,6 +536,8 @@ export const SubsidiesView: React.FC<Props> = ({
           );
         })}
       </div>
+
+      <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
     </div>
   );
 };

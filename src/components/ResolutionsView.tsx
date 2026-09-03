@@ -58,6 +58,7 @@ import { FirebaseSync } from '../utils/firebaseSync';
 import { verifyDeleteCode } from '../utils/security';
 import { downloadAttachment, getAttachmentType, formatFileSize } from '../utils/fileHelpers';
 import { prepareFileForStorage, formatBytes } from '../utils/fileStorage';
+import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
 
 interface ResolutionsViewProps {
   currentMember: BoardMember;
@@ -127,6 +128,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
   const [showVoteNoteField, setShowVoteNoteField] = useState<boolean>(false);
   const detailFileInputRef = useRef<HTMLInputElement>(null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [previewFile, setPreviewFile] = useState<PreviewableFile | null>(null);
 
   // Welcher Beschluss zeigt gerade die eigene Abstimm-Box? Nur die eigene
   // Zeile ist klickbar - so muss man erst den eigenen Namen antippen, bevor
@@ -1180,10 +1182,23 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                       const isPdf = att.type === 'pdf';
                       const isImage = att.type === 'image';
 
+                      const handleOpen = () => {
+                        if (!att.dataUrl) {
+                          setPreviewFile(att);
+                        } else if (isImage) {
+                          setPreviewFile(att);
+                        } else if (isPdf) {
+                          window.open(att.dataUrl, '_blank');
+                        } else {
+                          downloadAttachment(att);
+                        }
+                      };
+
                       return (
                         <div
                           key={att.id}
-                          className="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-blue-50/40 border border-slate-200 rounded-xl transition-all group"
+                          onClick={handleOpen}
+                          className="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-blue-50/40 border border-slate-200 rounded-xl transition-all group cursor-pointer"
                         >
                           <div className="flex items-center space-x-2.5 min-w-0 pr-2">
                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
@@ -1228,7 +1243,10 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
 
                           <button
                             type="button"
-                            onClick={() => downloadAttachment(att)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              downloadAttachment(att);
+                            }}
                             className="p-1.5 bg-white border border-slate-200 text-slate-600 hover:text-[#003594] hover:border-blue-300 rounded-lg shadow-2xs transition-colors shrink-0 cursor-pointer"
                             title={`${att.name} herunterladen`}
                           >
@@ -1556,6 +1574,8 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
           </div>
         </div>
       )}
+
+      <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
     </div>
   );
 };

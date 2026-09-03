@@ -431,3 +431,34 @@ sind lokal nicht gesetzt — das öffentliche Formular wurde bis zur
 Zugangscode-Prüfung (korrektes Fail-closed-Verhalten bestätigt) und
 UI/Validierung getestet, nicht aber der volle Firestore-Schreibpfad. Bitte
 nach dem Deploy einmal echt mit einem gesetzten Zugangscode durchklicken.
+
+## Bug behoben: Nachweisfotos/Anhänge ließen sich nicht öffnen (v3.2.1)
+
+**Symptom:** Bilder (Nachweisfotos bei Zuschüssen, Bild-Anhänge bei
+Beschlüssen) ließen sich nicht "aufmachen" - Klick auf den Dateinamen löste
+höchstens einen erzwungenen Download aus (`<a href download>`), keine
+Vorschau. Auf dem Handy landet ein solcher Download oft unsichtbar im
+System, ohne dass der Nutzer merkt, dass überhaupt etwas passiert ist.
+
+**Ursache, zweite Ebene:** `stripFilePayloads()` in `utils/storage.ts`
+entfernt `dataUrl`-Felder bewusst vor dem Schreiben in den Browser-Speicher
+(5-MB-Limit) - betrifft Beschluss-Anhänge **und** Zuschuss-Nachweise
+gleichermaßen. Ohne Verbindung zur Vereinsdatenbank (oranger Banner "Keine
+Verbindung...") bleibt die App nach einem Neuladen auf diesen
+lokalstorage-Daten sitzen - die `dataUrl` fehlt dann komplett, ein Klick tat
+buchstäblich gar nichts.
+
+**Fix:** Neue `src/components/FilePreviewModal.tsx` - Vollbild-Overlay für
+Bilder, direkter Download-Button. Eingebunden in `ResolutionsView.tsx`
+(Dateianhänge), `SubsidiesView.tsx` (Nachweis-Link) und
+`NewSubsidyModal.tsx` (Nachweis beim Bearbeiten). Klick-Logik:
+- Bild vorhanden → Vorschau-Overlay
+- PDF vorhanden → neuer Browser-Tab (nativer PDF-Viewer)
+- sonst → klassischer Download
+- **`dataUrl` fehlt** → Overlay zeigt jetzt eine klare Erklärung
+  ("Datei auf diesem Gerät gerade nicht verfügbar, vermutlich fehlende
+  Verbindung zur Datenbank - Seite neu laden") statt stillschweigend nichts
+  zu tun.
+
+Live im Browser mit allen drei Fällen getestet (Bild-Vorschau, PDF-Link,
+fehlende Datei) - jeweils korrektes Verhalten bestätigt.
