@@ -1,24 +1,29 @@
 import React, { useState } from 'react';
 import { BoardMember, Resolution, VoteType, EmailServerConfig } from '../types';
 import { EmailService, sendResolutionVoteMails } from '../utils/emailService';
-import { 
-  Mail, 
-  Send, 
-  Copy, 
-  Check, 
-  ExternalLink, 
-  X, 
-  CheckCircle2, 
-  XCircle, 
-  MinusCircle, 
-  Smartphone, 
-  Monitor, 
+import { isVotingMember } from '../utils/formatters';
+import {
+  Mail,
+  Send,
+  Copy,
+  Check,
+  ExternalLink,
+  X,
+  CheckCircle2,
+  XCircle,
+  MinusCircle,
+  Smartphone,
+  Monitor,
   Sparkles,
   Info,
   ShieldCheck,
   Zap,
   Users,
-  Loader2
+  Loader2,
+  Eye,
+  EyeOff,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 
 interface EmailVoteModalProps {
@@ -42,14 +47,28 @@ export const EmailVoteModal: React.FC<EmailVoteModalProps> = ({
 }) => {
   if (!isOpen || !resolution) return null;
 
-  const [selectedMemberId, setSelectedMemberId] = useState<string>(members[0]?.id || '');
-  const [selectedRecipients, setSelectedRecipients] = useState<string[]>(members.map((m) => m.id));
+  // Stimmberechtigte und Nicht-Stimmberechtigte werden getrennt behandelt:
+  // Nur Stimmberechtigte duerfen ueberhaupt eine gueltige Stimme abgeben,
+  // daher sind nur sie standardmaessig vorausgewaehlt (und auch nur, wenn
+  // ihre Stimme noch "offen" ist - bereits Abgestimmte muessen nicht erneut
+  // angeschrieben werden). Nicht-Stimmberechtigte koennen weiterhin manuell
+  // dazugenommen werden (z.B. zur Information), sind aber standardmaessig
+  // weder ausgewaehlt noch sichtbar.
+  const eligibleMembers = members.filter((m) => isVotingMember(m));
+  const otherMembers = members.filter((m) => !isVotingMember(m));
+
+  const [selectedMemberId, setSelectedMemberId] = useState<string>(eligibleMembers[0]?.id || members[0]?.id || '');
+  const [selectedRecipients, setSelectedRecipients] = useState<string[]>(
+    eligibleMembers.filter((m) => !resolution.votes[m.id]).map((m) => m.id)
+  );
+  const [showOtherMembers, setShowOtherMembers] = useState(false);
   const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
+  const [showPreview, setShowPreview] = useState(false);
   const [copiedType, setCopiedType] = useState<'html' | 'text' | 'yes' | 'no' | null>(null);
   const [sentFeedback, setSentFeedback] = useState<string | null>(null);
   const [showTechGuide, setShowTechGuide] = useState<boolean>(false);
 
-  const previewMember = members.find((m) => m.id === selectedMemberId) || members[0];
+  const previewMember = members.find((m) => m.id === selectedMemberId) || eligibleMembers[0] || members[0];
   const emailHtml = EmailService.generateResolutionEmailHtml(resolution, previewMember);
   const emailText = EmailService.generateResolutionEmailText(resolution, previewMember);
   const subject = `[WJ Offenbach Umlaufbeschluss] ${resolution.number}: ${resolution.title} (1-Klick Abstimmung)`;
@@ -60,11 +79,16 @@ export const EmailVoteModal: React.FC<EmailVoteModalProps> = ({
     );
   };
 
-  const handleSelectAllRecipients = () => {
-    if (selectedRecipients.length === members.length) {
-      setSelectedRecipients([]);
+  const eligibleSelectedCount = eligibleMembers.filter((m) => selectedRecipients.includes(m.id)).length;
+
+  const handleSelectAllEligible = () => {
+    if (eligibleSelectedCount === eligibleMembers.length) {
+      setSelectedRecipients((prev) => prev.filter((id) => !eligibleMembers.some((m) => m.id === id)));
     } else {
-      setSelectedRecipients(members.map((m) => m.id));
+      setSelectedRecipients((prev) => [
+        ...prev.filter((id) => !eligibleMembers.some((m) => m.id === id)),
+        ...eligibleMembers.map((m) => m.id),
+      ]);
     }
   };
 
@@ -193,10 +217,10 @@ export const EmailVoteModal: React.FC<EmailVoteModalProps> = ({
         )}
 
         {/* Modal Body: Split view */}
-        <div className="flex-1 overflow-y-auto p-5 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 bg-slate-50">
-          
-          {/* Left Column: Recipients & Dispatch Controls (5 cols) */}
-          <div className="lg:col-span-5 space-y-4">
+        <div className={`flex-1 overflow-y-auto p-5 sm:p-6 grid grid-cols-1 gap-6 bg-slate-50 ${showPreview ? 'lg:grid-cols-12' : ''}`}>
+
+          {/* Left Column: Recipients & Dispatch Controls */}
+          <div className={`${showPreview ? 'lg:col-span-5' : ''} space-y-4`}>
             
             {/* 1. Recipients Box */}
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3">
@@ -207,15 +231,15 @@ export const EmailVoteModal: React.FC<EmailVoteModalProps> = ({
                 </div>
                 <button
                   type="button"
-                  onClick={handleSelectAllRecipients}
+                  onClick={handleSelectAllEligible}
                   className="text-[11px] font-bold text-[#003594] hover:underline"
                 >
-                  {selectedRecipients.length === members.length ? 'Keine' : 'Alle (8)'}
+                  {eligibleSelectedCount === eligibleMembers.length ? 'Keine' : `Alle (${eligibleMembers.length})`}
                 </button>
               </div>
 
               <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
-                {members.map((m) => {
+                {eligibleMembers.map((m) => {
                   const isChecked = selectedRecipients.includes(m.id);
                   const hasVoted = !!resolution.votes[m.id];
                   return (
@@ -251,7 +275,60 @@ export const EmailVoteModal: React.FC<EmailVoteModalProps> = ({
                     </label>
                   );
                 })}
+                {eligibleMembers.length === 0 && (
+                  <p className="text-[11px] text-slate-400 italic px-1">Keine stimmberechtigten Mitglieder hinterlegt.</p>
+                )}
               </div>
+
+              {otherMembers.length > 0 && (
+                <div className="pt-1 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowOtherMembers((v) => !v)}
+                    className="w-full flex items-center justify-between text-[11px] font-semibold text-slate-500 hover:text-[#003594] py-1"
+                  >
+                    <span className="flex items-center space-x-1">
+                      {showOtherMembers ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                      <span>Nicht stimmberechtigt ({otherMembers.length})</span>
+                    </span>
+                    <span className="text-slate-400">nur bei Bedarf hinzufügen</span>
+                  </button>
+
+                  {showOtherMembers && (
+                    <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1 mt-1.5">
+                      {otherMembers.map((m) => {
+                        const isChecked = selectedRecipients.includes(m.id);
+                        return (
+                          <label
+                            key={m.id}
+                            className={`flex items-center justify-between p-2 rounded-lg border text-xs cursor-pointer transition-colors ${
+                              isChecked
+                                ? 'bg-blue-50/60 border-blue-200 text-slate-900'
+                                : 'bg-slate-50/50 border-slate-200/60 text-slate-500 hover:bg-slate-100'
+                            }`}
+                          >
+                            <div className="flex items-center space-x-2 min-w-0 pr-1">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => handleToggleRecipient(m.id)}
+                                className="rounded text-[#003594] focus:ring-[#003594]"
+                              />
+                              <div className="truncate">
+                                <span className="font-semibold block truncate">{m.name}</span>
+                                <span className="text-[10px] text-slate-500 block truncate">{m.email}</span>
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 shrink-0">
+                              Kein Stimmrecht
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* 2. Dispatch Options Box */}
@@ -361,53 +438,75 @@ export const EmailVoteModal: React.FC<EmailVoteModalProps> = ({
             </button>
           </div>
 
-          {/* Right Column: Live Email Preview (7 cols) */}
-          <div className="lg:col-span-7 space-y-3 flex flex-col">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <span className="text-xs font-bold text-slate-700">E-Mail-Vorschau für {previewMember.name}</span>
-                <span className="text-[10px] font-mono bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">
-                  HTML
-                </span>
+          {/* Right Column: Live Email Preview - standardmaessig eingeklappt,
+              damit der Versand nicht jedes Mal erst eine Vorschau verlangt */}
+          {!showPreview ? (
+            <button
+              type="button"
+              onClick={() => setShowPreview(true)}
+              className="w-full flex items-center justify-center space-x-2 text-xs font-semibold text-slate-500 hover:text-[#003594] py-2.5 rounded-xl border border-dashed border-slate-300 hover:border-[#003594] transition-colors"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>E-Mail-Vorschau anzeigen (nicht notwendig zum Versenden)</span>
+            </button>
+          ) : (
+            <div className="lg:col-span-7 space-y-3 flex flex-col">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs font-bold text-slate-700">E-Mail-Vorschau für {previewMember.name}</span>
+                  <span className="text-[10px] font-mono bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">
+                    HTML
+                  </span>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-1 bg-slate-200 p-0.5 rounded-lg text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewMode('desktop')}
+                      className={`p-1 rounded-md transition-colors ${
+                        previewMode === 'desktop' ? 'bg-white text-[#003594] shadow-xs' : 'text-slate-600'
+                      }`}
+                      title="Desktop-Ansicht"
+                    >
+                      <Monitor className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewMode('mobile')}
+                      className={`p-1 rounded-md transition-colors ${
+                        previewMode === 'mobile' ? 'bg-white text-[#003594] shadow-xs' : 'text-slate-600'
+                      }`}
+                      title="Mobile Smartphone-Ansicht"
+                    >
+                      <Smartphone className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPreview(false)}
+                    className="p-1 rounded-md text-slate-500 hover:text-[#003594]"
+                    title="Vorschau ausblenden"
+                  >
+                    <EyeOff className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
-              <div className="flex items-center space-x-1 bg-slate-200 p-0.5 rounded-lg text-xs">
-                <button
-                  type="button"
-                  onClick={() => setPreviewMode('desktop')}
-                  className={`p-1 rounded-md transition-colors ${
-                    previewMode === 'desktop' ? 'bg-white text-[#003594] shadow-xs' : 'text-slate-600'
-                  }`}
-                  title="Desktop-Ansicht"
-                >
-                  <Monitor className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPreviewMode('mobile')}
-                  className={`p-1 rounded-md transition-colors ${
-                    previewMode === 'mobile' ? 'bg-white text-[#003594] shadow-xs' : 'text-slate-600'
-                  }`}
-                  title="Mobile Smartphone-Ansicht"
-                >
-                  <Smartphone className="w-3.5 h-3.5" />
-                </button>
+              {/* Frame containing the rendered HTML email */}
+              <div className={`bg-white border border-slate-300 rounded-xl overflow-hidden shadow-inner flex-1 min-h-[380px] max-h-[460px] overflow-y-auto ${
+                previewMode === 'mobile' ? 'max-w-xs mx-auto border-4 border-slate-700 rounded-3xl p-1' : ''
+              }`}>
+                <div dangerouslySetInnerHTML={{ __html: emailHtml }} />
+              </div>
+
+              {/* Info note */}
+              <div className="text-[11px] text-slate-500 flex items-center justify-between">
+                <span>Betreff: <em>{subject}</em></span>
+                <span className="text-slate-400">Responsive Email HTML5</span>
               </div>
             </div>
-
-            {/* Frame containing the rendered HTML email */}
-            <div className={`bg-white border border-slate-300 rounded-xl overflow-hidden shadow-inner flex-1 min-h-[380px] max-h-[460px] overflow-y-auto ${
-              previewMode === 'mobile' ? 'max-w-xs mx-auto border-4 border-slate-700 rounded-3xl p-1' : ''
-            }`}>
-              <div dangerouslySetInnerHTML={{ __html: emailHtml }} />
-            </div>
-
-            {/* Info note */}
-            <div className="text-[11px] text-slate-500 flex items-center justify-between">
-              <span>Betreff: <em>{subject}</em></span>
-              <span className="text-slate-400">Responsive Email HTML5</span>
-            </div>
-          </div>
+          )}
 
         </div>
 

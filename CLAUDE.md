@@ -290,3 +290,37 @@ das tatsächlich in Firestore hängende `settings/versionConfig`-Dokument
 möglich (kein authentifizierter Lesezugriff von hier aus) — die Argumentation
 für „3.1.2 deckt garantiert alle je erfundenen Werte ab" steht in der
 Commit-Nachricht.
+
+## Bug behoben: E-Mail-Versand bei Beschlüssen erlaubte Nicht-Stimmberechtigte als Standard (v3.1.3)
+
+**Symptom:** Im Beschluss-Detail unter „E-Mail versenden" (`EmailVoteModal.tsx`) waren
+standardmäßig **alle** Mitglieder ausgewählt — auch Nicht-Stimmberechtigte
+und bereits Abgestimmte. Der „Alle"-Knopf zeigte zudem eine **hartcodierte**
+Zahl „(8)" statt der tatsächlichen Mitgliederzahl (real z. B. nur 3). Die
+Live-HTML-Vorschau war immer sichtbar und erschwerte den schnellen Versand.
+
+**Ursache:** `members={members}` in `App.tsx` übergab die komplette,
+ungefilterte Mitgliederliste an das Modal; `selectedRecipients` wurde initial
+auf `members.map(m => m.id)` gesetzt (alle, unabhängig von Stimmrecht/Status).
+Der Text `Alle (8)` war ein vergessener Literal-String statt `members.length`.
+
+**Fix (`EmailVoteModal.tsx`):**
+- Mitglieder werden intern in `eligibleMembers` (`isVotingMember`) und
+  `otherMembers` getrennt.
+- Standardauswahl = nur `eligibleMembers`, die noch **nicht** abgestimmt haben
+  (`!resolution.votes[m.id]`) — bereits Abgestimmte und Nicht-Stimmberechtigte
+  sind initial abgewählt.
+- Nicht-Stimmberechtigte stehen in einer eigenen, standardmäßig
+  **eingeklappten** Sektion („Nicht stimmberechtigt (n) — nur bei Bedarf
+  hinzufügen") und lassen sich bei Bedarf manuell dazuwählen.
+- „Alle"-Knopf bezieht sich nur auf `eligibleMembers` und zeigt die echte
+  Zahl dynamisch (`Alle (${eligibleMembers.length})`), kein Hardcoding mehr.
+- Die HTML-Live-Vorschau ist jetzt standardmäßig **eingeklappt** (Knopf
+  „E-Mail-Vorschau anzeigen (nicht notwendig zum Versenden)"); „Automatisch
+  senden" funktioniert direkt ohne vorherigen Blick auf die Vorschau.
+
+Live im Browser mit 5 Testmitgliedern (3 stimmberechtigt, 2 nicht) und einem
+teilweise abgestimmten Testbeschluss verifiziert: Standardauswahl zeigte
+korrekt nur die zwei noch offenen Stimmberechtigten, „Alle (3)" korrekt,
+Nicht-Stimmberechtigte blieben abgewählt/versteckt, Vorschau blieb bis zum
+manuellen Aufklappen verborgen.
