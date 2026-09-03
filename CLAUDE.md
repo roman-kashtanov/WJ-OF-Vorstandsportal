@@ -241,3 +241,52 @@ weiterhin tragen. Betroffene Stellen: `App.tsx` (`pendingVotesCount`),
 `DashboardView.tsx` (`openResolutions`, `pendingResolutionsForMember`),
 `NotificationCenter.tsx` (`unvotedResolutions`), `EmailCenterView.tsx`
 (`activeResolutions`). Bei einer neuen Zählstelle immer mitdenken.
+
+## Bug behoben: Erzwungene Aktualisierung hing sich in Endlosschleife auf (v3.1.2)
+
+**Symptom:** Nach Klick auf „Aktualisierung erzwingen" (Einstellungen → System)
+blieb auf allen Geräten dauerhaft das Update-Popup offen. Klick auf
+„Aktualisieren" lud neu, das Popup kam aber sofort wieder — auf beiden
+betroffenen Geräten des Nutzers, ohne jede Möglichkeit, das zu umgehen.
+
+**Ursache:** `handleForceUpdateNow` in `SettingsModal.tsx` hat **nicht** die
+tatsächlich laufende `CURRENT_APP_VERSION` als Pflichtversion nach Firestore
+geschrieben, sondern eine rechnerisch um eine Patch-Stelle **erfundene**
+Zukunftsversion (z. B. lief 3.1.1 → geschrieben wurde 3.1.2, obwohl nie
+wirklich als 3.1.2 gebaut/deployt). Diese erfundene Nummer entsprach keinem
+real existierenden Deploy. `ForceUpdateModal.tsx` verglich außerdem noch
+gegen `latestVersion` statt gegen `minRequiredVersion`. Jedes Gerät lud beim
+Klick auf „Aktualisieren" zwangsläufig nur die tatsächlich vorhandene
+(ältere) Version nach — die verlangte Version konnte nie erreicht werden.
+Endlosschleife ohne Ausweg, da es keine Möglichkeit gab, die erzwungene
+Aktualisierung wieder zu deaktivieren.
+
+**Fix:**
+- `handleForceUpdateNow` schreibt jetzt `CURRENT_APP_VERSION` **unverändert**
+  als `latestVersion` **und** `minRequiredVersion` — keine Erfindung mehr.
+  UI warnt den Admin vorher, die eigene Seite selbst einmal neu zu laden,
+  damit garantiert die neueste echte Version verlangt wird.
+- `ForceUpdateModal.tsx` vergleicht jetzt korrekt gegen `minRequiredVersion`
+  und zeigt permanent „Installiert: vX · Benötigt: vY" an — Diagnose auf
+  einen Blick, ob überhaupt eine erreichbare Version verlangt wird.
+- Neuer Zähler (`sessionStorage`, `wjof_force_update_attempts`): ab dem 2.
+  erfolglosen Klick erscheint ein Hinweis, dass die verlangte Version
+  vermutlich nicht wirklich veröffentlicht ist.
+- **Neue Notbremse**: Solange `forceUpdateEnabled === true` zeigt
+  Einstellungen → System jetzt „Aktiv seit … · Pflichtversion vX" mit einem
+  „Deaktivieren"-Knopf, der `forceUpdateEnabled` direkt zurücksetzt — vorher
+  gab es aus einem hängenden Zustand keinerlei Ausweg außer manuellem
+  Löschen des Firestore-Dokuments.
+
+**Wichtig für künftige Versionsbumps:** Der Knopf ist jetzt bewusst simpel —
+er zwingt exakt die Version, die im Browser des klickenden Admins gerade
+läuft. Nach einem echten Deploy muss der Admin also **erst selbst neu laden**,
+dann erst klicken. Nie mehr eine Versionsnummer rechnerisch erfinden.
+
+Isoliert per Skript gegen `compareVersions()` getestet (alte Schleife
+nachgestellt und bestätigt; neuer Deploy 3.1.2 löst alle bisher denkbaren
+hängengebliebenen Zielversionen 3.0.1/3.1.1/3.1.2 auf). Kein Livetest gegen
+das tatsächlich in Firestore hängende `settings/versionConfig`-Dokument
+möglich (kein authentifizierter Lesezugriff von hier aus) — die Argumentation
+für „3.1.2 deckt garantiert alle je erfundenen Werte ab" steht in der
+Commit-Nachricht.

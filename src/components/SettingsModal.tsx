@@ -39,7 +39,7 @@ import {
 } from '../utils/pwaNotifications';
 import { sendMail } from '../utils/emailService';
 import { Biometric } from '../utils/biometric';
-import { isVotingMember } from '../utils/formatters';
+import { isVotingMember, formatDate } from '../utils/formatters';
 import { firebaseConfig } from '../lib/firebase';
 
 interface SettingsModalProps {
@@ -369,18 +369,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setTimeout(() => setPasscodeSuccess(false), 4000);
   };
 
-  // 1-Click Force Update ("Klatz & fertig")
+  /**
+   * Erzwingt die Aktualisierung fuer alle Geraete.
+   *
+   * Frueher wurde hier CURRENT_APP_VERSION rechnerisch um eine Patch-Stelle
+   * erhoeht ("bumpedVersion") und diese erfundene Nummer als Pflicht in
+   * Firestore hinterlegt. Das Problem: Diese Nummer entsprach nie einer
+   * tatsaechlich ausgelieferten Version - sie war reine Zukunftsmusik, die
+   * nur durch puren Zufall exakt mit einem spaeteren echten Deploy
+   * uebereingestimmt haette. In der Praxis verlangte die App von jedem
+   * Geraet eine Version, die es nirgends zum Herunterladen gab: Der
+   * "Aktualisieren"-Knopf im ForceUpdateModal laed neu, bekommt aber wieder
+   * nur die tatsaechlich existierende (aeltere) Version - der Dialog
+   * erscheint sofort erneut. Eine Endlosschleife ohne Ausweg.
+   *
+   * Richtig ist: Als Pflichtversion gilt die Version, die JETZT tatsaechlich
+   * in diesem Browser laeuft (CURRENT_APP_VERSION), unveraendert. Klickt der
+   * Administrator nach einem echten Deploy und nach eigenem Neuladen der
+   * Seite, ist genau das die neueste wirklich existierende Version - jedes
+   * andere Geraet landet nach dem Aktualisieren-Klick exakt dort.
+   */
   const handleForceUpdateNow = async () => {
     setIsForcingUpdate(true);
     setForceUpdateSuccess(false);
     try {
-      // Calculate bumped version
-      const parts = CURRENT_APP_VERSION.split('.').map((p) => parseInt(p, 10) || 0);
-      const bumpedVersion = `${parts[0]}.${parts[1]}.${(parts[2] || 0) + 1}`;
-
       const payload: Partial<AppVersionConfig> = {
-        latestVersion: bumpedVersion,
-        minRequiredVersion: bumpedVersion,
+        latestVersion: CURRENT_APP_VERSION,
+        minRequiredVersion: CURRENT_APP_VERSION,
         forceUpdateEnabled: true,
         releaseNotes: 'Aktualisierung durch Vorstand initiiert.',
         updatedAt: new Date().toISOString(),
@@ -906,7 +921,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     Gezwungene Aktualisierung für alle ausrollen
                   </h5>
                   <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
-                    1 Klick: Verlangt von allen geöffneten Sessions sofort die Aktualisierung auf die neueste Version.
+                    Verlangt von allen Geräten, mindestens die Version zu laden, die
+                    gerade <strong>in diesem Browser</strong> läuft (v{CURRENT_APP_VERSION}).
+                  </p>
+                  <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 mt-2 leading-relaxed">
+                    Bitte vorher diese Seite selbst einmal neu laden, damit sicher die
+                    neueste Version verlangt wird — sonst zwingt der Knopf alle auf
+                    einen möglicherweise veralteten Stand, und niemand kommt mehr
+                    aus dem Update-Dialog heraus.
                   </p>
                 </div>
 
@@ -917,13 +939,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   className="w-full sm:w-auto px-5 py-2.5 bg-[#003594] hover:bg-[#00266B] text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center space-x-2 transition-all cursor-pointer disabled:opacity-50 active:scale-98"
                 >
                   <RefreshCw className={`w-4 h-4 ${isForcingUpdate ? 'animate-spin' : ''}`} />
-                  <span>{isForcingUpdate ? 'Aktualisierung wird gesendet...' : 'Aktualisierung für alle erzwingen'}</span>
+                  <span>{isForcingUpdate ? 'Aktualisierung wird gesendet...' : `Version ${CURRENT_APP_VERSION} für alle erzwingen`}</span>
                 </button>
 
                 {forceUpdateSuccess && (
                   <div className="p-2.5 bg-emerald-100 border border-emerald-300 rounded-xl text-emerald-900 text-xs font-bold flex items-center space-x-2 animate-in fade-in">
                     <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-700" />
                     <span>Aktualisierung sofort im Netzwerk aktiviert! Alle Geräte erhalten den Update-Dialog.</span>
+                  </div>
+                )}
+
+                {/* Aktueller Zustand + Not-Aus. Vorher gab es keine Moeglichkeit,
+                    eine einmal ausgeloeste Pflicht wieder zurueckzunehmen - wer in
+                    eine Situation wie oben beschrieben (Pflichtversion existiert
+                    nirgends wirklich) geraten war, kam da nicht mehr heraus. */}
+                {versionConfig?.forceUpdateEnabled && (
+                  <div className="pt-2.5 border-t border-blue-200/70 flex items-center justify-between gap-2 flex-wrap">
+                    <span className="text-[11px] text-slate-600">
+                      Aktiv seit {formatDate(versionConfig.updatedAt)} · Pflichtversion v
+                      {versionConfig.minRequiredVersion}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const payload: Partial<AppVersionConfig> = { forceUpdateEnabled: false };
+                        if (onUpdateVersionConfig) await onUpdateVersionConfig(payload);
+                        else await FirebaseSync.saveVersionConfig(payload);
+                      }}
+                      className="text-[11px] font-bold text-rose-700 hover:underline cursor-pointer"
+                    >
+                      Deaktivieren
+                    </button>
                   </div>
                 )}
               </div>
