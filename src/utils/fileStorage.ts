@@ -14,8 +14,14 @@
 /** Obergrenze der gespeicherten Rohdaten. Mit Base64 bleibt genug Luft unter 1 MiB. */
 export const MAX_STORED_BYTES = 700 * 1024;
 
-/** Längste Bildkante nach dem Verkleinern. Reicht für Belege problemlos. */
-const MAX_EDGE = 1600;
+/**
+ * Längste Bildkante nach dem Verkleinern.
+ *
+ * 2400 px liegen deutlich über dem, was ein Dokumentenscanner mit 300 dpi
+ * für eine A4-Seite liefert. Kleingedrucktes bleibt dadurch auch bei
+ * dichteren Vorlagen (Verträge, mehrspaltige Rechnungen) scharf.
+ */
+const MAX_EDGE = 2400;
 
 export interface PreparedFile {
   dataUrl: string;
@@ -69,12 +75,28 @@ async function compressImage(file: File): Promise<PreparedFile> {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-  // Qualität schrittweise senken, bis es unter die Grenze passt
-  let quality = 0.75;
+  // Hoch ansetzen und nur so weit senken, wie es die Größengrenze verlangt.
+  // In kleinen Schritten, damit nicht unnötig Qualität verschenkt wird.
+  let quality = 0.92;
   let out = canvas.toDataURL('image/jpeg', quality);
-  while (dataUrlBytes(out) > MAX_STORED_BYTES && quality > 0.35) {
-    quality -= 0.1;
+  while (dataUrlBytes(out) > MAX_STORED_BYTES && quality > 0.45) {
+    quality -= 0.06;
     out = canvas.toDataURL('image/jpeg', quality);
+  }
+
+  // Reicht das nicht, lieber die Auflösung senken als die Qualität weiter:
+  // Artefakte zerstören feine Schrift stärker als eine etwas kleinere Kante.
+  if (dataUrlBytes(out) > MAX_STORED_BYTES) {
+    const smaller = document.createElement('canvas');
+    smaller.width = Math.round(canvas.width * 0.7);
+    smaller.height = Math.round(canvas.height * 0.7);
+    const sctx = smaller.getContext('2d');
+    if (sctx) {
+      sctx.fillStyle = '#ffffff';
+      sctx.fillRect(0, 0, smaller.width, smaller.height);
+      sctx.drawImage(canvas, 0, 0, smaller.width, smaller.height);
+      out = smaller.toDataURL('image/jpeg', 0.85);
+    }
   }
 
   return {

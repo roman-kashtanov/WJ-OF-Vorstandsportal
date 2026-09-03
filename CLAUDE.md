@@ -168,14 +168,16 @@ Dateispeicher. Daraus folgen zwei harte Grenzen:
   sie liegen in Firestore. Sonst schlägt das Schreiben irgendwann fehl und
   **alle** weiteren Änderungen gehen verloren.
 
-`src/utils/fileStorage.ts` verkleinert Bilder vor dem Speichern (max. 1600 px
-Kante, JPEG, Qualität wird gesenkt bis es passt). Ein Beleg landet damit bei
-80–300 KB. Zu große Nicht-Bilder werden mit klarer Meldung abgelehnt, statt
+`src/utils/fileStorage.ts` verkleinert Bilder vor dem Speichern: max. 2400 px
+Kante, JPEG ab Qualität 92 %, die nur so weit gesenkt wird, wie die
+Größengrenze es verlangt. Reicht das nicht, wird die Auflösung reduziert statt
+die Qualität weiter — Artefakte zerstören feine Schrift stärker als eine etwas
+kleinere Kante. Ein Beleg landet damit bei 300–500 KB. Zu große Nicht-Bilder werden mit klarer Meldung abgelehnt, statt
 still zu scheitern.
 
 Firebase Storage ist im Projekt **nicht** eingerichtet (404) und würde für neue
 Projekte den Blaze-Tarif erfordern. Solange die Komprimierung reicht, ist das
 nicht nötig.
 
-Gesamtkapazität im kostenlosen Tarif: 1 GiB. Bei ~150 KB je Beleg entspricht
-das grob 6.000–7.000 Belegen.
+Gesamtkapazität im kostenlosen Tarif: 1 GiB. Bei ~400 KB je Beleg entspricht
+das grob 2.500 Belegen.
