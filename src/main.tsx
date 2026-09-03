@@ -1,6 +1,5 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import App from './App.tsx';
 import './index.css';
 
 /**
@@ -16,8 +15,39 @@ if (typeof window !== 'undefined') {
   document.addEventListener('gestureend', block, { passive: false });
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>
-);
+/**
+ * Pfad-Weiche fuer die zwei oeffentlichen, unauthentifizierten Seiten
+ * (/antrag, /nachweis). Bewusst per dynamischem import() statt eines
+ * statischen "import App", damit das komplette authentifizierte App-Bundle
+ * (Firebase, Vorstands-State) gar nicht erst im Netzwerkpfad anonymer
+ * Besucher landet - eine statische Import-Anweisung wuerde trotz der
+ * Pfadpruefung immer mitgebuendelt und geladen.
+ */
+const root = createRoot(document.getElementById('root')!);
+const path = window.location.pathname;
+
+if (path === '/antrag') {
+  import('./public/SubsidyApplicationPage').then(({ SubsidyApplicationPage }) => {
+    root.render(
+      <StrictMode>
+        <SubsidyApplicationPage />
+      </StrictMode>
+    );
+  });
+} else if (path === '/nachweis') {
+  import('./public/SubsidyProofUploadPage').then(({ SubsidyProofUploadPage }) => {
+    root.render(
+      <StrictMode>
+        <SubsidyProofUploadPage />
+      </StrictMode>
+    );
+  });
+} else {
+  import('./App').then(({ default: App }) => {
+    root.render(
+      <StrictMode>
+        <App />
+      </StrictMode>
+    );
+  });
+}

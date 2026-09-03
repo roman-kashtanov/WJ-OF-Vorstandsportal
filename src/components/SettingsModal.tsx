@@ -120,6 +120,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [passcodeSuccess, setPasscodeSuccess] = useState(false);
   const [passcodeError, setPasscodeError] = useState<string | null>(null);
 
+  // Zugangscode fuers oeffentliche Zuschuss-Antragsformular (/antrag)
+  const [newSubsidyCode, setNewSubsidyCode] = useState('');
+  const [subsidyCodeSuccess, setSubsidyCodeSuccess] = useState(false);
+  const [subsidyCodeError, setSubsidyCodeError] = useState<string | null>(null);
+
   // Force update button feedback
   const [isForcingUpdate, setIsForcingUpdate] = useState(false);
   const [forceUpdateSuccess, setForceUpdateSuccess] = useState(false);
@@ -367,6 +372,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setNewPasscode('');
     setConfirmPasscode('');
     setTimeout(() => setPasscodeSuccess(false), 4000);
+  };
+
+  // Zugangscode fuers oeffentliche Zuschuss-Antragsformular (/antrag) setzen
+  const handleChangeSubsidyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubsidyCodeError(null);
+    setSubsidyCodeSuccess(false);
+
+    if (newSubsidyCode.trim().length < 4) {
+      setSubsidyCodeError('Der Zugangscode sollte mindestens 4 Zeichen haben.');
+      return;
+    }
+
+    const hashed = await hashPasscode(newSubsidyCode);
+
+    const updatedSettings: SecuritySettings = {
+      ...securitySettings,
+      subsidyFormCodeHash: hashed,
+      lastUpdated: new Date().toISOString(),
+    };
+
+    onUpdateSecuritySettings(updatedSettings);
+    await FirebaseSync.saveSecuritySettings(updatedSettings);
+
+    setSubsidyCodeSuccess(true);
+    setNewSubsidyCode('');
+    setTimeout(() => setSubsidyCodeSuccess(false), 4000);
   };
 
   /**
@@ -855,6 +887,52 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   className="w-full py-2.5 bg-[#003594] hover:bg-[#00266B] disabled:opacity-50 text-white font-bold rounded-xl shadow-xs transition-all cursor-pointer"
                 >
                   Neuen Code speichern
+                </button>
+              </form>
+
+              <div className="pt-2 border-t border-slate-100">
+                <h4 className="font-bold text-slate-900 text-sm">
+                  Zugangscode fürs öffentliche Zuschuss-Formular
+                </h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Schützt das Antragsformular unter /antrag vor fremdem Zugriff. Ohne gesetzten
+                  Code ist das Formular nicht nutzbar. Diesen Code an Antragsteller weitergeben.
+                </p>
+              </div>
+
+              <form onSubmit={handleChangeSubsidyCode} className="space-y-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Neuer Zugangscode</label>
+                  <input
+                    type="text"
+                    required
+                    value={newSubsidyCode}
+                    onChange={(e) => setNewSubsidyCode(e.target.value)}
+                    placeholder="z. B. WJOF2026"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-center text-lg font-mono font-bold tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#003594]"
+                  />
+                </div>
+
+                {subsidyCodeError && (
+                  <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-semibold flex items-center space-x-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{subsidyCodeError}</span>
+                  </div>
+                )}
+
+                {subsidyCodeSuccess && (
+                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-semibold flex items-center space-x-2">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                    <span>Zugangscode wurde gespeichert.</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={newSubsidyCode.trim().length < 4}
+                  className="w-full py-2.5 bg-[#003594] hover:bg-[#00266B] disabled:opacity-50 text-white font-bold rounded-xl shadow-xs transition-all cursor-pointer"
+                >
+                  Zugangscode speichern
                 </button>
               </form>
             </div>

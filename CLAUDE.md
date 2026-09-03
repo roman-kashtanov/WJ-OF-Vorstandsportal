@@ -324,3 +324,110 @@ teilweise abgestimmten Testbeschluss verifiziert: Standardauswahl zeigte
 korrekt nur die zwei noch offenen Stimmberechtigten, „Alle (3)" korrekt,
 Nicht-Stimmberechtigte blieben abgewählt/versteckt, Vorschau blieb bis zum
 manuellen Aufklappen verborgen.
+
+## Neues Feature: Öffentliches Zuschuss-Formular + Beschluss-Pflicht vor Auszahlung (v3.2.0)
+
+Großes, mehrteiliges Feature. Zuschüsse laufen jetzt durch eine Ampel-Kette,
+bevor tatsächlich Geld fließt:
+
+```
+beantragt → bestätigt ("Geprüft") → im_beschluss (gebündelt, Abstimmung läuft)
+          → zur_zahlung_freigegeben (Beschluss angenommen) → bezahlt
+```
+
+„Geprüft" (`bestaetigt`, alter Schlüssel beibehalten für Bestandsdaten)
+bedeutet nur „inhaltlich korrekt, Nachweise vollständig" — **keine**
+Zahlungsfreigabe. Erst ein angenommener Vorstandsbeschluss schaltet frei.
+Gilt einheitlich für alle Zuschüsse, nicht nur öffentlich eingereichte.
+
+### Öffentliches Antragsformular (/antrag) und Nachweis-Nachreichen (/nachweis)
+
+Beide Seiten sind eigenständige React-Komponenten
+(`src/public/SubsidyApplicationPage.tsx`, `SubsidyProofUploadPage.tsx`),
+KEINE rohen HTML-Seiten wie die E-Mail-Abstimmung. `src/main.tsx` verzweigt
+per **dynamischem** `import()` auf `window.location.pathname` — bewusst kein
+statischer Import, sonst würde das komplette authentifizierte App-Bundle
+(Firebase, Vorstands-State) trotzdem im Netzwerkpfad anonymer Besucher
+landen. Bestätigt im Build: beide Seiten sind eigene, kleine Chunks
+(~5–10 KB), `App.tsx` ein separater ~1,5-MB-Chunk.
+
+Zugangsschutz: einfacher Zugangscode (SHA-256-Hash in
+`SecuritySettings.subsidyFormCodeHash`, setzbar in Einstellungen →
+Sicherheit), gleiches Hash-Schema wie der Vorstandscode. **Fail closed**:
+ohne gesetzten Hash ist das Formular nicht nutzbar, kein Standard-Fallback.
+
+Backend folgt exakt dem Muster der E-Mail-Abstimmung
+(`api/vote.ts`/`api/voteToken.ts`): eigene signierte HMAC-Tokens
+(`api/subsidyProofToken.ts`, eigenes Secret `SUBSIDY_PROOF_LINK_SECRET`,
+180 Tage gültig, **kein** Einmalverbrauch — der Nachweis-Link darf mehrfach
+geöffnet werden, der Handler prüft stattdessen bei jedem Aufruf live den
+Zuschuss-Status). Alle Schreibzugriffe laufen über `FirestoreAdmin`
+(Dienstkonto), nie direkt vom Browser — das ist bei einem unauthentifizierten
+Formular auch technisch der einzige Weg, da Firestore-Regeln jeden Zugriff
+ohne echten Google-Login blockieren.
+
+**Wichtiger Fallstrick, der beim Testen auffiel und behoben wurde:**
+`verifySubsidyFormCode`/`handleGetProofStatus`/`handleUploadProof` müssen
+`FirestoreAdmin`-Aufrufe in try/catch kapseln bzw. vorher `isConfigured()`
+prüfen — sonst wirft ein fehlendes `FIREBASE_SERVICE_ACCOUNT` (z. B. lokal)
+eine ungefangene Exception, die die ganze Anfrage ohne Antwort hängen lässt,
+statt sauber `{ok:false}` zurückzugeben. Genau nach dem Vorbild von
+`api/vote.ts`s durchgängigem try/catch nachgezogen.
+
+### Bündeln zu Beschluss
+
+Neuer Knopf „Zu Beschluss bündeln" in der Zuschüsse-Übersicht
+(`SubsidiesView.tsx`) öffnet `BundleSubsidiesModal.tsx`: Checkliste aller
+„geprüft"-Einträge, erzeugt einen vorausgefüllten Beschluss (Kategorie
+„Finanzen & Budget", Antragswortlaut zählt jeden Zuschuss auf) über die
+bestehende `handleCreateResolution` — kein neuer Erstellungspfad nötig.
+Jeder Zuschuss-Nachweis wird automatisch als `ResolutionAttachment` an den
+Beschluss gehängt. Danach `status: 'im_beschluss'`, `resolutionId` gesetzt.
+
+### Reaktive Kaskade statt Verdrahtung in der Stimmabgabe
+
+Sobald ein Beschluss mit verknüpften Zuschüssen `angenommen` wird, sollen
+diese automatisch auf `zur_zahlung_freigegeben` springen (bei `abgelehnt`
+zurück auf `bestaetigt`, `resolutionId` gelöscht — neu bündelbar). Das läuft
+**bewusst nicht** in `handleVoteForMember` verdrahtet, sondern als eigener
+`useEffect`, der auf den `resolutions`-State selbst reagiert: E-Mail-Link-
+Stimmen ändern den Beschluss-Status serverseitig direkt in Firestore
+(`api/vote.ts`), nie über `handleVoteForMember` — ein Effekt auf den
+State selbst erfasst beide Wege (lokale Stimme UND Live-Firestore-
+Subscription) gleichermaßen. Live getestet: Kaskade greift zuverlässig,
+Zuschuss erscheint danach korrekt in `SubsidyPayoutModal` (dort jetzt auf
+`zur_zahlung_freigegeben` gefiltert statt `bestaetigt`).
+
+### Nachweis-Zusammenfassung (PDF)
+
+Neue Abhängigkeit `jspdf`. `src/utils/subsidyReceipt.ts` erzeugt beim
+Markieren als „Bezahlt" (`handleMarkSubsidiesPaid` in `App.tsx`) pro
+Zuschuss eine reine Text-PDF (Person, Veranstaltung, Betrag, maskierte
+IBAN, Beschluss-Nummer) und hängt sie über die bestehende
+`handleAddAttachment` an den Beschluss — **ohne** das Nachweisfoto darin
+erneut einzubetten (das hängt schon separat dran, aus dem Bündeln).
+Live getestet: Beschluss zeigt danach beide Anhänge (Original-Nachweis +
+automatische Zusammenfassung).
+
+### Nicht manuell wählbar
+
+`im_beschluss` und `zur_zahlung_freigegeben` (`PIPELINE_MANAGED_STATUSES`
+in `utils/subsidies.ts`) sind aus den Status-Dropdowns in
+`NewSubsidyModal.tsx` und `SubsidiesView.tsx` ausgeblendet (außer als
+aktueller Wert, damit ein bereits so gesetzter Eintrag sichtbar bleibt) —
+sonst könnte man die Beschluss-Pflicht einfach per Dropdown umgehen.
+
+### Bekannte Grenzen (bewusst nicht gebaut)
+
+Kein CAPTCHA/Rate-Limiting am öffentlichen Formular (nur der Zugangscode
+schützt), keine automatische Dublettenerkennung bei Personen (kein
+Firestore-Query im Admin-Client, nur Einzeldokument-Zugriff), kein
+Status-Auskunftsportal für Antragsteller über den Nachweis-Link hinaus.
+
+### Nicht lokal end-to-end testbar
+
+`FIREBASE_SERVICE_ACCOUNT`, `VOTE_LINK_SECRET`, `SUBSIDY_PROOF_LINK_SECRET`
+sind lokal nicht gesetzt — das öffentliche Formular wurde bis zur
+Zugangscode-Prüfung (korrektes Fail-closed-Verhalten bestätigt) und
+UI/Validierung getestet, nicht aber der volle Firestore-Schreibpfad. Bitte
+nach dem Deploy einmal echt mit einem gesetzten Zugangscode durchklicken.

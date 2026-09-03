@@ -11,11 +11,20 @@ import { SUBSIDY_LIMITS } from '../data/subsidyCatalogue';
 
 export const STATUS_LABEL: Record<SubsidyStatus, string> = {
   beantragt: 'Beantragt',
-  bestaetigt: 'Bestätigt',
+  bestaetigt: 'Geprüft',
+  im_beschluss: 'Im Beschluss',
+  zur_zahlung_freigegeben: 'Zur Zahlung freigegeben',
   nicht_stattgefunden: 'Noch nicht stattgefunden',
   bezahlt: 'Bezahlt',
   abgelehnt: 'Abgelehnt',
 };
+
+/**
+ * Diese zwei Status setzt ausschliesslich die Beschluss-Pipeline selbst
+ * (Buendeln bzw. Abstimmungsergebnis in App.tsx) - nicht manuell waehlbar,
+ * sonst koennte man die Beschluss-Pflicht vor der Auszahlung umgehen.
+ */
+export const PIPELINE_MANAGED_STATUSES: SubsidyStatus[] = ['im_beschluss', 'zur_zahlung_freigegeben'];
 
 export const PERSON_TYPE_LABEL: Record<SubsidyPerson['type'], string> = {
   mitglied: 'Mitglied',
@@ -28,9 +37,15 @@ export function countsTowardsBudget(s: Subsidy): boolean {
   return s.status !== 'abgelehnt';
 }
 
-/** Steht die Auszahlung noch aus? */
+/**
+ * Darf jetzt tatsaechlich ausgezahlt werden?
+ *
+ * Bewusst NICHT "bestaetigt" (das heisst nur "geprueft, inhaltlich korrekt").
+ * Auszahlbar ist ein Zuschuss erst, wenn der ihn buendelnde Vorstandsbeschluss
+ * angenommen wurde - siehe die Kaskade in App.tsx, die diesen Status setzt.
+ */
 export function isPayable(s: Subsidy): boolean {
-  return s.status === 'bestaetigt';
+  return s.status === 'zur_zahlung_freigegeben';
 }
 
 export interface BudgetOverview {

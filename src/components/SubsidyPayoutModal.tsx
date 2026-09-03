@@ -46,7 +46,7 @@ export const SubsidyPayoutModal: React.FC<Props> = ({
 
   /** Auszahlungen je Person zusammenfassen - eine Überweisung pro Empfänger. */
   const groups = useMemo(() => {
-    const payable = subsidies.filter((s) => s.year === year && s.status === 'bestaetigt');
+    const payable = subsidies.filter((s) => s.year === year && s.status === 'zur_zahlung_freigegeben');
     const byPerson: Record<string, Subsidy[]> = {};
     for (const s of payable) {
       (byPerson[s.personId] ||= []).push(s);
@@ -209,7 +209,8 @@ export const SubsidyPayoutModal: React.FC<Props> = ({
 
                 {groups.length === 0 && (
                   <p className="text-slate-400 py-4 text-center">
-                    Keine bestätigten Zuschüsse zur Auszahlung.
+                    Keine zur Zahlung freigegebenen Zuschüsse. Erst bündeln, per Beschluss
+                    abstimmen lassen - danach erscheinen sie hier.
                   </p>
                 )}
 

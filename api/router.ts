@@ -2,6 +2,12 @@ import { sendEmail } from './email';
 import { sendPush, getVapidPublicKey } from './push';
 import { handleVoteLink } from './vote';
 import { createVoteToken } from './voteToken';
+import {
+  handleVerifySubsidyCode,
+  handleSubmitSubsidy,
+  handleGetProofStatus,
+  handleUploadProof,
+} from './subsidy';
 
 export interface ApiResponse {
   status: number;
@@ -75,6 +81,29 @@ export async function handleApiRequest(
 
   if (method === 'POST' && route === 'email/send') {
     const result = await sendEmail(payload || {});
+    return { status: result.status, body: result.body };
+  }
+
+  // Oeffentliches Zuschuss-Antragsformular (/antrag) und Nachweis-Nachreichen (/nachweis)
+  if (method === 'POST' && route === 'subsidy/verify-code') {
+    const result = await handleVerifySubsidyCode(payload?.code || '');
+    return { status: result.status, body: result.body };
+  }
+
+  if (method === 'POST' && route === 'subsidy/submit') {
+    const result = await handleSubmitSubsidy(payload || {}, origin || '/');
+    return { status: result.status, body: result.body };
+  }
+
+  if (method === 'GET' && route === 'subsidy/proof') {
+    const token = query?.get('t') || '';
+    const result = await handleGetProofStatus(token);
+    return { status: result.status, body: result.body };
+  }
+
+  if (method === 'POST' && route === 'subsidy/proof') {
+    const { token, file } = payload || {};
+    const result = await handleUploadProof(token || '', file);
     return { status: result.status, body: result.body };
   }
 

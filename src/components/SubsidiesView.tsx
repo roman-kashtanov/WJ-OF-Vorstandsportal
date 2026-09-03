@@ -4,6 +4,7 @@ import { formatCurrency, formatDate } from '../utils/formatters';
 import {
   STATUS_LABEL,
   PERSON_TYPE_LABEL,
+  PIPELINE_MANAGED_STATUSES,
   budgetOverview,
   isPayable,
 } from '../utils/subsidies';
@@ -20,6 +21,7 @@ import {
   Pencil,
   Trash2,
   Download,
+  Vote,
 } from 'lucide-react';
 
 interface Props {
@@ -33,11 +35,14 @@ interface Props {
   onUpdateStatus: (id: string, status: SubsidyStatus) => void;
   onManagePeople: () => void;
   onOpenPayout: () => void;
+  onOpenBundle: () => void;
 }
 
 const STATUS_STYLE: Record<SubsidyStatus, string> = {
   beantragt: 'bg-slate-100 text-slate-700',
   bestaetigt: 'bg-blue-100 text-[#003594]',
+  im_beschluss: 'bg-violet-100 text-violet-800',
+  zur_zahlung_freigegeben: 'bg-teal-100 text-teal-800',
   nicht_stattgefunden: 'bg-amber-100 text-amber-800',
   bezahlt: 'bg-emerald-100 text-emerald-800',
   abgelehnt: 'bg-rose-100 text-rose-800',
@@ -54,6 +59,7 @@ export const SubsidiesView: React.FC<Props> = ({
   onUpdateStatus,
   onManagePeople,
   onOpenPayout,
+  onOpenBundle,
 }) => {
   const [showFilters, setShowFilters] = useState(false);
   const [filterPerson, setFilterPerson] = useState('all');
@@ -94,6 +100,7 @@ export const SubsidiesView: React.FC<Props> = ({
 
   const overview = budgetOverview(subsidies, year);
   const payable = subsidies.filter((s) => s.year === year && isPayable(s));
+  const bundlable = subsidies.filter((s) => s.year === year && s.status === 'bestaetigt');
   const filteredSum = filtered.reduce((sum, s) => sum + s.amount, 0);
 
   const hasActiveFilters =
@@ -215,6 +222,31 @@ export const SubsidiesView: React.FC<Props> = ({
           </div>
         )}
       </div>
+
+      {/* Buendeln zu Beschluss */}
+      {bundlable.length > 0 && (
+        <button
+          type="button"
+          onClick={onOpenBundle}
+          className="w-full bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs flex items-center justify-between gap-3 hover:border-[#003594]/40 transition-colors cursor-pointer text-left"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-violet-50 text-violet-700 flex items-center justify-center shrink-0">
+              <Vote className="w-5 h-5" strokeWidth={1.75} />
+            </div>
+            <div className="min-w-0">
+              <div className="font-bold text-slate-900 text-sm">
+                {bundlable.length} {bundlable.length === 1 ? 'Zuschuss' : 'Zuschüsse'} geprüft
+              </div>
+              <div className="text-[11px] text-slate-500">
+                {formatCurrency(bundlable.reduce((s, x) => s + x.amount, 0))} · zu Beschluss
+                bündeln, um Zahlung freizugeben
+              </div>
+            </div>
+          </div>
+          <span className="text-[#003594] font-bold text-xs shrink-0">Öffnen →</span>
+        </button>
+      )}
 
       {/* Auszahlung */}
       {payable.length > 0 && (
@@ -436,7 +468,11 @@ export const SubsidiesView: React.FC<Props> = ({
                     )}
                   </div>
 
-                  {person && !person.iban && s.status === 'bestaetigt' && (
+                  {person &&
+                    !person.iban &&
+                    (s.status === 'bestaetigt' ||
+                      s.status === 'im_beschluss' ||
+                      s.status === 'zur_zahlung_freigegeben') && (
                     <div className="text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 font-semibold">
                       Für {person.name} ist keine IBAN hinterlegt – die Auszahlung kann nicht
                       erzeugt werden.
@@ -455,11 +491,13 @@ export const SubsidiesView: React.FC<Props> = ({
                       onChange={(e) => onUpdateStatus(s.id, e.target.value as SubsidyStatus)}
                       className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#003594]"
                     >
-                      {(Object.keys(STATUS_LABEL) as SubsidyStatus[]).map((st) => (
-                        <option key={st} value={st}>
-                          {STATUS_LABEL[st]}
-                        </option>
-                      ))}
+                      {(Object.keys(STATUS_LABEL) as SubsidyStatus[])
+                        .filter((st) => !PIPELINE_MANAGED_STATUSES.includes(st) || st === s.status)
+                        .map((st) => (
+                          <option key={st} value={st}>
+                            {STATUS_LABEL[st]}
+                          </option>
+                        ))}
                     </select>
 
                     <button

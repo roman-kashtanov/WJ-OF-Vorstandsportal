@@ -51,6 +51,8 @@ export interface SecuritySettings {
    * Bewusst getrennt vom Vorstandscode: Loeschen ist unwiderruflich.
    */
   deleteCodeHash?: string;
+  /** SHA-256 des Zugangscodes fuer das oeffentliche Zuschuss-Antragsformular (/antrag). */
+  subsidyFormCodeHash?: string;
   lastUpdated: string;
 }
 
@@ -341,9 +343,18 @@ export interface SubsidyPerson {
   createdAt: string;
 }
 
+/**
+ * Ampel-Kette bis zur Auszahlung. "bestaetigt" (Anzeige: "Geprueft") heisst nur
+ * "inhaltlich korrekt, Nachweise vollstaendig" - noch KEINE Zahlungsfreigabe.
+ * Erst wenn ein daran gebundener Vorstandsbeschluss angenommen ist, wechselt
+ * ein gebuendelter Zuschuss automatisch von "im_beschluss" auf
+ * "zur_zahlung_freigegeben"; nur dieser Status darf ausgezahlt werden.
+ */
 export type SubsidyStatus =
   | 'beantragt'
   | 'bestaetigt'
+  | 'im_beschluss'
+  | 'zur_zahlung_freigegeben'
   | 'nicht_stattgefunden'
   | 'bezahlt'
   | 'abgelehnt';
@@ -378,8 +389,14 @@ export interface Subsidy {
   appliedAt: string;
   approvedAt?: string;
   paidAt?: string;
-  /** Verknüpfter Vorstandsbeschluss (Interessenten, Einzelfälle) */
+  /** Vorstandsbeschluss, in den dieser Zuschuss gebündelt wurde (Zahlungsfreigabe). */
   resolutionId?: string;
+  /** Wann in einen Beschluss gebündelt wurde. */
+  bundledAt?: string;
+  /** Wann der zugehörige Beschluss angenommen wurde (Zahlung damit freigegeben). */
+  releasedAt?: string;
+  /** Woher der Antrag kam - nur zur Anzeige, keine Logik hängt daran. */
+  source?: 'public' | 'admin';
   proofState: SubsidyProofState;
   /** Pflicht, wenn der Nachweis anderweitig abgelegt ist */
   proofNote?: string;

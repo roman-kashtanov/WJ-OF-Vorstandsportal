@@ -7,7 +7,7 @@ import {
   SubsidyProofState,
 } from '../types';
 import { SUBSIDY_CATALOGUE, catalogueEntry, CATEGORY_LABEL } from '../data/subsidyCatalogue';
-import { checkSubsidy, STATUS_LABEL, personBudget } from '../utils/subsidies';
+import { checkSubsidy, STATUS_LABEL, PIPELINE_MANAGED_STATUSES, personBudget } from '../utils/subsidies';
 import { formatCurrency } from '../utils/formatters';
 import { prepareFileForStorage, formatBytes } from '../utils/fileStorage';
 import { X, Paperclip, AlertTriangle, Info, Trash2 } from 'lucide-react';
@@ -302,12 +302,20 @@ export const NewSubsidyModal: React.FC<Props> = ({
               onChange={(e) => setStatus(e.target.value as SubsidyStatus)}
               className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#003594]"
             >
-              {(Object.keys(STATUS_LABEL) as SubsidyStatus[]).map((s) => (
-                <option key={s} value={s}>
-                  {STATUS_LABEL[s]}
-                </option>
-              ))}
+              {(Object.keys(STATUS_LABEL) as SubsidyStatus[])
+                .filter((s) => !PIPELINE_MANAGED_STATUSES.includes(s) || s === status)
+                .map((s) => (
+                  <option key={s} value={s}>
+                    {STATUS_LABEL[s]}
+                  </option>
+                ))}
             </select>
+            {PIPELINE_MANAGED_STATUSES.includes(status) && (
+              <p className="text-[10px] text-slate-400 px-1 mt-1">
+                Dieser Stand wird normalerweise automatisch über den Beschluss gesetzt, nicht
+                manuell.
+              </p>
+            )}
           </div>
 
           {/* Nachweis */}
