@@ -55,10 +55,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     const [expandedResId, setExpandedResId] = useState<string | null>(null);
 
   const openResolutions = resolutions
-    .filter((res) => res.status === 'in_abstimmung')
+    .filter((res) => !res.isArchived && res.status === 'in_abstimmung')
     .sort((a, b) => new Date(b.createdAt || "").getTime() - new Date(a.createdAt || "").getTime());
 
   const pendingResolutionsForMember = resolutions.filter((res) => {
+    if (res.isArchived) return false;
     const isEligible = !res.eligibleVoterIds || res.eligibleVoterIds.length === 0 || res.eligibleVoterIds.includes(currentMember.id);
     return res.status === 'in_abstimmung' && isEligible && !res.votes[currentMember.id];
   });

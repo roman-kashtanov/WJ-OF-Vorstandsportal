@@ -150,8 +150,19 @@ export const FirestoreAdmin = {
       .join('&');
     const url = `https://firestore.googleapis.com/v1/projects/${sa.project_id}/databases/(default)/documents/${path}?${mask}`;
 
+    // Wichtig: Firestore erwartet im Dokumentkoerper eine echte verschachtelte
+    // Struktur (votes -> memberId -> ...), keinen flachen Schluessel mit
+    // Punkten ("votes.memberId"). Der Query-Parameter updateMask.fieldPaths
+    // darf zwar Punktnotation nutzen, der Request-Body selbst nicht - ein
+    // flacher Schluessel wird sonst stillschweigend als eigenes Feld mit
+    // woertlichem Punkt im Namen abgelegt, statt das verschachtelte Feld zu
+    // aktualisieren. Genau das hat die Stimmabgabe per E-Mail-Link unwirksam
+    // gemacht: Firestore antwortete mit Erfolg, aber "votes.mem123" landete
+    // als eigenstaendiges (nirgends gelesenes) Feld statt in votes.mem123.
     const body: Record<string, any> = { fields: {} };
-    for (const [k, v] of Object.entries(fields)) body.fields[k] = toFirestoreValue(v);
+    for (const [dottedKey, value] of Object.entries(fields)) {
+      setNestedFirestoreField(body.fields, dottedKey, value);
+    }
 
     const res = await fetch(url, {
       method: 'PATCH',
@@ -165,3 +176,15 @@ export const FirestoreAdmin = {
     }
   },
 };
+
+/** Traegt einen Punkt-Pfad ("votes.mem123") als verschachtelte Firestore-Map ein. */
+function setNestedFirestoreField(root: Record<string, any>, dottedPath: string, rawValue: any) {
+  const parts = dottedPath.split('.');
+  let cursor = root;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const key = parts[i];
+    if (!cursor[key]) cursor[key] = { mapValue: { fields: {} } };
+    cursor = cursor[key].mapValue.fields;
+  }
+  cursor[parts[parts.length - 1]] = toFirestoreValue(rawValue);
+}

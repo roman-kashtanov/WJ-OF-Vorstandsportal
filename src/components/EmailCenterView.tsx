@@ -57,7 +57,7 @@ export const EmailCenterView: React.FC<EmailCenterViewProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'logs' | 'requests' | 'architecture'>('overview');
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
 
-  const activeResolutions = resolutions.filter((r) => r.status === 'in_abstimmung');
+  const activeResolutions = resolutions.filter((r) => !r.isArchived && r.status === 'in_abstimmung');
   const openInvoiceRequests = invoiceRequests.filter((r) => r.status === 'offen');
 
   const handleCopyLink = async (text: string, id: string) => {

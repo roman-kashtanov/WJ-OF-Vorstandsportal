@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   BoardMember, 
   Resolution, 
@@ -86,18 +86,15 @@ export const NewResolutionModal: React.FC<NewResolutionModalProps> = ({
     setShowCopilotImport(false);
   };
   
-  // Stimmberechtigte: Vorgabe sind alle als stimmberechtigt gefuehrten
-  // Mitglieder; fuer den Einzelfall hier anpassbar.
-  const [eligibleVoterIds, setEligibleVoterIds] = useState<string[]>(() => {
+  // Stimmberechtigt ist, wer in den Einstellungen als stimmberechtigt gefuehrt
+  // wird - hier nicht mehr auswaehlbar. Das entscheidet ausschliesslich die
+  // Einstellung je Mitglied (Portal -> Einstellungen -> Vorstand), damit ein
+  // Beschluss automatisch an die richtigen Adressen geht, ohne dass es bei
+  // jeder Erstellung erneut festgelegt werden muss.
+  const eligibleVoterIds = useMemo(() => {
     const voting = members.filter(isVotingMember);
     return voting.length > 0 ? voting.map((m) => m.id) : members.map((m) => m.id);
-  });
-  const [showVoters, setShowVoters] = useState<boolean>(false);
-
-  const toggleVoter = (id: string) =>
-    setEligibleVoterIds((prev) =>
-      prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]
-    );
+  }, [members]);
 
   // Voice dictation state
   const [isDictating, setIsDictating] = useState<boolean>(false);
@@ -284,49 +281,12 @@ export const NewResolutionModal: React.FC<NewResolutionModalProps> = ({
             )}
           </div>
 
-          {/* Stimmberechtigte fuer diesen Beschluss */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-slate-500">
-                Stimmberechtigt: {eligibleVoterIds.length} von {members.length}
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowVoters(!showVoters)}
-                className="text-[11px] font-bold text-[#003594] hover:underline cursor-pointer flex items-center space-x-1"
-              >
-                <Users className="w-3 h-3 text-[#00A3E0]" />
-                <span>{showVoters ? 'Ausblenden' : 'Anpassen'}</span>
-              </button>
-            </div>
-
-            {showVoters && (
-              <div className="p-2.5 bg-blue-50/60 rounded-xl border border-blue-100 space-y-1 animate-in fade-in">
-                {members.map((m) => (
-                  <label
-                    key={m.id}
-                    className="flex items-center justify-between gap-2 py-1 cursor-pointer"
-                  >
-                    <span className="text-[11px] text-slate-700 truncate">
-                      {m.name}
-                      <span className="text-slate-400"> · {m.role}</span>
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={eligibleVoterIds.includes(m.id)}
-                      onChange={() => toggleVoter(m.id)}
-                      className="w-4 h-4 accent-[#003594] shrink-0"
-                    />
-                  </label>
-                ))}
-                {eligibleVoterIds.length === 0 && (
-                  <p className="text-[11px] text-rose-700 font-semibold pt-1">
-                    Mindestens eine Person muss stimmberechtigt sein.
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
+          {/* Stimmberechtigung: nicht mehr hier einstellbar, sondern je
+              Mitglied unter Portal -> Einstellungen -> Vorstand. */}
+          <p className="text-[11px] text-slate-400 px-0.5">
+            Stimmberechtigt: {eligibleVoterIds.length} von {members.length} Vorstandsmitgliedern
+            (einstellbar unter Einstellungen → Vorstand)
+          </p>
 
           {/* Uebernahme aus Teams / Copilot */}
           <div className="space-y-1.5">

@@ -54,6 +54,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
 
   // Filter pending resolutions where the current member has NOT voted yet AND is eligible to vote
   const unvotedResolutions = resolutions.filter((r) => {
+    if (r.isArchived) return false;
     if (r.status !== 'in_abstimmung') return false;
     if (r.votes[currentMember.id]) return false;
     if (r.eligibleVoterIds && r.eligibleVoterIds.length > 0 && !r.eligibleVoterIds.includes(currentMember.id)) {

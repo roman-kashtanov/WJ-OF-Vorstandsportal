@@ -181,3 +181,63 @@ nicht nötig.
 
 Gesamtkapazität im kostenlosen Tarif: 1 GiB. Bei ~400 KB je Beleg entspricht
 das grob 2.500 Belegen.
+
+## Stimmberechtigung
+
+Ausschließlich in *Einstellungen → Vorstand* pro Mitglied festgelegt
+(`isVotingMember`, Feld auf `BoardMember`). Beim Anlegen eines Beschlusses ist
+das **nicht mehr auswählbar** — `eligibleVoterIds` wird in `NewResolutionModal`
+automatisch aus den aktuell stimmberechtigten Mitgliedern abgeleitet
+(`useMemo`, kein manueller Toggle mehr). Genau daran hängt auch, wer die
+Abstimmungs-E-Mail bekommt — beides läuft über dieselbe Liste, eine Änderung
+in den Einstellungen wirkt sich also automatisch auf künftige Beschlüsse aus
+(nicht rückwirkend auf bereits erstellte).
+
+`calculateVoteStats()` in `formatters.ts` leitet `eligibleCount` selbst aus
+`resolution.eligibleVoterIds` ab (Fallback auf die übergebene Gesamtzahl nur,
+wenn das Feld leer ist). Prozent-Balken und „X von Y"-Texte in der
+Detailansicht müssen deshalb `activeStats.eligibleCount` verwenden, nicht
+`members.length` — sonst zählen Nicht-Stimmberechtigte (z. B. Festangestellte)
+fälschlich mit.
+
+## Bug behoben: Stimme per E-Mail-Link kam nie an
+
+`FirestoreAdmin.patchDocument()` schickte verschachtelte Felder
+(`votes.mem123`) als **flachen** Schlüssel mit Punkt im Namen statt als echte
+verschachtelte Firestore-Map. Firestore quittierte das mit Erfolg, legte den
+Wert aber unter einem nirgends gelesenen Feld ab — die E-Mail zeigte „Stimme
+erfasst", im Portal blieb der Beschluss unverändert auf „Ausstehend". Behoben
+über `setNestedFirestoreField()` in `api/firestoreAdmin.ts`, die Punkt-Pfade
+korrekt in verschachtelte `mapValue`-Strukturen umwandelt. Isoliert gegen die
+erwartete JSON-Struktur getestet; ein Livetest mit echter Beschluss-ID steht
+noch aus (bitte nach dem Deploy einmal mit einem echten Abstimmungslink
+prüfen).
+
+## Detailansicht eines Beschlusses — Reihenfolge
+
+Bewusst so sortiert (Stand: Nutzerwunsch nach mehreren Anläufen):
+
+1. Stammdaten ganz oben: von wem, wann, E-Mail-/Druck-Aktionen, Status,
+   Buchhaltungsstatus — alles in einer kompakten Box
+2. Bezeichnung, Antragswortlaut, Budget
+3. **Abstimmung**: eine einzige Mitgliederliste (nicht zwei getrennte wie
+   früher). Nur die eigene Zeile ist klickbar; erst der Klick öffnet die
+   Knöpfe zum Abstimmen bzw. Ändern (`voteBoxOpenFor`-State, keyed nach
+   Beschluss-ID). Nicht-Stimmberechtigte zeigen „Kein Stimmrecht" statt
+   fälschlich „Ausstehend"
+4. Quorum kompakt (Balken + Zahlen) — **ohne** erneute Namensliste darunter
+5. Dateianhänge, Zugeordnete Rechnungen, Kommentare, Archivieren/Löschen
+
+Der Datei-Upload direkt in der Detailansicht (`handleDetailFileUpload`) nutzt
+jetzt ebenfalls `prepareFileForStorage()` — vorher lief dieser zweite
+Upload-Pfad noch am Komprimierungs-Fix vorbei.
+
+## Archivierte Beschlüsse
+
+Müssen an **jeder** Stelle, die „offene Beschlüsse" zählt oder auflistet,
+explizit ausgeschlossen werden (`!res.isArchived`) — der reine Status
+`in_abstimmung` reicht nicht, ein archivierter Beschluss kann diesen Status
+weiterhin tragen. Betroffene Stellen: `App.tsx` (`pendingVotesCount`),
+`DashboardView.tsx` (`openResolutions`, `pendingResolutionsForMember`),
+`NotificationCenter.tsx` (`unvotedResolutions`), `EmailCenterView.tsx`
+(`activeResolutions`). Bei einer neuen Zählstelle immer mitdenken.

@@ -1207,6 +1207,7 @@ export default function App() {
 
   // Compute pending votes for current member (only where eligible)
   const pendingVotesCount = resolutions.filter((res) => {
+    if (res.isArchived) return false;
     if (res.status !== 'in_abstimmung') return false;
     if (res.votes[currentMember.id]) return false;
     if (res.eligibleVoterIds && res.eligibleVoterIds.length > 0 && !res.eligibleVoterIds.includes(currentMember.id)) {
