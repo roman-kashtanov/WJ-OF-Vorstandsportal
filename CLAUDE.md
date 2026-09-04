@@ -625,3 +625,93 @@ zusätzlich der Cross-Domain-Kernfall getestet: Zuschuss bündeln
 (useSubsidies) → erzeugt Beschluss (useResolutions) → Beschluss annehmen
 → Kaskade greift → Auszahlung → Nachweis-PDF an Beschluss angehängt -
 funktioniert identisch zum Stand vor der Modularisierung.
+
+## Zuschuss-Antrag erweitert: Pflichtfelder, Kostennachweis, Drag&Drop,
+## Sicherungsdatei, Namens-Zusammenführung (v3.5.0)
+
+Große Erweiterung des öffentlichen Zuschuss-Formulars (`/antrag`) und der
+Admin-Ansicht, in 5 Phasen umgesetzt (jede einzeln `tsc`+`build`+Live-Test
+im Browser+Commit):
+
+**1. Datenmodell + Backend** (`src/types.ts`, `api/subsidy.ts`,
+`api/router.ts`): `Subsidy` bekam einen zweiten, unabhängigen Nachweis-Satz
+(`costProofState`/`costProofNote`/`costProofFile` - Kostennachweis/Rechnung,
+neben dem bisherigen Teilnahmenachweis). `handleSubmitSubsidy`: E-Mail,
+Veranstaltungsdatum und `actualCost` sind jetzt Pflicht; der gewährte
+Betrag wird serverseitig auf `Math.min(catalogueEntry.amount, actualCost)`
+gekappt (§ 9 der Richtlinie technisch statt nur als Hinweis durchgesetzt);
+liegt das Veranstaltungsdatum in der Zukunft, startet der Antrag im Status
+`nicht_stattgefunden` statt `beantragt`. `handleGetProofStatus`/
+`handleUploadProof` liefern/erwarten jetzt beide Nachweisarten getrennt
+(`proofType: 'attendance' | 'cost'`). Neuer Endpunkt
+`POST subsidy/resend-proof-link` (`handleResendProofLink`), mit dem der
+Vorstand aus der App heraus einen frischen Nachweis-Link nachschicken kann
+- nach demselben unauthentifizierten Vertrauensmodell wie `vote/links`.
+
+**Falle bei der Betragskappung:** `SUBSIDY_CATALOGUE`-Einträge mit
+`amount: 0` sind kein "kein Zuschuss", sondern der Sentinel für
+"vollständig übernommen" (`fullCost: true`, z. B. LEO Academy) bzw. "durch
+Vorstandsbeschluss festgelegt" (Sonstiges). `Math.min(0, actualCost)` ergibt
+in beiden Fällen weiterhin `0` - **kein** Verhalten geändert gegenüber
+vorher (der Admin trägt den tatsächlichen Betrag ohnehin manuell nach,
+`NewSubsidyModal` befüllt `amount` bei diesen Einträgen bewusst nicht vor).
+Nur die reine Anzeige im öffentlichen Formular hätte fälschlich "Maximal
+möglicher Zuschuss: 0,00 €" gezeigt - dort wird jetzt anhand von
+`entry.fullCost` unterschieden und ein passender Text gezeigt.
+
+**2.-3. Formular + `/nachweis`-Seite**: neue, wiederverwendbare
+`src/components/DropzoneFileInput.tsx` (Klick oder Drag&Drop, ruft
+denselben `prepareFileForStorage`-Pfad wie bisher). Öffentliches Formular
+(`SubsidyApplicationPage.tsx`) zeigt Teilnahme- und Kostennachweis als zwei
+getrennte Abschnitte, dazu ein neues Pflichtfeld "Tatsächliche Kosten" mit
+Live-Hinweis auf den Katalog-Höchstbetrag. Neuer Abschnitt
+"Sicherungsdatei": clientseitig erzeugte CSV mit allen Antragsdaten (Format
+zentralisiert in `src/utils/subsidyBackupCsv.ts`, Feld;Wert-Paare statt
+echter Tabellenzeilen, damit Sonderzeichen/Kommas in Namen und Kommentaren
+das Format nicht zerlegen) - jederzeit herunterladbar, zusätzlich prominent
+bei einem Sende-Fehler und als Rückfalloption auf der Erfolgsseite.
+`/nachweis` (`SubsidyProofUploadPage.tsx`) zeigt beide Nachweise als zwei
+unabhängige `ProofSection`-Komponenten; ein bereits vorhandener Nachweis
+zeigt "liegt bereits vor" statt erneut nach einer Datei zu fragen.
+
+**4. Admin-Ansicht**: `NewSubsidyModal.tsx` nutzt jetzt ebenfalls
+`DropzoneFileInput` für beide Nachweise. `SubsidiesView.tsx`: neue
+Übersichtskarte "Noch nicht stattgefunden", zwei getrennte
+Nachweis-Badges pro Zeile, Button "Nachweis-Link senden" (ruft
+`resendSubsidyProofLink` aus `emailService.ts` auf) und "CSV importieren"
+- liest die Sicherungsdatei eines Antragstellers ein und legt Person +
+Zuschuss lokal genauso an wie ein erfolgreich übertragener Antrag (gleiche
+Kappungs-/Status-Logik wie im Backend, dupliziert in
+`useSubsidies.ts::handleImportSubsidyCsv` - bewusst kein gemeinsamer Code
+mit `api/subsidy.ts`, da eine Serverfunktion nicht im Browser-Bundle
+importierbar ist).
+
+**5. Namens-Zusammenführung**: `normalizeNameKey()` (`utils/subsidies.ts`)
+erkennt Namen in vertauschter Reihenfolge ("Max Mustermann" ==
+"Mustermann Max"). `SubsidyPeopleModal.tsx` gruppiert Personen danach und
+zeigt bei Treffern ein Banner mit "Zusammenführen"-Knopf (mit
+`confirm()`-Bestätigung, kein automatisches Merge). Neuer Handler
+`handleMergeSubsidyPeople` in `useSubsidies.ts` hängt alle Zuschüsse der
+Duplikat-Person auf die behaltene um (die mit dem älteren `createdAt`) und
+löscht den Duplikat-Eintrag.
+
+**Bug beim Live-Test gefunden und behoben:** `handleMergeSubsidyPeople`
+schrieb zunächst nur `personId` auf den umgehängten Zuschüssen um, nicht
+das mitgeführte `personName` (dieses Feld existiert redundant, damit Listen
+ohne Nachschlagen lesbar bleiben - siehe Kommentar am `Subsidy`-Typ). Nach
+einem Merge zeigte die Zuschuss-Liste beim übernommenen Eintrag deshalb
+weiterhin den Namen der bereits gelöschten Duplikat-Person. Fix: der
+kept-Personenname wird beim Merge mit umgeschrieben, analog zu
+`handleSaveSubsidyPerson`, das dasselbe bei einer Namens*bearbeitung*
+schon immer getan hat.
+
+**Wichtig für lokale Tests ohne Firestore-Dienstkonto:** `/antrag` und
+`/nachweis` lassen sich lokal nicht über den echten Zugangscode-Schritt
+hindurch testen (`FirestoreAdmin.isConfigured()` ist ohne
+`FIREBASE_SERVICE_ACCOUNT` immer `false`, `verifySubsidyFormCode` schlägt
+darum immer fehl). Zum Testen der Formular-UI testweise den
+`useState`-Startwert (`step`/`state`) direkt auf den gewünschten Schritt
+setzen, verifizieren, danach unbedingt zurücksetzen, bevor committet wird.
+Drag&Drop lässt sich ohne echten OS-Dateidialog über `javascript_tool`
+prüfen: ein `File`-Objekt in ein `DataTransfer` packen und ein
+`DragEvent('drop', …)` auf das Dropzone-`<label>` dispatchen.
