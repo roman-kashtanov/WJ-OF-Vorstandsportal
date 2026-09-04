@@ -3,6 +3,7 @@ import { SUBSIDY_CATALOGUE, CATEGORY_LABEL, catalogueEntry } from '../data/subsi
 import { isValidIban } from '../utils/sepa';
 import { prepareFileForStorage } from '../utils/fileStorage';
 import { DropzoneFileInput } from '../components/DropzoneFileInput';
+import { downloadSubsidyBackupCsv } from '../utils/subsidyBackupCsv';
 import { CheckCircle2, Copy, Check, Landmark, UploadCloud, Download } from 'lucide-react';
 
 /**
@@ -17,8 +18,6 @@ import { CheckCircle2, Copy, Check, Landmark, UploadCloud, Download } from 'luci
 
 type Step = 'code' | 'form' | 'success';
 type ProofFileState = { name: string; mimeType?: string; dataUrl: string } | null;
-
-const CSV_VERSION = 'WJOF-Zuschuss-Sicherung/1';
 
 async function postJson(path: string, body: unknown) {
   const res = await fetch(`/api/${path}`, {
@@ -113,38 +112,22 @@ export const SubsidyApplicationPage: React.FC = () => {
     !!eventDate &&
     actualCostNumber > 0;
 
-  const csvEscape = (value: string) => `"${value.replace(/"/g, '""')}"`;
-
-  const buildBackupCsv = () => {
-    const rows: [string, string][] = [
-      ['Format', CSV_VERSION],
-      ['Erstellt am', new Date().toISOString()],
-      ['Name', personName.trim()],
-      ['E-Mail', personEmail.trim()],
-      ['IBAN', iban.trim()],
-      ['BIC', bic.trim()],
-      ['Kontoinhaber', accountHolder.trim()],
-      ['Veranstaltung (Schlüssel)', eventKey],
-      ['Veranstaltung (Bezeichnung)', entry?.label || ''],
-      ['Datum der Veranstaltung', eventDate],
-      ['Tatsächliche Kosten', actualCost],
-      ['Kommentar', comment.trim()],
-    ];
-    return rows.map(([k, v]) => `${csvEscape(k)};${csvEscape(v)}`).join('\n');
-  };
-
   const downloadBackupCsv = () => {
-    const csv = buildBackupCsv();
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const datePart = new Date().toISOString().slice(0, 10);
-    a.href = url;
-    a.download = `zuschuss-sicherung-${eventKey || 'antrag'}-${datePart}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    downloadSubsidyBackupCsv(
+      {
+        personName: personName.trim(),
+        personEmail: personEmail.trim(),
+        iban: iban.trim(),
+        bic: bic.trim(),
+        accountHolder: accountHolder.trim(),
+        eventKey,
+        eventLabel: entry?.label || '',
+        eventDate,
+        actualCost,
+        comment: comment.trim(),
+      },
+      `zuschuss-sicherung-${eventKey || 'antrag'}`
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

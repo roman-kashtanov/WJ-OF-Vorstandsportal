@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { SubsidyPerson, SubsidyPersonType, Subsidy } from '../types';
 import { formatCurrency } from '../utils/formatters';
-import { PERSON_TYPE_LABEL, personBudget } from '../utils/subsidies';
+import { PERSON_TYPE_LABEL, personBudget, normalizeNameKey } from '../utils/subsidies';
 import { SUBSIDY_LIMITS } from '../data/subsidyCatalogue';
 import { isValidIban, formatIban } from '../utils/sepa';
-import { X, UserPlus, Trash2, Pencil, Check } from 'lucide-react';
+import { X, UserPlus, Trash2, Pencil, Check, Users2 } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
@@ -15,6 +15,7 @@ interface Props {
   year: number;
   onSave: (person: SubsidyPerson) => void;
   onDelete: (personId: string) => void;
+  onMerge: (keepId: string, mergeId: string) => void;
 }
 
 const emptyDraft = (): SubsidyPerson => ({
@@ -38,9 +39,23 @@ export const SubsidyPeopleModal: React.FC<Props> = ({
   year,
   onSave,
   onDelete,
+  onMerge,
 }) => {
   const [draft, setDraft] = useState<SubsidyPerson | null>(null);
   const [ibanError, setIbanError] = useState<string | null>(null);
+
+  const duplicateGroups = useMemo(() => {
+    const groups = new Map<string, SubsidyPerson[]>();
+    for (const p of people) {
+      const key = normalizeNameKey(p.name);
+      if (!key) continue;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(p);
+    }
+    return [...groups.values()]
+      .filter((g) => g.length > 1)
+      .map((g) => [...g].sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
+  }, [people]);
 
   useBodyScrollLock(isOpen);
   if (!isOpen) return null;
@@ -92,6 +107,45 @@ export const SubsidyPeopleModal: React.FC<Props> = ({
         </div>
 
         <div className="overflow-y-auto p-4 sm:p-5 space-y-4 text-xs">
+          {duplicateGroups.length > 0 && (
+            <div className="space-y-1.5">
+              {duplicateGroups.map((group) => {
+                const [keep, ...rest] = group;
+                return (
+                  <div
+                    key={keep.id}
+                    className="p-3 rounded-xl border border-amber-200 bg-amber-50 flex items-start gap-2.5"
+                  >
+                    <Users2 className="w-4 h-4 mt-0.5 text-amber-700 shrink-0" strokeWidth={1.75} />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-amber-900">
+                        Diese Einträge könnten dieselbe Person sein
+                      </p>
+                      <p className="text-amber-800 mt-0.5">
+                        {group.map((p) => p.name).join(' · ')}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (
+                            !confirm(
+                              `${rest.map((p) => p.name).join(', ')} in "${keep.name}" zusammenführen? Alle zugehörigen Zuschüsse werden übernommen.`
+                            )
+                          )
+                            return;
+                          rest.forEach((p) => onMerge(keep.id, p.id));
+                        }}
+                        className="mt-1.5 px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] cursor-pointer"
+                      >
+                        Zusammenführen
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {!draft && (
             <button
               type="button"

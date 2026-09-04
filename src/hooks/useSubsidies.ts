@@ -3,6 +3,9 @@ import { Resolution, ResolutionAttachment, Subsidy, SubsidyPerson, SubsidyStatus
 import { FirebaseSync } from '../utils/firebaseSync';
 import { SubsidyStorage } from '../utils/storage';
 import { generateSubsidyReceiptPdf } from '../utils/subsidyReceipt';
+import { normalizeNameKey } from '../utils/subsidies';
+import { catalogueEntry } from '../data/subsidyCatalogue';
+import { parseSubsidyBackupCsv } from '../utils/subsidyBackupCsv';
 
 /**
  * Kapselt den kompletten Zuschuss-Bereich (Zuschuesse, Personen,
@@ -171,6 +174,112 @@ export function useSubsidies({
     });
   }, [resolutions]);
 
+  /**
+   * Anträge für Veranstaltungen, die noch nicht stattgefunden haben,
+   * starten im eigenen Status "nicht_stattgefunden" (siehe api/subsidy.ts) -
+   * sobald das Veranstaltungsdatum erreicht ist, rutschen sie automatisch
+   * in die normale Prüfung. Gleiches Kaskaden-Muster wie oben beim
+   * Beschluss-Status: der "changed"-Guard verhindert eine Endlosschleife,
+   * weil setSubsidies(prev) bei unveraendertem Ergebnis dieselbe Referenz
+   * zurueckgibt.
+   */
+  useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    setSubsidies((prev) => {
+      let changed = false;
+      const next = prev.map((s) => {
+        if (s.status !== 'nicht_stattgefunden' || !s.eventDate || s.eventDate > today) return s;
+        changed = true;
+        const updated: Subsidy = { ...s, status: 'beantragt' };
+        FirebaseSync.saveSubsidy(updated).catch(() => {});
+        return updated;
+      });
+      return changed ? next : prev;
+    });
+  }, [subsidies]);
+
+  /**
+   * Fasst zwei Personen-Eintraege zusammen, die vermutlich dieselbe Person
+   * sind (z. B. Name mal andersrum geschrieben) - haengt alle Zuschuesse der
+   * Duplikat-Person auf den behaltenen Eintrag um.
+   */
+  const handleMergeSubsidyPeople = (keepId: string, mergeId: string) => {
+    if (keepId === mergeId) return;
+    const keepName = subsidyPeople.find((p) => p.id === keepId)?.name;
+    setSubsidies((prev) =>
+      prev.map((s) => {
+        if (s.personId !== mergeId) return s;
+        const updated: Subsidy = { ...s, personId: keepId, personName: keepName || s.personName };
+        FirebaseSync.saveSubsidy(updated).catch(() => {});
+        return updated;
+      })
+    );
+    setSubsidyPeople((prev) => prev.filter((p) => p.id !== mergeId));
+    FirebaseSync.deleteSubsidyPerson(mergeId).catch(() => {});
+  };
+
+  /**
+   * Liest die Sicherungsdatei ein, die das oeffentliche Formular als
+   * Ruecksicherung anbietet, und legt Person + Zuschuss lokal genauso an,
+   * wie es ein erfolgreich uebertragener Antrag getan haette (ohne Anhaenge -
+   * die kommen separat per E-Mail). Dieselbe Betragskappung/Status-Logik wie
+   * in api/subsidy.ts handleSubmitSubsidy, damit beide Wege gleich rechnen.
+   */
+  const handleImportSubsidyCsv = (text: string): { ok: true } | { ok: false; error: string } => {
+    const parsed = parseSubsidyBackupCsv(text);
+    if (!parsed) {
+      return { ok: false, error: 'Diese Datei sieht nicht wie eine WJOF-Sicherungsdatei aus.' };
+    }
+    const entry = catalogueEntry(parsed.eventKey);
+    if (!entry) {
+      return { ok: false, error: 'Unbekannte Veranstaltung in der Sicherungsdatei.' };
+    }
+
+    const nameKey = normalizeNameKey(parsed.personName);
+    let person = subsidyPeople.find(
+      (p) => normalizeNameKey(p.name) === nameKey && (!parsed.iban || p.iban === parsed.iban)
+    );
+    const now = new Date().toISOString();
+    if (!person) {
+      person = {
+        id: `csv_${Date.now()}`,
+        name: parsed.personName,
+        type: 'interessent',
+        email: parsed.personEmail || undefined,
+        iban: parsed.iban || undefined,
+        bic: parsed.bic || undefined,
+        accountHolder: parsed.accountHolder || undefined,
+        isActive: true,
+        note: 'Aus Sicherungsdatei importiert',
+        createdAt: now,
+      };
+      handleSaveSubsidyPerson(person);
+    }
+
+    const isFuture = parsed.eventDate > now.slice(0, 10);
+    const subsidy: Subsidy = {
+      id: `csv_${Date.now()}`,
+      personId: person.id,
+      personName: person.name,
+      category: entry.category,
+      eventKey: entry.key,
+      eventName: entry.label,
+      eventDate: parsed.eventDate || undefined,
+      amount: Math.min(entry.amount, parsed.actualCost),
+      actualCost: parsed.actualCost,
+      status: isFuture ? 'nicht_stattgefunden' : 'beantragt',
+      source: 'public',
+      appliedAt: now,
+      proofState: 'offen',
+      costProofState: 'offen',
+      note: parsed.comment || undefined,
+      year: new Date().getFullYear(),
+      createdAt: now,
+    };
+    handleSaveSubsidy(subsidy);
+    return { ok: true };
+  };
+
   const handleSaveSubsidyPerson = (person: SubsidyPerson) => {
     setSubsidyPeople((prev) => {
       const exists = prev.some((p) => p.id === person.id);
@@ -220,5 +329,7 @@ export function useSubsidies({
     handleSaveSubsidyPerson,
     handleDeleteSubsidyPerson,
     handleSaveClubAccount,
+    handleMergeSubsidyPeople,
+    handleImportSubsidyCsv,
   };
 }

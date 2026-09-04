@@ -814,3 +814,30 @@ export async function fetchVoteLinks(
     return undefined;
   }
 }
+
+/**
+ * Vom Vorstand aus der App heraus ausgeloest, wenn bei einem Zuschuss-Antrag
+ * noch ein Nachweis fehlt - fordert ihn per E-Mail erneut an (siehe
+ * api/subsidy.ts handleResendProofLink).
+ */
+export async function resendSubsidyProofLink(input: {
+  subsidyId: string;
+  email: string;
+  personName: string;
+  eventName: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const res = await fetch('/api/subsidy/resend-proof-link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { ok: false, error: data?.error || 'Der Nachweis-Link konnte nicht versendet werden.' };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, error: 'Verbindung fehlgeschlagen. Bitte erneut versuchen.' };
+  }
+}

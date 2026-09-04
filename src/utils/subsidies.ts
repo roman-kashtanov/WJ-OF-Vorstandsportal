@@ -189,6 +189,22 @@ export function checkSubsidy(
   return warnings;
 }
 
+/**
+ * Vergleichsschlüssel für Namen, unabhängig von der Reihenfolge der
+ * Wortteile ("Max Mustermann" und "Mustermann Max" ergeben denselben
+ * Schlüssel) - erkennt so einen häufigen Tippfehler beim öffentlichen
+ * Formular als wahrscheinliches Personen-Duplikat.
+ */
+export function normalizeNameKey(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .sort()
+    .join(' ');
+}
+
 /** Verwendungszweck für die Überweisung. */
 export function paymentReference(subsidies: Subsidy[]): string {
   if (subsidies.length === 1) {

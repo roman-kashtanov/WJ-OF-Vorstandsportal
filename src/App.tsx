@@ -485,6 +485,8 @@ export default function App() {
     handleSaveSubsidyPerson,
     handleDeleteSubsidyPerson,
     handleSaveClubAccount,
+    handleMergeSubsidyPeople,
+    handleImportSubsidyCsv,
   } = useSubsidies({
     resolutions,
     createResolution: handleCreateResolution,
@@ -697,6 +699,7 @@ export default function App() {
             onManagePeople={() => setIsSubsidyPeopleOpen(true)}
             onOpenPayout={() => setIsPayoutOpen(true)}
             onOpenBundle={() => setIsBundleModalOpen(true)}
+            onImportCsv={handleImportSubsidyCsv}
           />
         )}
 
@@ -828,6 +831,7 @@ export default function App() {
         year={subsidyYear}
         onSave={handleSaveSubsidyPerson}
         onDelete={handleDeleteSubsidyPerson}
+        onMerge={handleMergeSubsidyPeople}
       />
 
       <SubsidyPayoutModal

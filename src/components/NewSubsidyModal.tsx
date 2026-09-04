@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import {
   Subsidy,
@@ -12,6 +12,7 @@ import { checkSubsidy, STATUS_LABEL, PIPELINE_MANAGED_STATUSES, personBudget } f
 import { formatCurrency } from '../utils/formatters';
 import { prepareFileForStorage, formatBytes } from '../utils/fileStorage';
 import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
+import { DropzoneFileInput } from './DropzoneFileInput';
 import { X, Paperclip, AlertTriangle, Info, Trash2 } from 'lucide-react';
 
 interface Props {
@@ -53,8 +54,6 @@ export const NewSubsidyModal: React.FC<Props> = ({
   const [costProofNote, setCostProofNote] = useState(editing?.costProofNote || '');
   const [costProofFile, setCostProofFile] = useState(editing?.costProofFile);
   const [note, setNote] = useState(editing?.note || '');
-  const fileRef = useRef<HTMLInputElement>(null);
-  const costFileRef = useRef<HTMLInputElement>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [costFileError, setCostFileError] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<PreviewableFile | null>(null);
@@ -95,9 +94,7 @@ export const NewSubsidyModal: React.FC<Props> = ({
     }
   };
 
-  const handleFile = async (files: FileList | null) => {
-    const file = files?.[0];
-    if (!file) return;
+  const handleFile = async (file: File) => {
     setFileError(null);
 
     const result = await prepareFileForStorage(file);
@@ -116,9 +113,7 @@ export const NewSubsidyModal: React.FC<Props> = ({
     setProofState('hochgeladen');
   };
 
-  const handleCostFile = async (files: FileList | null) => {
-    const file = files?.[0];
-    if (!file) return;
+  const handleCostFile = async (file: File) => {
     setCostFileError(null);
 
     const result = await prepareFileForStorage(file);
@@ -406,22 +401,13 @@ export const NewSubsidyModal: React.FC<Props> = ({
                     </button>
                   </div>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => fileRef.current?.click()}
-                    className="w-full py-3 rounded-xl border border-dashed border-slate-300 text-slate-500 hover:border-[#003594] hover:text-[#003594] transition-colors cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    <Paperclip className="w-3.5 h-3.5" strokeWidth={1.75} />
-                    <span>Foto, PDF oder Beleg auswählen</span>
-                  </button>
+                  <DropzoneFileInput accept="image/*,application/pdf" onFile={handleFile}>
+                    <div className="flex items-center justify-center gap-2 py-1 text-slate-500">
+                      <Paperclip className="w-3.5 h-3.5" strokeWidth={1.75} />
+                      <span>Foto, PDF oder Beleg auswählen oder hierher ziehen</span>
+                    </div>
+                  </DropzoneFileInput>
                 )}
-                <input
-                  ref={fileRef}
-                  type="file"
-                  className="hidden"
-                  accept="image/*,application/pdf"
-                  onChange={(e) => handleFile(e.target.files)}
-                />
                 {fileError && (
                   <div className="mt-2 rounded-xl bg-rose-50 border border-rose-200 p-2.5 text-[11px] leading-relaxed text-rose-800">
                     {fileError}
@@ -501,22 +487,13 @@ export const NewSubsidyModal: React.FC<Props> = ({
                     </button>
                   </div>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => costFileRef.current?.click()}
-                    className="w-full py-3 rounded-xl border border-dashed border-slate-300 text-slate-500 hover:border-[#003594] hover:text-[#003594] transition-colors cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    <Paperclip className="w-3.5 h-3.5" strokeWidth={1.75} />
-                    <span>Rechnung oder Beleg auswählen</span>
-                  </button>
+                  <DropzoneFileInput accept="image/*,application/pdf" onFile={handleCostFile}>
+                    <div className="flex items-center justify-center gap-2 py-1 text-slate-500">
+                      <Paperclip className="w-3.5 h-3.5" strokeWidth={1.75} />
+                      <span>Rechnung oder Beleg auswählen oder hierher ziehen</span>
+                    </div>
+                  </DropzoneFileInput>
                 )}
-                <input
-                  ref={costFileRef}
-                  type="file"
-                  className="hidden"
-                  accept="image/*,application/pdf"
-                  onChange={(e) => handleCostFile(e.target.files)}
-                />
                 {costFileError && (
                   <div className="mt-2 rounded-xl bg-rose-50 border border-rose-200 p-2.5 text-[11px] leading-relaxed text-rose-800">
                     {costFileError}

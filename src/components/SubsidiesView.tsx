@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Subsidy, SubsidyPerson, SubsidyStatus, SubsidyPersonType } from '../types';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import {
@@ -10,7 +10,7 @@ import {
 } from '../utils/subsidies';
 import { CATEGORY_LABEL, SUBSIDY_LIMITS } from '../data/subsidyCatalogue';
 import { formatIban } from '../utils/sepa';
-import { EmailService } from '../utils/emailService';
+import { EmailService, resendSubsidyProofLink } from '../utils/emailService';
 import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
 import {
   HandCoins,
@@ -23,10 +23,13 @@ import {
   Pencil,
   Trash2,
   Download,
+  Upload,
   Vote,
   Link as LinkIcon,
   Copy,
   Check,
+  CalendarClock,
+  Send,
 } from 'lucide-react';
 
 interface Props {
@@ -41,6 +44,7 @@ interface Props {
   onManagePeople: () => void;
   onOpenPayout: () => void;
   onOpenBundle: () => void;
+  onImportCsv: (text: string) => { ok: true } | { ok: false; error: string };
 }
 
 const STATUS_STYLE: Record<SubsidyStatus, string> = {
@@ -65,6 +69,7 @@ export const SubsidiesView: React.FC<Props> = ({
   onManagePeople,
   onOpenPayout,
   onOpenBundle,
+  onImportCsv,
 }) => {
   const [showFilters, setShowFilters] = useState(false);
   const [filterPerson, setFilterPerson] = useState('all');
@@ -74,6 +79,38 @@ export const SubsidiesView: React.FC<Props> = ({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<PreviewableFile | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [resendState, setResendState] = useState<Record<string, 'busy' | 'done' | 'error'>>({});
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const [importMessage, setImportMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const handleResendProofLink = async (s: Subsidy, email: string) => {
+    setResendState((prev) => ({ ...prev, [s.id]: 'busy' }));
+    const result = await resendSubsidyProofLink({
+      subsidyId: s.id,
+      email,
+      personName: s.personName,
+      eventName: s.eventName,
+    });
+    setResendState((prev) => ({ ...prev, [s.id]: result.ok ? 'done' : 'error' }));
+    if (result.ok === false) alert(result.error);
+  };
+
+  const handleImportFile = (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = String(reader.result || '');
+      const result = onImportCsv(text);
+      setImportMessage(
+        result.ok === false
+          ? { ok: false, text: result.error }
+          : { ok: true, text: 'Antrag aus der Sicherungsdatei übernommen.' }
+      );
+      setTimeout(() => setImportMessage(null), 5000);
+    };
+    reader.readAsText(file);
+  };
 
   const antragUrl = `${window.location.origin}/antrag`;
   const handleCopyAntragUrl = async () => {
@@ -117,6 +154,9 @@ export const SubsidiesView: React.FC<Props> = ({
   const overview = budgetOverview(subsidies, year);
   const payable = subsidies.filter((s) => s.year === year && isPayable(s));
   const bundlable = subsidies.filter((s) => s.year === year && s.status === 'bestaetigt');
+  const notYetHappened = subsidies.filter(
+    (s) => s.year === year && s.status === 'nicht_stattgefunden'
+  );
   const filteredSum = filtered.reduce((sum, s) => sum + s.amount, 0);
 
   const hasActiveFilters =
@@ -126,7 +166,18 @@ export const SubsidiesView: React.FC<Props> = ({
   const paidPercent = Math.min(100, (overview.paid / overview.total) * 100);
 
   const exportCsv = () => {
-    const head = ['Wer', 'Typ', 'Wann', 'Wofür', 'Kategorie', 'Zuschuss', 'Kosten', 'Stand', 'Nachweis'];
+    const head = [
+      'Wer',
+      'Typ',
+      'Wann',
+      'Wofür',
+      'Kategorie',
+      'Zuschuss',
+      'Kosten',
+      'Stand',
+      'Teilnahmenachweis',
+      'Kostennachweis',
+    ];
     const rows = filtered.map((s) => [
       s.personName,
       PERSON_TYPE_LABEL[personById[s.personId]?.type || 'mitglied'],
@@ -140,6 +191,11 @@ export const SubsidiesView: React.FC<Props> = ({
         ? 'hier abgelegt'
         : s.proofState === 'anderweitig'
         ? s.proofNote || 'anderweitig'
+        : 'offen',
+      s.costProofState === 'hochgeladen'
+        ? 'hier abgelegt'
+        : s.costProofState === 'anderweitig'
+        ? s.costProofNote || 'anderweitig'
         : 'offen',
     ]);
     const csv = [head, ...rows].map((r) => r.map((c) => `"${c}"`).join(';')).join('\n');
@@ -318,8 +374,61 @@ export const SubsidiesView: React.FC<Props> = ({
         </button>
       )}
 
+      {/* Noch nicht stattgefundene Veranstaltungen - rein informativ, siehe
+          die automatische Kaskade in useSubsidies.ts, die sie nach dem
+          Veranstaltungsdatum selbst in die Prüfung rutschen laesst. */}
+      {notYetHappened.length > 0 && (
+        <div className="w-full bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
+            <CalendarClock className="w-5 h-5" strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0">
+            <div className="font-bold text-slate-900 text-sm">
+              {notYetHappened.length}{' '}
+              {notYetHappened.length === 1 ? 'Veranstaltung' : 'Veranstaltungen'} noch nicht
+              stattgefunden
+            </div>
+            <div className="text-[11px] text-slate-500">
+              {formatCurrency(notYetHappened.reduce((s, x) => s + x.amount, 0))} · rutscht am
+              Veranstaltungsdatum automatisch in die Prüfung
+            </div>
+          </div>
+        </div>
+      )}
+
+      {importMessage && (
+        <div
+          className={`text-xs font-semibold rounded-xl border p-3 ${
+            importMessage.ok
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-rose-50 border-rose-200 text-rose-800'
+          }`}
+        >
+          {importMessage.text}
+        </div>
+      )}
+
       {/* Filter */}
       <div className="flex justify-end gap-2">
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".csv,text/csv"
+          className="hidden"
+          onChange={(e) => {
+            handleImportFile(e.target.files);
+            e.target.value = '';
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => importInputRef.current?.click()}
+          className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+          title="Sicherungsdatei eines Antragstellers einspielen"
+        >
+          <Upload className="w-3.5 h-3.5" strokeWidth={1.75} />
+          <span className="hidden sm:inline">CSV importieren</span>
+        </button>
         <button
           type="button"
           onClick={exportCsv}
@@ -496,7 +605,7 @@ export const SubsidiesView: React.FC<Props> = ({
                   </div>
 
                   <div className="text-slate-600">
-                    Nachweis:{' '}
+                    Teilnahmenachweis:{' '}
                     {s.proofState === 'hochgeladen' && s.proofFile ? (
                       <button
                         type="button"
@@ -520,6 +629,51 @@ export const SubsidiesView: React.FC<Props> = ({
                       <span className="text-amber-700 font-semibold">offen</span>
                     )}
                   </div>
+
+                  <div className="text-slate-600">
+                    Kostennachweis:{' '}
+                    {s.costProofState === 'hochgeladen' && s.costProofFile ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const file = s.costProofFile!;
+                          const isImage = file.mimeType?.startsWith('image/');
+                          if (!file.dataUrl || isImage) {
+                            setPreviewFile(file);
+                          } else {
+                            window.open(file.dataUrl, '_blank');
+                          }
+                        }}
+                        className="text-[#003594] font-semibold hover:underline inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        <Paperclip className="w-3 h-3" strokeWidth={1.75} />
+                        {s.costProofFile.name}
+                      </button>
+                    ) : s.costProofState === 'anderweitig' ? (
+                      <span className="text-slate-700">{s.costProofNote}</span>
+                    ) : (
+                      <span className="text-amber-700 font-semibold">offen</span>
+                    )}
+                  </div>
+
+                  {person?.email &&
+                    (s.proofState !== 'hochgeladen' || s.costProofState !== 'hochgeladen') && (
+                      <button
+                        type="button"
+                        onClick={() => handleResendProofLink(s, person.email!)}
+                        disabled={resendState[s.id] === 'busy'}
+                        className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        <Send className="w-3 h-3" strokeWidth={1.75} />
+                        {resendState[s.id] === 'busy'
+                          ? 'Wird gesendet…'
+                          : resendState[s.id] === 'done'
+                          ? 'Link erneut gesendet'
+                          : resendState[s.id] === 'error'
+                          ? 'Fehlgeschlagen – erneut versuchen'
+                          : 'Nachweis-Link senden'}
+                      </button>
+                    )}
 
                   {person &&
                     !person.iban &&
