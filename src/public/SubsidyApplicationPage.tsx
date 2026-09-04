@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { SUBSIDY_CATALOGUE, CATEGORY_LABEL, catalogueEntry } from '../data/subsidyCatalogue';
-import { isValidIban, formatIban } from '../utils/sepa';
-import { prepareFileForStorage, formatBytes } from '../utils/fileStorage';
-import { CheckCircle2, Copy, Check, Landmark } from 'lucide-react';
+import { isValidIban } from '../utils/sepa';
+import { prepareFileForStorage } from '../utils/fileStorage';
+import { DropzoneFileInput } from '../components/DropzoneFileInput';
+import { CheckCircle2, Copy, Check, Landmark, UploadCloud, Download } from 'lucide-react';
 
 /**
  * Oeffentliches Zuschuss-Antragsformular unter /antrag - ohne Anmeldung.
@@ -15,6 +16,9 @@ import { CheckCircle2, Copy, Check, Landmark } from 'lucide-react';
  */
 
 type Step = 'code' | 'form' | 'success';
+type ProofFileState = { name: string; mimeType?: string; dataUrl: string } | null;
+
+const CSV_VERSION = 'WJOF-Zuschuss-Sicherung/1';
 
 async function postJson(path: string, body: unknown) {
   const res = await fetch(`/api/${path}`, {
@@ -39,14 +43,18 @@ export const SubsidyApplicationPage: React.FC = () => {
   const [accountHolder, setAccountHolder] = useState('');
   const [eventKey, setEventKey] = useState('');
   const [eventDate, setEventDate] = useState('');
+  const [actualCost, setActualCost] = useState('');
   const [comment, setComment] = useState('');
 
-  const [uploadNow, setUploadNow] = useState(true);
-  const [proofFile, setProofFile] = useState<{ name: string; mimeType?: string; dataUrl: string } | null>(
-    null
-  );
-  const [proofError, setProofError] = useState<string | null>(null);
-  const [proofBusy, setProofBusy] = useState(false);
+  const [attendanceUploadNow, setAttendanceUploadNow] = useState(true);
+  const [attendanceProofFile, setAttendanceProofFile] = useState<ProofFileState>(null);
+  const [attendanceProofError, setAttendanceProofError] = useState<string | null>(null);
+  const [attendanceProofBusy, setAttendanceProofBusy] = useState(false);
+
+  const [costUploadNow, setCostUploadNow] = useState(true);
+  const [costProofFile, setCostProofFile] = useState<ProofFileState>(null);
+  const [costProofError, setCostProofError] = useState<string | null>(null);
+  const [costProofBusy, setCostProofBusy] = useState(false);
 
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -54,6 +62,7 @@ export const SubsidyApplicationPage: React.FC = () => {
   const [copied, setCopied] = useState(false);
 
   const entry = useMemo(() => catalogueEntry(eventKey), [eventKey]);
+  const actualCostNumber = Number(actualCost.replace(',', '.'));
 
   const handleCheckCode = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,26 +82,70 @@ export const SubsidyApplicationPage: React.FC = () => {
     }
   };
 
-  const handleProofSelected = async (files: FileList | null) => {
-    const file = files?.[0];
-    if (!file) return;
-    setProofError(null);
-    setProofBusy(true);
+  const handleFileSelected = async (
+    file: File,
+    setFile: (f: ProofFileState) => void,
+    setError: (e: string | null) => void,
+    setBusy: (b: boolean) => void
+  ) => {
+    setError(null);
+    setBusy(true);
     try {
       const result = await prepareFileForStorage(file);
       if (result.ok === false) {
-        setProofError(result.error);
+        setError(result.error);
         return;
       }
-      setProofFile({ name: file.name, mimeType: result.file.mimeType, dataUrl: result.file.dataUrl });
+      setFile({ name: file.name, mimeType: result.file.mimeType, dataUrl: result.file.dataUrl });
     } finally {
-      setProofBusy(false);
+      setBusy(false);
     }
   };
 
   const ibanValid = !iban || isValidIban(iban);
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(personEmail.trim());
   const canSubmit =
-    personName.trim().length > 1 && iban.trim().length > 0 && isValidIban(iban) && !!eventKey;
+    personName.trim().length > 1 &&
+    emailValid &&
+    iban.trim().length > 0 &&
+    isValidIban(iban) &&
+    !!eventKey &&
+    !!eventDate &&
+    actualCostNumber > 0;
+
+  const csvEscape = (value: string) => `"${value.replace(/"/g, '""')}"`;
+
+  const buildBackupCsv = () => {
+    const rows: [string, string][] = [
+      ['Format', CSV_VERSION],
+      ['Erstellt am', new Date().toISOString()],
+      ['Name', personName.trim()],
+      ['E-Mail', personEmail.trim()],
+      ['IBAN', iban.trim()],
+      ['BIC', bic.trim()],
+      ['Kontoinhaber', accountHolder.trim()],
+      ['Veranstaltung (Schlüssel)', eventKey],
+      ['Veranstaltung (Bezeichnung)', entry?.label || ''],
+      ['Datum der Veranstaltung', eventDate],
+      ['Tatsächliche Kosten', actualCost],
+      ['Kommentar', comment.trim()],
+    ];
+    return rows.map(([k, v]) => `${csvEscape(k)};${csvEscape(v)}`).join('\n');
+  };
+
+  const downloadBackupCsv = () => {
+    const csv = buildBackupCsv();
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const datePart = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `zuschuss-sicherung-${eventKey || 'antrag'}-${datePart}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,14 +156,16 @@ export const SubsidyApplicationPage: React.FC = () => {
       const { ok, data } = await postJson('subsidy/submit', {
         accessCode: code,
         personName: personName.trim(),
-        personEmail: personEmail.trim() || undefined,
+        personEmail: personEmail.trim(),
         iban: iban.trim(),
         bic: bic.trim() || undefined,
         accountHolder: accountHolder.trim() || undefined,
         eventKey,
-        eventDate: eventDate || undefined,
+        eventDate,
+        actualCost: actualCostNumber,
         comment: comment.trim() || undefined,
-        proofFile: uploadNow && proofFile ? proofFile : undefined,
+        attendanceProofFile: attendanceUploadNow && attendanceProofFile ? attendanceProofFile : undefined,
+        costProofFile: costUploadNow && costProofFile ? costProofFile : undefined,
       });
       if (!ok) {
         setSubmitError(data?.error || 'Der Antrag konnte nicht gesendet werden.');
@@ -193,13 +248,18 @@ export const SubsidyApplicationPage: React.FC = () => {
 
               <div>
                 <label className="font-bold text-slate-900 text-xs block mb-1.5">
-                  E-Mail (optional, für Rückfragen und den Nachweis-Link)
+                  E-Mail * (für Rückfragen und den Nachweis-Link)
                 </label>
                 <input
+                  required
                   type="email"
                   value={personEmail}
                   onChange={(e) => setPersonEmail(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-[#003594]"
+                  className={`w-full px-3 py-2.5 bg-slate-50 border rounded-xl text-base focus:outline-none focus:ring-2 ${
+                    !personEmail || emailValid
+                      ? 'border-slate-200 focus:ring-[#003594]'
+                      : 'border-rose-300 focus:ring-rose-400'
+                  }`}
                 />
               </div>
 
@@ -227,14 +287,46 @@ export const SubsidyApplicationPage: React.FC = () => {
 
               <div>
                 <label className="font-bold text-slate-900 text-xs block mb-1.5">
-                  Datum der Veranstaltung (optional)
+                  Datum der Veranstaltung *
                 </label>
                 <input
+                  required
                   type="date"
                   value={eventDate}
                   onChange={(e) => setEventDate(e.target.value)}
                   className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-[#003594]"
                 />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Bei mehrtägigen Veranstaltungen bitte den ersten Tag angeben.
+                </p>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-900 text-xs block mb-1.5">
+                  Tatsächliche Kosten (€) *
+                </label>
+                <input
+                  required
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={actualCost}
+                  onChange={(e) => setActualCost(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-[#003594]"
+                />
+                {entry && entry.fullCost && (
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Bei dieser Veranstaltung werden die Kosten laut Richtlinie vollständig übernommen
+                    (Voraussetzung: Nominierung durch den Vorstand).
+                  </p>
+                )}
+                {entry && !entry.fullCost && entry.amount > 0 && (
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Maximal möglicher Zuschuss für diese Veranstaltung: {entry.amount.toFixed(2)} € — der
+                    tatsächlich gewährte Zuschuss kann die hier eingetragenen Kosten nie übersteigen.
+                  </p>
+                )}
               </div>
 
               <div className="pt-1">
@@ -279,33 +371,41 @@ export const SubsidyApplicationPage: React.FC = () => {
 
               <div className="pt-1">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-bold text-slate-900 text-xs">Nachweisfoto</span>
+                  <span className="font-bold text-slate-900 text-xs">Teilnahmenachweis</span>
                   <label className="flex items-center gap-1.5 text-[11px] text-slate-500">
                     <input
                       type="checkbox"
-                      checked={uploadNow}
-                      onChange={(e) => setUploadNow(e.target.checked)}
+                      checked={attendanceUploadNow}
+                      onChange={(e) => setAttendanceUploadNow(e.target.checked)}
                       className="rounded text-[#003594]"
                     />
                     Jetzt hochladen
                   </label>
                 </div>
 
-                {uploadNow ? (
+                {attendanceUploadNow ? (
                   <>
-                    <input
-                      type="file"
+                    <DropzoneFileInput
                       accept="image/*,.pdf"
-                      onChange={(e) => handleProofSelected(e.target.files)}
-                      className="w-full text-xs"
-                    />
-                    {proofBusy && <p className="text-[11px] text-slate-400 mt-1">Wird verarbeitet…</p>}
-                    {proofError && (
-                      <p className="text-[11px] font-semibold text-rose-700 mt-1">{proofError}</p>
+                      disabled={attendanceProofBusy}
+                      onFile={(f) =>
+                        handleFileSelected(f, setAttendanceProofFile, setAttendanceProofError, setAttendanceProofBusy)
+                      }
+                    >
+                      <UploadCloud className="w-5 h-5 mx-auto text-slate-400 mb-1" strokeWidth={1.75} />
+                      <span className="text-[11px] text-slate-500">
+                        Datei auswählen oder hierher ziehen
+                      </span>
+                    </DropzoneFileInput>
+                    {attendanceProofBusy && (
+                      <p className="text-[11px] text-slate-400 mt-1">Wird verarbeitet…</p>
                     )}
-                    {proofFile && (
+                    {attendanceProofError && (
+                      <p className="text-[11px] font-semibold text-rose-700 mt-1">{attendanceProofError}</p>
+                    )}
+                    {attendanceProofFile && (
                       <p className="text-[11px] text-emerald-700 font-semibold mt-1">
-                        {proofFile.name} bereit
+                        {attendanceProofFile.name} bereit
                       </p>
                     )}
                   </>
@@ -317,9 +417,74 @@ export const SubsidyApplicationPage: React.FC = () => {
                 )}
               </div>
 
+              <div className="pt-1">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-bold text-slate-900 text-xs">Kostennachweis (Rechnung)</span>
+                  <label className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                    <input
+                      type="checkbox"
+                      checked={costUploadNow}
+                      onChange={(e) => setCostUploadNow(e.target.checked)}
+                      className="rounded text-[#003594]"
+                    />
+                    Jetzt hochladen
+                  </label>
+                </div>
+
+                {costUploadNow ? (
+                  <>
+                    <DropzoneFileInput
+                      accept="image/*,.pdf"
+                      disabled={costProofBusy}
+                      onFile={(f) => handleFileSelected(f, setCostProofFile, setCostProofError, setCostProofBusy)}
+                    >
+                      <UploadCloud className="w-5 h-5 mx-auto text-slate-400 mb-1" strokeWidth={1.75} />
+                      <span className="text-[11px] text-slate-500">
+                        Datei auswählen oder hierher ziehen
+                      </span>
+                    </DropzoneFileInput>
+                    {costProofBusy && <p className="text-[11px] text-slate-400 mt-1">Wird verarbeitet…</p>}
+                    {costProofError && (
+                      <p className="text-[11px] font-semibold text-rose-700 mt-1">{costProofError}</p>
+                    )}
+                    {costProofFile && (
+                      <p className="text-[11px] text-emerald-700 font-semibold mt-1">
+                        {costProofFile.name} bereit
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-2.5">
+                    Du bekommst nach dem Absenden einen persönlichen Link, mit dem du den Nachweis
+                    später nachreichen kannst.
+                  </p>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={downloadBackupCsv}
+                className="w-full flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold text-slate-500 hover:text-[#003594] transition-colors cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" strokeWidth={1.75} />
+                Antragsdaten als Sicherungsdatei herunterladen
+              </button>
+
               {submitError && (
-                <div className="text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-2.5">
-                  {submitError}
+                <div className="text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-2.5 space-y-2">
+                  <p>{submitError}</p>
+                  <p className="font-normal">
+                    Bitte lade die Sicherungsdatei herunter und schicke sie per E-Mail an den
+                    Vorstand, damit dein Antrag nicht verloren geht.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={downloadBackupCsv}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 bg-white border border-rose-300 rounded-lg text-rose-700 cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    Sicherungsdatei herunterladen
+                  </button>
                 </div>
               )}
 
@@ -346,7 +511,7 @@ export const SubsidyApplicationPage: React.FC = () => {
               {proofUploadUrl && (
                 <div className="text-left bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
                   <p className="text-[11px] font-bold text-amber-900">
-                    Bitte diesen Link aufbewahren – damit kannst du später deinen Nachweis
+                    Bitte diesen Link aufbewahren – damit kannst du später deine Nachweise
                     nachreichen:
                   </p>
                   <div className="flex items-center gap-2">
@@ -370,6 +535,22 @@ export const SubsidyApplicationPage: React.FC = () => {
                   )}
                 </div>
               )}
+
+              <div className="text-left bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+                <p className="text-[11px] text-slate-500">
+                  Dein Antrag ist bereits bestätigt beim Vorstand angekommen. Zur Sicherheit kannst
+                  du zusätzlich eine Sicherungsdatei herunterladen und per E-Mail an den Vorstand
+                  schicken.
+                </p>
+                <button
+                  type="button"
+                  onClick={downloadBackupCsv}
+                  className="w-full flex items-center justify-center gap-1.5 py-2 bg-white border border-slate-300 rounded-lg text-slate-600 cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" strokeWidth={1.75} />
+                  Sicherungsdatei herunterladen
+                </button>
+              </div>
             </div>
           )}
         </div>
