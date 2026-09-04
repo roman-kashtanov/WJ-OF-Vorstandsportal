@@ -81,7 +81,10 @@ export async function handleVoteLink(token: string, appUrl: string): Promise<Vot
     // beendet"/"existiert nicht mehr". Am Ergebnis aendert das nichts: eine
     // erreichte Ja-Mehrheit der Stimmberechtigten kann durch weitere Stimmen
     // nicht mehr zurueckgenommen werden.
-    const alreadyDecided = !!resolution.status && resolution.status !== 'in_abstimmung';
+    //
+    // Die Bestaetigungsseite erwaehnt bewusst NICHT, ob der Beschluss schon
+    // entschieden war - der Abstimmende soll nur die Rueckmeldung bekommen,
+    // dass seine Stimme angekommen ist (ausdruecklicher Nutzerwunsch).
 
     const members = await FirestoreAdmin.getDocument(`members/${memberId}`);
     const memberName = members?.name || 'Vorstandsmitglied';
@@ -156,17 +159,11 @@ export async function handleVoteLink(token: string, appUrl: string): Promise<Vot
       });
     }
 
-    const decidedNote = alreadyDecided
-      ? `<br><br><span style="color:#64748b;font-size:13px;">Der Beschluss war zu diesem Zeitpunkt bereits <strong>${
-          resolution.status === 'angenommen' ? 'angenommen' : 'abgelehnt'
-        }</strong> - deine Stimme wurde trotzdem vollständig erfasst.</span>`
-      : '';
-
     return {
       status: 200,
       html: page(
         'Stimme erfasst',
-        `${memberName} hat für "${resolution.title || resolutionId}" mit <strong>${VOTE_LABEL[vote]}</strong> gestimmt.${decidedNote}`,
+        `${memberName} hat für "${resolution.title || resolutionId}" mit <strong>${VOTE_LABEL[vote]}</strong> gestimmt.`,
         true,
         appUrl
       ),
