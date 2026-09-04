@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Subsidy, SubsidyPerson, SubsidyStatus, SubsidyPersonType } from '../types';
+import { Subsidy, SubsidyPerson, SubsidyStatus, SubsidyPersonType, AuditLogEntry } from '../types';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import {
   STATUS_LABEL,
@@ -12,6 +12,7 @@ import { CATEGORY_LABEL, SubsidyLimits } from '../data/subsidyCatalogue';
 import { formatIban } from '../utils/sepa';
 import { EmailService, resendSubsidyProofLink } from '../utils/emailService';
 import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
+import { RevisionHistory } from './RevisionHistory';
 import {
   HandCoins,
   Plus,
@@ -38,6 +39,7 @@ interface Props {
   people: SubsidyPerson[];
   year: number;
   limits: SubsidyLimits;
+  auditLog: AuditLogEntry[];
   onChangeYear: (year: number) => void;
   onOpenNew: () => void;
   onEdit: (subsidy: Subsidy) => void;
@@ -65,6 +67,7 @@ export const SubsidiesView: React.FC<Props> = ({
   people,
   year,
   limits,
+  auditLog,
   onChangeYear,
   onOpenNew,
   onEdit,
@@ -705,6 +708,14 @@ export const SubsidiesView: React.FC<Props> = ({
                   )}
 
                   {s.note && <div className="text-slate-600">{s.note}</div>}
+
+                  <div className="pt-1">
+                    <div className="font-semibold text-slate-500 mb-1">Historie</div>
+                    <RevisionHistory
+                      entries={auditLog.filter((a) => a.entityType === 'subsidy' && a.entityId === s.id)}
+                      compact
+                    />
+                  </div>
 
                   <div className="flex flex-wrap items-center gap-2 pt-1">
                     <select

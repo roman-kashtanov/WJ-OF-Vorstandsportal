@@ -536,8 +536,10 @@ export default function App() {
     handleResetCatalogueToDefault,
   } = useSubsidies({
     resolutions,
+    currentMember,
     createResolution: handleCreateResolution,
     addResolutionAttachment: handleAddAttachment,
+    addAuditLogEntry,
   });
 
   // Compute pending votes for current member (only where eligible)
@@ -734,6 +736,7 @@ export default function App() {
             people={subsidyPeople}
             year={subsidyYear}
             limits={catalogueSettings.limits}
+            auditLog={auditLog}
             onChangeYear={setSubsidyYear}
             onOpenNew={() => {
               setEditingSubsidy(null);

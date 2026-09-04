@@ -6,6 +6,7 @@ import { sendEmail } from './email';
 import { SUBSIDY_CATALOGUE, SubsidyCatalogueEntry } from '../src/data/subsidyCatalogue';
 import { isValidIban } from '../src/utils/sepa';
 import { dataUrlBytes } from '../src/utils/fileStorage';
+import { writeNotification, writeAuditLogEntry } from './notify';
 
 /**
  * Oeffentliches Zuschuss-Antragsformular (/antrag) und Nachweis-Nachreichen
@@ -242,6 +243,21 @@ export async function handleSubmitSubsidy(
       }).catch(() => {});
     }
 
+    await writeNotification({
+      title: `💶 Neuer Zuschuss-Antrag: ${entry.label}`,
+      message: `${personName} hat einen Zuschuss für "${entry.label}" beantragt.`,
+      type: 'subsidy',
+      targetTab: 'subsidies',
+      targetId: subsidyId,
+    });
+    await writeAuditLogEntry({
+      entityType: 'subsidy',
+      entityId: subsidyId,
+      entityLabel: `${personName} – ${entry.label}`,
+      action: 'Antrag über das öffentliche Formular eingereicht',
+      actorName: 'Öffentliches Formular',
+    });
+
     return { status: 200, body: { ok: true, subsidyId, proofUploadUrl } };
   } catch (err: any) {
     return {
@@ -407,6 +423,22 @@ export async function handleUploadProof(
         ? { proofState: 'hochgeladen', proofFile: uploadedFile }
         : { costProofState: 'hochgeladen', costProofFile: uploadedFile }
     );
+
+    const proofTypeLabel = proofType === 'attendance' ? 'Teilnahmenachweis' : 'Kostennachweis (Rechnung)';
+    await writeNotification({
+      title: `📎 Nachweis hochgeladen: ${subsidy.eventName}`,
+      message: `${subsidy.personName} hat den ${proofTypeLabel} zum Zuschuss "${subsidy.eventName}" hochgeladen.`,
+      type: 'subsidy',
+      targetTab: 'subsidies',
+      targetId: check.payload.s,
+    });
+    await writeAuditLogEntry({
+      entityType: 'subsidy',
+      entityId: check.payload.s,
+      entityLabel: `${subsidy.personName} – ${subsidy.eventName}`,
+      action: `${proofTypeLabel} über den Nachweis-Link hochgeladen`,
+      actorName: 'Öffentliches Formular',
+    });
 
     return { status: 200, body: { ok: true } };
   } catch (err: any) {

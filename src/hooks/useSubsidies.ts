@@ -1,9 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Resolution, ResolutionAttachment, Subsidy, SubsidyPerson, SubsidyStatus } from '../types';
+import {
+  AuditLogEntry,
+  BoardMember,
+  Resolution,
+  ResolutionAttachment,
+  Subsidy,
+  SubsidyPerson,
+  SubsidyStatus,
+} from '../types';
 import { FirebaseSync } from '../utils/firebaseSync';
 import { SubsidyStorage } from '../utils/storage';
 import { generateSubsidyReceiptPdf } from '../utils/subsidyReceipt';
-import { normalizeNameKey } from '../utils/subsidies';
+import { normalizeNameKey, STATUS_LABEL } from '../utils/subsidies';
 import { SubsidyCatalogueSettings, DEFAULT_SUBSIDY_CATALOGUE_SETTINGS } from '../data/subsidyCatalogue';
 import { parseSubsidyBackupCsv } from '../utils/subsidyBackupCsv';
 
@@ -21,18 +29,22 @@ import { parseSubsidyBackupCsv } from '../utils/subsidyBackupCsv';
 
 interface UseSubsidiesParams {
   resolutions: Resolution[];
+  currentMember: BoardMember;
   /** = handleCreateResolution aus App.tsx */
   createResolution: (
     data: Omit<Resolution, 'id' | 'votes' | 'comments' | 'linkedInvoiceIds' | 'createdAt'>
   ) => Resolution;
   /** = handleAddAttachment aus App.tsx */
   addResolutionAttachment: (resolutionId: string, attachment: ResolutionAttachment) => void;
+  addAuditLogEntry: (entry: Omit<AuditLogEntry, 'id' | 'timestamp'>) => void;
 }
 
 export function useSubsidies({
   resolutions,
+  currentMember,
   createResolution,
   addResolutionAttachment,
+  addAuditLogEntry,
 }: UseSubsidiesParams) {
   const [subsidies, setSubsidies] = useState<Subsidy[]>(() => SubsidyStorage.getSubsidies());
   const [subsidyPeople, setSubsidyPeople] = useState<SubsidyPerson[]>(() =>
@@ -57,6 +69,14 @@ export function useSubsidies({
   const handleSaveSubsidy = (s: Subsidy) => {
     setSubsidies((prev) => {
       const exists = prev.some((x) => x.id === s.id);
+      addAuditLogEntry({
+        entityType: 'subsidy',
+        entityId: s.id,
+        entityLabel: `${s.personName} – ${s.eventName}`,
+        action: exists ? 'Zuschuss bearbeitet' : 'Zuschuss erfasst',
+        actorName: currentMember.name,
+        actorId: currentMember.id,
+      });
       return exists ? prev.map((x) => (x.id === s.id ? s : x)) : [s, ...prev];
     });
     FirebaseSync.saveSubsidy(s).catch(() => {});
@@ -83,6 +103,14 @@ export function useSubsidies({
           releasedAt: status === 'zur_zahlung_freigegeben' ? x.releasedAt || now : x.releasedAt,
         };
         FirebaseSync.saveSubsidy(updated).catch(() => {});
+        addAuditLogEntry({
+          entityType: 'subsidy',
+          entityId: x.id,
+          entityLabel: `${x.personName} – ${x.eventName}`,
+          action: `Status auf "${STATUS_LABEL[status]}" gesetzt`,
+          actorName: currentMember.name,
+          actorId: currentMember.id,
+        });
         return updated;
       })
     );
@@ -110,6 +138,14 @@ export function useSubsidies({
           bundledAt: now,
         };
         FirebaseSync.saveSubsidy(updated).catch(() => {});
+        addAuditLogEntry({
+          entityType: 'subsidy',
+          entityId: s.id,
+          entityLabel: `${s.personName} – ${s.eventName}`,
+          action: `Zu Beschluss ${newRes.number} gebündelt`,
+          actorName: currentMember.name,
+          actorId: currentMember.id,
+        });
         return updated;
       })
     );
