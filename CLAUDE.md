@@ -554,3 +554,74 @@ dürfen von Props abhängige Vorauswahlen NIE als reiner `useState`-
 Startwert berechnet werden - das läuft nur beim allerersten Mount, nicht
 bei jedem "Öffnen". Immer per `useEffect`, das auf die relevante Prop
 (hier `resolution?.id`/`isOpen`) reagiert.
+
+## App.tsx modularisiert (v3.3.1 → v3.4.0, sechs Schritte)
+
+Der ursprüngliche Google-AI-Studio-Monolith `App.tsx` (1820 Zeilen, fast
+aller State + alle Handler in einer Datei) ist in sechs fachlich klar
+abgegrenzte Custom Hooks aufgeteilt worden — reine Verschiebung, **keine
+Verhaltensänderung**. App.tsx ist jetzt noch **1007 Zeilen** (-45 %).
+
+**Warum:** Nutzerwunsch, ausdrücklich als generelles Prinzip für alle
+Projekte festgehalten (siehe eigene Feedback-Memory
+`feedback_avoid_monolithic_files`) — Google-AI-Studio-Apps neigen zu
+solchen "God files", und genau dort verstecken sich Regressionen am
+leichtesten (siehe die EmailVoteModal-Story weiter oben).
+
+**Reihenfolge (wichtig bei künftigen Änderungen an der Kopplung):**
+
+1. `src/hooks/useSubsidies.ts` — am eigenständigsten, `createResolution`/
+   `addResolutionAttachment` als Parameter (damals noch App.tsx-lokale
+   Consts, heute aus useResolutions).
+2. `src/hooks/useMeetings.ts` — braucht nur `members`, `setSystemBanner`,
+   `setActiveTab`.
+3. `src/hooks/useNotifications.ts` — Benachrichtigungen + E-Mail-Protokoll
+   + deren Einstellungen. Wird von Resolutions/Invoices gebraucht, daher
+   früh extrahiert.
+4. `src/hooks/useMembers.ts` — Vorstand/Anmeldung/Sicherheit. Braucht
+   **keine** externen Abhängigkeiten, wird deshalb als **erster** Hook in
+   App.tsx aufgerufen (praktisch jede andere Domain braucht
+   `currentMember`).
+5. `src/hooks/useInvoices.ts` — braucht `setResolutions` (schreibt
+   `linkedInvoiceIds`), `currentMember`, `addInAppAndPushNotification`,
+   `handleAddEmailLog`, `notificationSettings`.
+6. `src/hooks/useResolutions.ts` — am stärksten von anderen abhängig,
+   wird selbst von Subsidies/Invoices gebraucht. Deshalb in App.tsx **vor**
+   diesen beiden aufgerufen (nach Members/Notifications).
+
+**Muster für jeden Hook:** eigener State + eigene Persistenz-Effekte +
+Handler, fremde Daten/Handler als Parameter-Interface (keine globale
+Store-Lösung nötig, die Kopplung ist klein und bekannt). App.tsx
+destrukturiert jeden Hook-Aufruf mit denselben Variablennamen wie vorher,
+damit der Rest der Datei (v. a. JSX-Props) unverändert bleibt.
+
+**Bewusst zentralisiert gelassen (nicht Teil dieser Runde):**
+- Die eine große Firestore-Sync-`useEffect` in App.tsx (mountet alle
+  `subscribe*`-Aufrufe + `autoInitCloudIfEmpty` in einem Rutsch) - eine
+  saubere Aufteilung auf die einzelnen Hooks wäre riskant (Gefahr
+  doppelter Subscriptions) und ist ein eigener, späterer Schritt.
+- `pendingUrlAction` (1-Klick-E-Mail-Aktionen `?action=vote|...`) bleibt
+  in App.tsx - echte Cross-Domain-Orchestrierung (Resolutions + Invoices +
+  Members + UI-Navigation gleichzeitig), gehört an die Kompositionsstelle.
+- 3 bereits vorher tote/unverdrahtete Handler
+  (`handleUpdateResolutionBookkeepingStatus`, `handleUpdateInvoiceRecurrence`,
+  `handleCheckForUpdates`) wurden unverändert mitverschoben, nicht
+  bereinigt - kein Verhaltens-Cleanup in diesem Umbau, nur Struktur.
+- Automatisierte Tests (separates, noch offenes Thema).
+
+**Wichtiger struktureller Punkt, falls weitere Hooks dazukommen:** Ein
+Hook-Aufruf ist eine *eager* Funktionsauswertung - anders als
+`useEffect`-Closures (die erst nach dem Render laufen und deshalb auf
+später im Code stehende Consts zugreifen dürfen), müssen alle Parameter
+eines Hook-Aufrufs zum Zeitpunkt des Aufrufs bereits zugewiesen sein. Das
+zwingt eine echte Reihenfolge in App.tsx: `useMembers()` zuerst (keine
+Abhängigkeiten), dann `useMeetings()`/`useNotifications()`, dann
+`useResolutions()` (braucht Members+Notifications-Ausgaben), erst danach
+`useInvoices()`/`useSubsidies()` (brauchen Resolutions-Handler).
+
+**Verifikation:** Jede Phase einzeln `npx tsc --noEmit` + `npm run build`
++ Live-Test im Browser, dann Commit - nicht erst am Ende. Abschließend
+zusätzlich der Cross-Domain-Kernfall getestet: Zuschuss bündeln
+(useSubsidies) → erzeugt Beschluss (useResolutions) → Beschluss annehmen
+→ Kaskade greift → Auszahlung → Nachweis-PDF an Beschluss angehängt -
+funktioniert identisch zum Stand vor der Modularisierung.
