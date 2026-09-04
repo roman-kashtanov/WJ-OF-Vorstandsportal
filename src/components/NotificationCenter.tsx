@@ -118,7 +118,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
 
       {/* MODAL / NEW WINDOW VIEW WHEN CLICKED */}
       {isOpen && (
-        <div className="fixed sm:absolute right-2 sm:right-0 top-16 sm:top-auto sm:mt-2 w-[94vw] sm:w-[460px] bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150 text-xs max-h-[85vh] flex flex-col">
+        <div className="fixed sm:absolute right-2 sm:right-0 top-16 sm:top-auto sm:mt-2 w-[94vw] sm:w-[460px] bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150 text-xs max-h-[85dvh] flex flex-col">
           
           {/* Top Header */}
           <div className="bg-[#003594] text-white p-4 flex items-center justify-between shrink-0">

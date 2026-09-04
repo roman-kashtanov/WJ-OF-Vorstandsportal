@@ -84,7 +84,7 @@ export const QuickAgendaModal: React.FC<QuickAgendaModalProps> = ({
         </div>
 
         {/* Agenda List */}
-        <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+        <div className="p-6 space-y-4 max-h-[60dvh] overflow-y-auto">
           <div className="flex items-center justify-between">
             <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
               Tagesordnungspunkte ({meeting.agenda.length} TOPs)

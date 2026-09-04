@@ -94,7 +94,7 @@ export const SubsidyPayoutModal: React.FC<Props> = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-start sm:items-center justify-center p-3 sm:p-4">
-      <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95">
+      <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] animate-in fade-in zoom-in-95">
         <div className="px-5 py-4 bg-[#003594] text-white flex items-center justify-between shrink-0">
           <div>
             <div className="text-[11px] font-bold uppercase tracking-wider text-blue-200">

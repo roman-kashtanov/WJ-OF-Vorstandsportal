@@ -528,7 +528,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       }`}
     >
       <div
-        className={`bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden duration-150 flex flex-col max-h-[90vh] ${
+        className={`bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden duration-150 flex flex-col max-h-[90dvh] ${
           isClosing ? 'animate-out fade-out zoom-out-95' : 'animate-in fade-in zoom-in-95'
         }`}
       >

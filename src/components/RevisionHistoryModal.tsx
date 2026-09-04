@@ -24,7 +24,7 @@ export const RevisionHistoryModal: React.FC<Props> = ({ isOpen, onClose, title, 
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-start sm:items-center justify-center p-3 sm:p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95">
+      <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[85dvh] animate-in fade-in zoom-in-95">
         <div className="px-5 py-4 bg-[#003594] text-white flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             <HistoryIcon className="w-4 h-4 shrink-0" strokeWidth={1.75} />

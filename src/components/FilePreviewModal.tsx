@@ -57,7 +57,7 @@ export const FilePreviewModal: React.FC<Props> = ({ file, onClose }) => {
           src={file.dataUrl}
           alt={file.name}
           onClick={(e) => e.stopPropagation()}
-          className="max-w-full max-h-[85vh] rounded-2xl shadow-2xl object-contain"
+          className="max-w-full max-h-[85dvh] rounded-2xl shadow-2xl object-contain"
         />
       ) : (
         <div
