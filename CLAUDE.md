@@ -1299,3 +1299,63 @@ Punkt 3 dort) blieben unveraendert - die Reiter sind reine
 Navigation/Uebersicht. Zusaetzlich ein dedizierter "Als geprueft
 markieren"-Button bei offenen Antraegen statt nur der generischen
 Status-Auswahlliste. Live getestet (Reiter-Zaehler, Filterung, Button).
+
+## Beschluss-Selbstheilung, Zuschuss-Vollautomatik, Rollen-Katalog, Einladungs-E-Mail (v3.13.0)
+
+Direktes Folge-Feedback nach v3.12.0, vier Themen:
+
+**1. Beschluss-Selbstheilung.** Der Mehrheits-Fix aus v3.12.0 korrigiert
+nur *kuenftige* Stimmabgaben - ein Beschluss, der schon VORHER genug
+Ja-Stimmen der Stimmberechtigten hatte, wurde nie neu bewertet (dafuer
+braucht es normalerweise eine neue Stimme, und alle Berechtigten hatten
+ja schon abgestimmt). Neuer Reconciliation-`useEffect` in
+`useResolutions.ts`: prueft bei jedem Laden alle `in_abstimmung`-
+Beschluesse gegen die aktuelle Formel nach und schliesst sie bei Bedarf
+nachtraeglich (inkl. Audit-Log-Eintrag + derselben "Beschluss
+angenommen"-Benachrichtigung). Live getestet: ein kuenstlich
+zurueckgesetzter, aber bereits mehrheitlich angenommener Beschluss
+korrigiert sich beim Laden automatisch, ganz ohne neue Stimme.
+
+**2. Zuschuss-Pipeline: keine freie Status-Wahl mehr, SEPA = automatisch
+erledigt.** Der Reiter-Umbau aus v3.12.0 allein reichte dem Nutzer nicht
+- er wollte, dass der Status **nie** frei waehlbar ist (nur als bewusste
+Ausnahme). `SubsidiesView.tsx`: der Status-Dropdown steckt jetzt hinter
+"Status manuell aendern (Ausnahme)", eingeklappt per Default, nicht mehr
+gleichrangig neben "Bearbeiten"/"Entfernen". `SubsidyPayoutModal.tsx`:
+das Erzeugen der SEPA-Datei markiert die gewaehlten Zuschuesse jetzt
+automatisch als erledigt (`onMarkPaid` direkt im Anschluss an den
+Download) - der bisherige zweite Bestaetigungsschritt ("Als „Bezahlt"
+markieren" / "Spaeter markieren") entfaellt. Live getestet.
+
+**3. Rollen-Katalog statt fester `BoardRole`-Liste + Admin-Konzept
+entfernt.** Die alte Liste (`Kreissprecher / Vorsitzender`, ...)
+entsprach nicht den echten Posten (`President`/`Vize President`/
+`Schatzmeister`/`Past Year President`) und aendert sich durch jaehrliche
+Neuwahlen - jetzt ein admin-editierbarer Katalog
+(`src/data/roleCatalogue.ts`, Firestore-Dokument
+`settings/roleCatalogue`, gleiches Muster wie
+`SubsidyCatalogueSettings`). `BoardRole` ist jetzt `string` statt
+striktem Union-Typ (Rolle ist reines Anzeige-Feld, keine
+Berechtigungslogik haengt daran). Mitgliederzeilen in
+`SettingsModal.tsx` sind jetzt klickbar und klappen einen
+Bearbeiten-Bereich auf (Rolle zuweisen - bisher nur beim Anlegen
+moeglich, nicht nachtraeglich). Admin-Badge/-Konzept ersatzlos entfernt
+(wertete ohnehin nirgends echte Berechtigungen aus, der
+Einstellungen-Loeschcode aus v3.12.0 ist die eigentliche
+Zugriffskontrolle) - `isAdmin` bleibt optional im Typ, wird aber
+nirgends mehr gesetzt/angezeigt (auch nicht mehr beim Erst-Login-
+Bootstrap in `AuthModal.tsx`). Live getestet inkl. konkreter
+Rollen-Zuweisung.
+
+**4. Einladungs-E-Mail.** Neue `sendMemberInvite()`
+(`emailService.ts`), nutzt das bestehende einfache `sendMail()` (reine
+Info-Mail, kein Token/Server-Endpunkt noetig): Link zum Portal +
+Installationsanleitung fuer iPhone (Safari → Teilen → Zum
+Home-Bildschirm)/Android (Chrome-Menue → App installieren)/Computer
+(nichts einzurichten). Nach dem Anlegen fragt die App direkt nach
+("Soll {Name} eine Einladung bekommen?"), im Bearbeiten-Bereich
+zusaetzlich ein "Einladung (erneut) senden"-Button - nutzt den bisher
+ungenutzten `credentialsSentAt`-Zeitstempel auf `BoardMember` fuer die
+Anzeige "Zuletzt gesendet am ...". Lokal nur bis zur erwarteten
+Fehlermeldung pruefbar (kein SMTP lokal konfiguriert, wie bei allen
+E-Mail-Flows dieser App).
