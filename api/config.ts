@@ -33,6 +33,10 @@ export function getServerConfig() {
     vapidPublicKey: e.VAPID_PUBLIC_KEY || e.VITE_VAPID_PUBLIC_KEY || '',
     vapidPrivateKey: e.VAPID_PRIVATE_KEY || '',
     vapidSubject: e.VAPID_SUBJECT || 'mailto:vorstand@wj-offenbach.de',
+
+    // --- KI-Beschlusserkennung aus Sitzungsprotokollen (api/protocolScan.ts)
+    anthropicApiKey: e.ANTHROPIC_API_KEY || '',
+    anthropicModel: e.ANTHROPIC_MODEL || 'claude-sonnet-5',
   };
 }
 
