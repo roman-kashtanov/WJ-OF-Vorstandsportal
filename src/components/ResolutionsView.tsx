@@ -8,8 +8,10 @@ import {
   ResolutionAttachment,
   BookkeepingStatus,
   SecuritySettings,
-  AuditLogEntry
+  AuditLogEntry,
+  Subsidy
 } from '../types';
+import { STATUS_LABEL as SUBSIDY_STATUS_LABEL } from '../utils/subsidies';
 import { 
   formatCurrency, 
   formatDate, 
@@ -26,7 +28,8 @@ import {
   MinusCircle, 
   MessageSquare, 
   Send, 
-  Receipt, 
+  Receipt,
+  HandCoins,
   FileText, 
   Calendar, 
   User, 
@@ -69,6 +72,8 @@ interface ResolutionsViewProps {
   members: BoardMember[];
   resolutions: Resolution[];
   invoices: Invoice[];
+  /** Fuer Sammelbeschluesse: die daran haengenden Zuschuesse (Subsidy.resolutionId). */
+  subsidies?: Subsidy[];
   auditLog: AuditLogEntry[];
   onVote: (resolutionId: string, vote: VoteType, note?: string) => void;
   onAddComment: (resolutionId: string, content: string) => void;
@@ -107,6 +112,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
   members,
   resolutions,
   invoices,
+  subsidies = [],
   auditLog,
   onVote,
   onAddComment,
@@ -401,6 +407,20 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
     ? invoices.filter((i) => i.resolutionId === activeResolution.id)
     : [];
   const linkedInvoicesTotal = linkedInvoices.reduce((sum, i) => sum + i.amount, 0);
+
+  /**
+   * Bei Sammelbeschluessen ueber Zuschuesse gibt es keine Rechnungen - dort
+   * haengen die Zuschuesse selbst am Beschluss (Subsidy.resolutionId, gesetzt
+   * beim Buendeln in useSubsidies.ts). Bewusst live aus den Zuschussdaten
+   * gelesen statt als PDF-Anhang eingefroren: so stimmt der angezeigte Stand
+   * (geprueft / im Beschluss / zur Zahlung freigegeben / bezahlt) immer, auch
+   * wenn sich spaeter etwas aendert. Die Auszahlungs-Nachweise als PDF haengt
+   * die App beim Bezahlen zusaetzlich als Dateianhang an.
+   */
+  const linkedSubsidies = activeResolution
+    ? subsidies.filter((s) => s.resolutionId === activeResolution.id)
+    : [];
+  const linkedSubsidiesTotal = linkedSubsidies.reduce((sum, s) => sum + (s.amount || 0), 0);
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -1267,6 +1287,60 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* Zugeordnete Zuschuesse (nur bei Sammelbeschluessen) */}
+              {linkedSubsidies.length > 0 && (
+                <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center space-x-2">
+                      <HandCoins className="w-4 h-4 text-[#003594]" />
+                      <h4 className="text-xs uppercase font-bold text-slate-700 tracking-wider">
+                        Zugeordnete Zuschüsse ({linkedSubsidies.length})
+                      </h4>
+                    </div>
+                    <span className="text-xs font-bold text-slate-900">
+                      Summe: {formatCurrency(linkedSubsidiesTotal)}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    {linkedSubsidies.map((s) => (
+                      <div
+                        key={s.id}
+                        className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-slate-50 border border-slate-200"
+                      >
+                        <div className="min-w-0">
+                          <div className="font-bold text-slate-900 text-xs truncate">
+                            {s.personName}
+                          </div>
+                          <div className="text-[11px] text-slate-500 truncate">{s.eventName}</div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              s.status === 'bezahlt'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : s.status === 'zur_zahlung_freigegeben'
+                                ? 'bg-teal-100 text-teal-800'
+                                : 'bg-violet-100 text-violet-800'
+                            }`}
+                          >
+                            {SUBSIDY_STATUS_LABEL[s.status] || s.status}
+                          </span>
+                          <span className="font-bold text-[#003594] text-xs">
+                            {formatCurrency(s.amount)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <p className="mt-2.5 text-[11px] text-slate-400 leading-relaxed">
+                    Wird der Beschluss angenommen, wechseln diese Zuschüsse automatisch auf „Zur
+                    Zahlung freigegeben" und erscheinen unter Zuschüsse zur Sammelüberweisung.
+                  </p>
+                </div>
+              )}
 
               {/* Zugeordnete Rechnungen */}
               <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs">

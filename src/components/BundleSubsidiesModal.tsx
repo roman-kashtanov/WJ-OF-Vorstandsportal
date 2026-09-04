@@ -213,7 +213,10 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
               className="px-5 py-2.5 rounded-xl bg-[#003594] hover:bg-[#00266B] disabled:opacity-40 font-bold text-white text-xs flex items-center gap-2 transition-all cursor-pointer"
             >
               <Vote className="w-4 h-4" strokeWidth={2} />
-              Beschluss erstellen
+              {/* Anzahl bewusst im Knopf: so ist vor dem Klick eindeutig, wie
+                  viele Zuschuesse tatsaechlich in den Beschluss wandern. */}
+              Beschluss über {chosen.length}{' '}
+              {chosen.length === 1 ? 'Zuschuss' : 'Zuschüsse'} erstellen
             </button>
           </div>
         )}

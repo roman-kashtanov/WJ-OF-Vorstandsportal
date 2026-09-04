@@ -73,17 +73,15 @@ export async function handleVoteLink(token: string, appUrl: string): Promise<Vot
       };
     }
 
-    if (resolution.status && resolution.status !== 'in_abstimmung') {
-      return {
-        status: 200,
-        html: page(
-          'Abstimmung beendet',
-          `Der Beschluss "${resolution.title || resolutionId}" ist bereits abgeschlossen.`,
-          false,
-          appUrl
-        ),
-      };
-    }
+    // Bewusst KEINE Sperre, wenn der Beschluss bereits entschieden ist:
+    // sobald die Mehrheit steht, kippt der Status automatisch auf
+    // "angenommen" - die uebrigen Stimmberechtigten sollen ihre Stimme
+    // trotzdem noch abgeben koennen (fuers vollstaendige Stimmbild und die
+    // Revisionshistorie). Frueher kam hier faelschlich "Abstimmung
+    // beendet"/"existiert nicht mehr". Am Ergebnis aendert das nichts: eine
+    // erreichte Ja-Mehrheit der Stimmberechtigten kann durch weitere Stimmen
+    // nicht mehr zurueckgenommen werden.
+    const alreadyDecided = !!resolution.status && resolution.status !== 'in_abstimmung';
 
     const members = await FirestoreAdmin.getDocument(`members/${memberId}`);
     const memberName = members?.name || 'Vorstandsmitglied';
@@ -158,11 +156,17 @@ export async function handleVoteLink(token: string, appUrl: string): Promise<Vot
       });
     }
 
+    const decidedNote = alreadyDecided
+      ? `<br><br><span style="color:#64748b;font-size:13px;">Der Beschluss war zu diesem Zeitpunkt bereits <strong>${
+          resolution.status === 'angenommen' ? 'angenommen' : 'abgelehnt'
+        }</strong> - deine Stimme wurde trotzdem vollständig erfasst.</span>`
+      : '';
+
     return {
       status: 200,
       html: page(
         'Stimme erfasst',
-        `${memberName} hat für "${resolution.title || resolutionId}" mit <strong>${VOTE_LABEL[vote]}</strong> gestimmt.`,
+        `${memberName} hat für "${resolution.title || resolutionId}" mit <strong>${VOTE_LABEL[vote]}</strong> gestimmt.${decidedNote}`,
         true,
         appUrl
       ),

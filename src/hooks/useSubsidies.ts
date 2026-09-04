@@ -41,6 +41,15 @@ interface UseSubsidiesParams {
   /** = handleAddAttachment aus App.tsx */
   addResolutionAttachment: (resolutionId: string, attachment: ResolutionAttachment) => void;
   addAuditLogEntry: (entry: Omit<AuditLogEntry, 'id' | 'timestamp'>) => void;
+  /**
+   * Fehler beim Speichern in die Cloud sichtbar machen. Vorher wurden sie
+   * nur in die Browser-Konsole geschrieben - der naechste Firestore-Snapshot
+   * hat die lokale Aenderung dann stillschweigend wieder ueberschrieben, und
+   * es sah so aus, als haette der Klick einfach nichts getan.
+   */
+  setSystemBanner: (
+    banner: { type: 'success' | 'info' | 'error'; title: string; message: string } | null
+  ) => void;
   notificationSettings: NotificationSettings;
   addInAppAndPushNotification: (notif: {
     title: string;
@@ -58,6 +67,7 @@ export function useSubsidies({
   createResolution,
   addResolutionAttachment,
   addAuditLogEntry,
+  setSystemBanner,
   notificationSettings,
   addInAppAndPushNotification,
 }: UseSubsidiesParams) {
@@ -103,32 +113,62 @@ export function useSubsidies({
     FirebaseSync.deleteSubsidy(id).catch(() => {});
   };
 
+  /**
+   * Meldet fehlgeschlagene Cloud-Schreibvorgaenge sichtbar.
+   *
+   * Wichtig, weil `applyRemote` in App.tsx die lokale Liste bei jedem
+   * Firestore-Snapshot komplett ersetzt: Schlaegt ein Schreibvorgang fehl
+   * (z. B. weil ein alter Zuschuss mit grossem Nachweisfoto ueber der
+   * 1-MiB-Grenze liegt), springt der Zuschuss beim naechsten Snapshot
+   * kommentarlos auf den alten Stand zurueck - fuer den Vorstand sah das
+   * so aus, als haette der Klick nichts bewirkt.
+   */
+  const reportSaveFailures = (failed: { label: string; error?: string }[]) => {
+    if (failed.length === 0) return;
+    setSystemBanner({
+      type: 'error',
+      title: failed.length === 1 ? 'Ein Zuschuss wurde nicht gespeichert' : `${failed.length} Zuschüsse wurden nicht gespeichert`,
+      message: `${failed.map((f) => f.label).join(', ')} – die Änderung gilt nur auf diesem Gerät und wird beim nächsten Abgleich überschrieben. Grund: ${
+        failed[0].error || 'unbekannt'
+      }`,
+    });
+    setTimeout(() => setSystemBanner(null), 12000);
+  };
+
   const handleUpdateSubsidyStatus = (id: string, status: SubsidyStatus) => {
-    setSubsidies((prev) =>
-      prev.map((x) => {
-        if (x.id !== id) return x;
-        const now = new Date().toISOString();
-        const updated: Subsidy = {
-          ...x,
-          status,
-          approvedAt:
-            status === 'bestaetigt' || status === 'bezahlt' ? x.approvedAt || now : x.approvedAt,
-          paidAt: status === 'bezahlt' ? x.paidAt || now : undefined,
-          bundledAt: status === 'im_beschluss' ? x.bundledAt || now : x.bundledAt,
-          releasedAt: status === 'zur_zahlung_freigegeben' ? x.releasedAt || now : x.releasedAt,
-        };
-        FirebaseSync.saveSubsidy(updated).catch(() => {});
-        addAuditLogEntry({
-          entityType: 'subsidy',
-          entityId: x.id,
-          entityLabel: `${x.personName} – ${x.eventName}`,
-          action: `Status auf "${STATUS_LABEL[status]}" gesetzt`,
-          actorName: currentMember.name,
-          actorId: currentMember.id,
-        });
-        return updated;
-      })
-    );
+    const now = new Date().toISOString();
+    const target = subsidies.find((x) => x.id === id);
+    if (!target) return;
+
+    const updated: Subsidy = {
+      ...target,
+      status,
+      approvedAt:
+        status === 'bestaetigt' || status === 'bezahlt' ? target.approvedAt || now : target.approvedAt,
+      paidAt: status === 'bezahlt' ? target.paidAt || now : target.paidAt,
+      bundledAt: status === 'im_beschluss' ? target.bundledAt || now : target.bundledAt,
+      releasedAt:
+        status === 'zur_zahlung_freigegeben' ? target.releasedAt || now : target.releasedAt,
+    };
+
+    setSubsidies((prev) => prev.map((x) => (x.id === id ? updated : x)));
+
+    addAuditLogEntry({
+      entityType: 'subsidy',
+      entityId: target.id,
+      entityLabel: `${target.personName} – ${target.eventName}`,
+      action: `Status auf "${STATUS_LABEL[status]}" gesetzt`,
+      actorName: currentMember.name,
+      actorId: currentMember.id,
+    });
+
+    FirebaseSync.saveSubsidy(updated).then((res) => {
+      if (!res?.success) {
+        reportSaveFailures([
+          { label: `${target.personName} – ${target.eventName}`, error: res?.error },
+        ]);
+      }
+    });
   };
 
   /**
@@ -143,27 +183,45 @@ export function useSubsidies({
   ) => {
     const newRes = createResolution(resolutionData);
     const now = new Date().toISOString();
-    setSubsidies((prev) =>
-      prev.map((s) => {
-        if (!subsidyIds.includes(s.id)) return s;
-        const updated: Subsidy = {
-          ...s,
-          status: 'im_beschluss',
-          resolutionId: newRes.id,
-          bundledAt: now,
-        };
-        FirebaseSync.saveSubsidy(updated).catch(() => {});
-        addAuditLogEntry({
-          entityType: 'subsidy',
-          entityId: s.id,
-          entityLabel: `${s.personName} – ${s.eventName}`,
-          action: `Zu Beschluss ${newRes.number} gebündelt`,
-          actorName: currentMember.name,
-          actorId: currentMember.id,
-        });
-        return updated;
+
+    // Bewusst ausserhalb des setSubsidies-Updaters berechnet: der Updater
+    // darf keine Seiteneffekte enthalten (React ruft ihn im Dev-Modus
+    // doppelt auf - das hat frueher Audit-Eintraege und Cloud-Schreibvorgaenge
+    // verdoppelt) und wird nicht garantiert synchron ausgefuehrt.
+    const updates = subsidies
+      .filter((s) => subsidyIds.includes(s.id))
+      .map<Subsidy>((s) => ({
+        ...s,
+        status: 'im_beschluss',
+        resolutionId: newRes.id,
+        bundledAt: now,
+      }));
+
+    const updatedById = new Map(updates.map((u) => [u.id, u]));
+    setSubsidies((prev) => prev.map((s) => updatedById.get(s.id) || s));
+
+    updates.forEach((u) =>
+      addAuditLogEntry({
+        entityType: 'subsidy',
+        entityId: u.id,
+        entityLabel: `${u.personName} – ${u.eventName}`,
+        action: `Zu Beschluss ${newRes.number} gebündelt`,
+        actorName: currentMember.name,
+        actorId: currentMember.id,
       })
     );
+
+    // Alle Schreibvorgaenge abwarten und Fehlschlaege melden - sonst
+    // verschwindet die Verknuepfung beim naechsten Snapshot lautlos wieder
+    // und der Beschluss haengt an weniger Zuschuessen als ausgewaehlt.
+    Promise.all(
+      updates.map(async (u) => {
+        const res = await FirebaseSync.saveSubsidy(u);
+        return res?.success ? null : { label: `${u.personName} – ${u.eventName}`, error: res?.error };
+      })
+    ).then((results) => {
+      reportSaveFailures(results.filter((r): r is { label: string; error: any } => !!r));
+    });
   };
 
   /**
@@ -219,37 +277,45 @@ export function useSubsidies({
       releasedByResolution.set(res.id, entry);
     }
 
-    setSubsidies((prev) => {
-      let changed = false;
-      const next = prev.map((s) => {
-        if (s.status !== 'im_beschluss' || !s.resolutionId) return s;
-        const res = resolutions.find((r) => r.id === s.resolutionId);
-        if (!res) return s;
-        if (res.status === 'angenommen') {
-          changed = true;
-          const updated: Subsidy = {
-            ...s,
-            status: 'zur_zahlung_freigegeben',
-            releasedAt: new Date().toISOString(),
-          };
-          FirebaseSync.saveSubsidy(updated).catch(() => {});
-          return updated;
-        }
-        if (res.status === 'abgelehnt') {
-          changed = true;
-          const updated: Subsidy = {
-            ...s,
-            status: 'bestaetigt',
-            resolutionId: undefined,
-            bundledAt: undefined,
-          };
-          FirebaseSync.saveSubsidy(updated).catch(() => {});
-          return updated;
-        }
-        return s;
+    // Die Statuswechsel werden - wie beim Buendeln - ausserhalb des
+    // setSubsidies-Updaters berechnet, damit keine Seiteneffekte im Updater
+    // stehen und Schreibfehler gemeldet werden koennen.
+    const cascadeUpdates: Subsidy[] = [];
+    for (const s of subsidies) {
+      if (s.status !== 'im_beschluss' || !s.resolutionId) continue;
+      const res = resolutions.find((r) => r.id === s.resolutionId);
+      if (!res) continue;
+      if (res.status === 'angenommen') {
+        cascadeUpdates.push({
+          ...s,
+          status: 'zur_zahlung_freigegeben',
+          releasedAt: new Date().toISOString(),
+        });
+      } else if (res.status === 'abgelehnt') {
+        cascadeUpdates.push({
+          ...s,
+          status: 'bestaetigt',
+          resolutionId: undefined,
+          bundledAt: undefined,
+        });
+      }
+    }
+
+    if (cascadeUpdates.length > 0) {
+      const byId = new Map(cascadeUpdates.map((u) => [u.id, u]));
+      setSubsidies((prev) => prev.map((s) => byId.get(s.id) || s));
+
+      Promise.all(
+        cascadeUpdates.map(async (u) => {
+          const res = await FirebaseSync.saveSubsidy(u);
+          return res?.success
+            ? null
+            : { label: `${u.personName} – ${u.eventName}`, error: res?.error };
+        })
+      ).then((results) => {
+        reportSaveFailures(results.filter((r): r is { label: string; error: any } => !!r));
       });
-      return changed ? next : prev;
-    });
+    }
 
     if (notificationSettings.notifyOnQuorumReached) {
       releasedByResolution.forEach(({ count, total }, resolutionId) => {

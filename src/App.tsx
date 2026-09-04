@@ -567,6 +567,7 @@ export default function App() {
     createResolution: handleCreateResolution,
     addResolutionAttachment: handleAddAttachment,
     addAuditLogEntry,
+    setSystemBanner,
     notificationSettings,
     addInAppAndPushNotification,
   });
@@ -703,6 +704,7 @@ export default function App() {
             members={members}
             resolutions={resolutions}
             invoices={invoices}
+            subsidies={subsidies}
             auditLog={auditLog}
             onVote={handleVote}
             onAddComment={handleAddComment}

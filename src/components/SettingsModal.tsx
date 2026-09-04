@@ -33,7 +33,7 @@ import {
 import { FirebaseSync } from '../utils/firebaseSync';
 import { useModalTransition } from '../hooks/useModalTransition';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
-import { hashPasscode, verifyDeleteCode } from '../utils/security';
+import { hashPasscode, verifyDeleteCode, verifyPasscode } from '../utils/security';
 import { RevisionHistory } from './RevisionHistory';
 import { CURRENT_APP_VERSION } from '../constants/version';
 import {
@@ -212,8 +212,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   // Security Passcode change state
+  const [oldPasscode, setOldPasscode] = useState('');
   const [newPasscode, setNewPasscode] = useState('');
   const [confirmPasscode, setConfirmPasscode] = useState('');
+
+  // Admin-Code (Einstellungen + endgueltiges Loeschen) aendern
+  const [oldAdminCode, setOldAdminCode] = useState('');
+  const [newAdminCode, setNewAdminCode] = useState('');
+  const [confirmAdminCode, setConfirmAdminCode] = useState('');
+  const [adminCodeError, setAdminCodeError] = useState<string | null>(null);
+  const [adminCodeSuccess, setAdminCodeSuccess] = useState(false);
   const [passcodeSuccess, setPasscodeSuccess] = useState(false);
   const [passcodeError, setPasscodeError] = useState<string | null>(null);
 
@@ -448,6 +456,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setPasscodeError(null);
     setPasscodeSuccess(false);
 
+    // Zuerst den bisherigen Code bestaetigen - sonst koennte jeder, der ein
+    // offenes Geraet vorfindet, den Zugang stillschweigend uebernehmen.
+    const oldOk = await verifyPasscode(oldPasscode, securitySettings);
+    if (!oldOk) {
+      setPasscodeError('Der bisherige Vorstandscode stimmt nicht.');
+      return;
+    }
+
     if (!/^\d{5}$/.test(newPasscode)) {
       setPasscodeError('Der Vorstandscode muss genau 5 Ziffern enthalten.');
       return;
@@ -471,9 +487,54 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     await FirebaseSync.saveSecuritySettings(updatedSettings);
 
     setPasscodeSuccess(true);
+    setOldPasscode('');
     setNewPasscode('');
     setConfirmPasscode('');
     setTimeout(() => setPasscodeSuccess(false), 4000);
+  };
+
+  /**
+   * Admin-Code aendern (derselbe Code, der die Einstellungen und das
+   * endgueltige Loeschen freigibt). Immer nur mit Bestaetigung des
+   * bisherigen Codes - er ist die einzige echte Zugriffskontrolle des
+   * Portals, seit es kein separates Admin-Flag mehr gibt.
+   */
+  const handleChangeAdminCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminCodeError(null);
+    setAdminCodeSuccess(false);
+
+    const oldOk = await verifyDeleteCode(oldAdminCode, securitySettings);
+    if (!oldOk) {
+      setAdminCodeError('Der bisherige Admin-Code stimmt nicht.');
+      return;
+    }
+
+    const clean = newAdminCode.trim();
+    if (clean.length < 5) {
+      setAdminCodeError('Der neue Admin-Code muss mindestens 5 Zeichen haben.');
+      return;
+    }
+
+    if (clean !== confirmAdminCode.trim()) {
+      setAdminCodeError('Die beiden neuen Codes stimmen nicht überein.');
+      return;
+    }
+
+    const updatedSettings: SecuritySettings = {
+      ...securitySettings,
+      deleteCodeHash: await hashPasscode(clean),
+      lastUpdated: new Date().toISOString(),
+    };
+
+    onUpdateSecuritySettings(updatedSettings);
+    await FirebaseSync.saveSecuritySettings(updatedSettings);
+
+    setAdminCodeSuccess(true);
+    setOldAdminCode('');
+    setNewAdminCode('');
+    setConfirmAdminCode('');
+    setTimeout(() => setAdminCodeSuccess(false), 5000);
   };
 
   // Zugangscode fuers oeffentliche Zuschuss-Antragsformular (/antrag) setzen
@@ -1151,6 +1212,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <form onSubmit={handleChangePasscode} className="space-y-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
+                    Bisheriger Code
+                  </label>
+                  <input
+                    type="password"
+                    maxLength={5}
+                    inputMode="numeric"
+                    required
+                    value={oldPasscode}
+                    onChange={(e) => setOldPasscode(e.target.value.replace(/\D/g, ''))}
+                    placeholder="•••••"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-center text-lg font-mono font-bold tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#003594]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
                     Neuer 5-stelliger Code
                   </label>
                   <input
@@ -1197,10 +1274,95 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 <button
                   type="submit"
-                  disabled={newPasscode.length !== 5 || confirmPasscode.length !== 5}
+                  disabled={
+                    oldPasscode.length !== 5 ||
+                    newPasscode.length !== 5 ||
+                    confirmPasscode.length !== 5
+                  }
                   className="w-full py-2.5 bg-[#003594] hover:bg-[#00266B] disabled:opacity-50 text-white font-bold rounded-xl shadow-xs transition-all cursor-pointer"
                 >
                   Neuen Code speichern
+                </button>
+              </form>
+
+              {/* Admin-Code: schuetzt die Einstellungen selbst und das
+                  endgueltige Loeschen - seit dem Wegfall des Admin-Flags die
+                  eigentliche Zugriffskontrolle. */}
+              <div className="pt-2 border-t border-slate-100">
+                <h4 className="font-bold text-slate-900 text-sm">Admin-Code ändern</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Dieser Code gibt die Einstellungen frei (dieses Fenster) und das endgültige
+                  Löschen archivierter Beschlüsse. Wer ihn kennt, hat Admin-Rechte - deshalb nur
+                  mit Bestätigung des bisherigen Codes änderbar.
+                </p>
+              </div>
+
+              <form onSubmit={handleChangeAdminCode} className="space-y-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Bisheriger Admin-Code
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={oldAdminCode}
+                    onChange={(e) => setOldAdminCode(e.target.value)}
+                    placeholder="Aktueller Code"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-center text-base font-mono tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#003594]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Neuer Admin-Code</label>
+                  <input
+                    type="password"
+                    required
+                    value={newAdminCode}
+                    onChange={(e) => setNewAdminCode(e.target.value)}
+                    placeholder="Mindestens 5 Zeichen"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-center text-base font-mono tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#003594]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Neuen Admin-Code wiederholen
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={confirmAdminCode}
+                    onChange={(e) => setConfirmAdminCode(e.target.value)}
+                    placeholder="Zur Bestätigung"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-center text-base font-mono tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#003594]"
+                  />
+                </div>
+
+                {adminCodeError && (
+                  <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-semibold flex items-center space-x-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{adminCodeError}</span>
+                  </div>
+                )}
+
+                {adminCodeSuccess && (
+                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-semibold flex items-start space-x-2">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 mt-0.5" />
+                    <span>
+                      Admin-Code geändert. Ab sofort gilt der neue Code für die Einstellungen und
+                      fürs endgültige Löschen - bitte im Vorstand weitergeben.
+                    </span>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={
+                    !oldAdminCode.trim() || !newAdminCode.trim() || !confirmAdminCode.trim()
+                  }
+                  className="w-full py-2.5 bg-[#003594] hover:bg-[#00266B] disabled:opacity-50 text-white font-bold rounded-xl shadow-xs transition-all cursor-pointer"
+                >
+                  Admin-Code speichern
                 </button>
               </form>
 
