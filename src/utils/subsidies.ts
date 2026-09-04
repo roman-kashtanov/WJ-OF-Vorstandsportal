@@ -32,6 +32,27 @@ export const STATUS_LABEL: Record<SubsidyStatus, string> = {
  */
 export const PIPELINE_MANAGED_STATUSES: SubsidyStatus[] = ['im_beschluss', 'zur_zahlung_freigegeben'];
 
+export interface SubsidyStage {
+  key: string;
+  label: string;
+  statuses: SubsidyStatus[];
+}
+
+/**
+ * Fasst die sieben granularen Status zu den Lebenszyklus-Phasen zusammen,
+ * die der Vorstand als Reiter in SubsidiesView.tsx unterscheiden will:
+ * Offen -> Geprueft -> Im Beschluss -> Zur Zahlung freigegeben -> Erledigt.
+ * "nicht_stattgefunden" zaehlt zu "Offen" (noch nicht pruefbar), "abgelehnt"
+ * zu "Erledigt" (kein weiterer Schritt noetig).
+ */
+export const SUBSIDY_STAGES: SubsidyStage[] = [
+  { key: 'offen', label: 'Offen', statuses: ['beantragt', 'nicht_stattgefunden'] },
+  { key: 'geprueft', label: 'Geprüft', statuses: ['bestaetigt'] },
+  { key: 'im_beschluss', label: 'Im Beschluss', statuses: ['im_beschluss'] },
+  { key: 'zur_zahlung', label: 'Zur Zahlung freigegeben', statuses: ['zur_zahlung_freigegeben'] },
+  { key: 'erledigt', label: 'Erledigt', statuses: ['bezahlt', 'abgelehnt'] },
+];
+
 export const PERSON_TYPE_LABEL: Record<SubsidyPerson['type'], string> = {
   mitglied: 'Mitglied',
   foerdermitglied: 'Fördermitglied',

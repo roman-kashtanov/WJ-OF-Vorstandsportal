@@ -5,6 +5,7 @@ import {
   STATUS_LABEL,
   PERSON_TYPE_LABEL,
   PIPELINE_MANAGED_STATUSES,
+  SUBSIDY_STAGES,
   budgetOverview,
   isPayable,
 } from '../utils/subsidies';
@@ -83,7 +84,7 @@ export const SubsidiesView: React.FC<Props> = ({
   const [showFilters, setShowFilters] = useState(false);
   const [filterPerson, setFilterPerson] = useState('all');
   const [filterType, setFilterType] = useState<'all' | SubsidyPersonType>('all');
-  const [filterStatus, setFilterStatus] = useState<'all' | SubsidyStatus>('all');
+  const [activeStage, setActiveStage] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<PreviewableFile | null>(null);
@@ -142,6 +143,23 @@ export const SubsidiesView: React.FC<Props> = ({
     [people]
   );
 
+  const stageOf = useMemo(() => {
+    const map = new Map<SubsidyStatus, string>();
+    SUBSIDY_STAGES.forEach((stage) => stage.statuses.forEach((st) => map.set(st, stage.key)));
+    return map;
+  }, []);
+
+  const stageCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    subsidies
+      .filter((s) => s.year === year)
+      .forEach((s) => {
+        const key = stageOf.get(s.status);
+        if (key) counts[key] = (counts[key] || 0) + 1;
+      });
+    return counts;
+  }, [subsidies, year, stageOf]);
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     return subsidies
@@ -150,7 +168,7 @@ export const SubsidiesView: React.FC<Props> = ({
       .filter(
         (s) => filterType === 'all' || personById[s.personId]?.type === filterType
       )
-      .filter((s) => filterStatus === 'all' || s.status === filterStatus)
+      .filter((s) => activeStage === 'all' || stageOf.get(s.status) === activeStage)
       .filter(
         (s) =>
           !q ||
@@ -159,7 +177,7 @@ export const SubsidiesView: React.FC<Props> = ({
           (s.note || '').toLowerCase().includes(q)
       )
       .sort((a, b) => (b.appliedAt || '').localeCompare(a.appliedAt || ''));
-  }, [subsidies, year, filterPerson, filterType, filterStatus, search, personById]);
+  }, [subsidies, year, filterPerson, filterType, activeStage, stageOf, search, personById]);
 
   const overview = budgetOverview(subsidies, year, limits);
   const payable = subsidies.filter((s) => s.year === year && isPayable(s));
@@ -169,8 +187,7 @@ export const SubsidiesView: React.FC<Props> = ({
   );
   const filteredSum = filtered.reduce((sum, s) => sum + s.amount, 0);
 
-  const hasActiveFilters =
-    filterPerson !== 'all' || filterType !== 'all' || filterStatus !== 'all' || !!search.trim();
+  const hasActiveFilters = filterPerson !== 'all' || filterType !== 'all' || !!search.trim();
 
   const usedPercent = Math.min(100, (overview.used / overview.total) * 100);
   const paidPercent = Math.min(100, (overview.paid / overview.total) * 100);
@@ -427,6 +444,38 @@ export const SubsidiesView: React.FC<Props> = ({
         </div>
       )}
 
+      {/* Laufbahn-Reiter: Offen -> Geprüft -> Im Beschluss -> Zur Zahlung
+          freigegeben -> Erledigt. Der Übergang zwischen den Phasen passiert
+          bis auf "Geprüft setzen" automatisch (siehe useSubsidies.ts) - die
+          Reiter dienen nur der Übersicht, nicht der manuellen Steuerung. */}
+      <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+        <button
+          type="button"
+          onClick={() => setActiveStage('all')}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors cursor-pointer shrink-0 ${
+            activeStage === 'all'
+              ? 'bg-[#003594] text-white'
+              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          Alle ({subsidies.filter((s) => s.year === year).length})
+        </button>
+        {SUBSIDY_STAGES.map((stage) => (
+          <button
+            key={stage.key}
+            type="button"
+            onClick={() => setActiveStage(stage.key)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors cursor-pointer shrink-0 ${
+              activeStage === stage.key
+                ? 'bg-[#003594] text-white'
+                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            {stage.label} ({stageCounts[stage.key] || 0})
+          </button>
+        ))}
+      </div>
+
       {/* Filter */}
       <div className="flex justify-end gap-2">
         <input
@@ -481,7 +530,7 @@ export const SubsidiesView: React.FC<Props> = ({
             placeholder="Name, Veranstaltung oder Notiz suchen…"
             className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-xs focus:outline-none focus:ring-2 focus:ring-[#003594]"
           />
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <select
               value={filterPerson}
               onChange={(e) => setFilterPerson(e.target.value)}
@@ -509,19 +558,6 @@ export const SubsidiesView: React.FC<Props> = ({
                 </option>
               ))}
             </select>
-
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value as any)}
-              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#003594]"
-            >
-              <option value="all">Alle Stände</option>
-              {(Object.keys(STATUS_LABEL) as SubsidyStatus[]).map((s) => (
-                <option key={s} value={s}>
-                  {STATUS_LABEL[s]}
-                </option>
-              ))}
-            </select>
           </div>
 
           {hasActiveFilters && (
@@ -530,7 +566,6 @@ export const SubsidiesView: React.FC<Props> = ({
               onClick={() => {
                 setFilterPerson('all');
                 setFilterType('all');
-                setFilterStatus('all');
                 setSearch('');
               }}
               className="text-[11px] font-bold text-rose-600 hover:underline cursor-pointer"
@@ -722,6 +757,17 @@ export const SubsidiesView: React.FC<Props> = ({
                     <HistoryIcon className="w-3 h-3" strokeWidth={1.75} />
                     Historie anzeigen
                   </button>
+
+                  {s.status === 'beantragt' && (
+                    <button
+                      type="button"
+                      onClick={() => onUpdateStatus(s.id, 'bestaetigt')}
+                      className="w-full py-2 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[#003594] font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <Check className="w-3.5 h-3.5" strokeWidth={2} />
+                      Als geprüft markieren
+                    </button>
+                  )}
 
                   <div className="flex flex-wrap items-center gap-2 pt-1">
                     <select
