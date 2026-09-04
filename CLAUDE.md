@@ -1174,3 +1174,67 @@ schwer"). Nicht mehr benoetigte Props (`upcomingMeeting`/
 das Rendering zu unterdruecken. Die zentrale `nextMeeting`-Berechnung in
 `useMeetings.ts` (siehe v3.10.0) bleibt unveraendert bestehen und wird
 weiterhin fuer Dashboard und `QuickAgendaModal` verwendet.
+
+## Drei Live-Fehler behoben: Modal-Hoehe auf Mobilgeraeten, doppeltes Mitglied/Admin-Bug, fehlende Zuschuss-Benachrichtigung (v3.11.0)
+
+Direktes Nutzer-Feedback nach echter Nutzung, drei unabhaengige Fixes:
+
+**1. Modal-Kopfzeile/Schliessen-Kreuz auf iPhone/Android teils nicht
+klickbar.** Alle 19 Modals der App nutzten `max-h-[NNvh]` fuer ihre
+maximale Hoehe. `vh` reagiert nicht auf die dynamisch ein-/ausblendende
+Adressleiste in mobilem Safari/Chrome - je nach ihrem Zustand konnte der
+Kopfbereich samt Kreuz ausserhalb des tatsaechlich sichtbaren Bereichs
+liegen. Global auf `dvh` (dynamic viewport height) umgestellt
+(`sed -i '' -E 's/max-h-\[([0-9]+)vh\]/max-h-[\1dvh]/g' src/components/*.tsx`),
+betrifft alle Modals einheitlich. Lokal nur in einem Fenster mit fester
+Groesse pruefbar, nicht mit der echten, sich dynamisch aendernden
+Adressleiste eines realen Telefons - `dvh` ist die dafuer vorgesehene,
+gut unterstuetzte CSS-Loesung.
+
+**2. Neue Person doppelt angelegt + versehentliche Admin-Rechte beim
+ersten Google-Login.** Ursache: `AuthModal.tsx::handleGoogleUser` prüfte
+sowohl "hat diese Person schon ein Profil" als auch "ist das der
+allererste Zugang ueberhaupt" gegen den LOKALEN React-`members`-State
+statt gegen Firestore. Auf einem neuen Geraet (kein localStorage) ist
+dieser State beim ersten Login immer leer, egal wie viele Mitglieder
+tatsaechlich schon existieren - ein vom Admin bereits angelegtes
+Mitglied wurde dadurch nicht gefunden (→ Dopplung unter neuer ID) und
+`isAdmin: members.length === 0` wertete faelschlich "true" (→
+versehentliche Admin-Vergabe). Fix: neue
+`FirebaseSync.getMembersOnce()` fragt die Mitgliederliste autoritativ
+direkt aus Firestore ab (zu diesem Zeitpunkt bereits erlaubt, da die
+Allowlist-Freigabe schon existiert, siehe `firestore.rules::isBoardMember()`)
+statt den lokalen State zu verwenden. Schlaegt die Abfrage fehl, bricht
+der Login mit klarer Fehlermeldung ab statt stillschweigend mit einer
+leeren Liste weiterzumachen (das wuerde denselben Fehler reproduzieren).
+**Die bereits entstandene Dopplung aus dem gemeldeten Vorfall muss der
+Nutzer einmalig manuell in den Mitgliedseinstellungen bereinigen** - der
+Fix verhindert nur kuenftige Vorkommnisse.
+
+**3. Zuschuss-Auszahlungs-Workflow "passiert nicht automatisch".**
+Untersucht und festgestellt: der komplette Ablauf (Zuschuss auf
+"Geprueft" setzen → `BundleSubsidiesModal.tsx` erstellt einen
+Sammelbeschluss → bei Annahme (auch bei Teilabstimmung, sobald die
+Mehrheit steht) schaltet ein bestehender `useEffect` in
+`useSubsidies.ts` die gebuendelten Zuschuesse automatisch auf
+`zur_zahlung_freigegeben` → `SubsidiesView.tsx` zeigt dann automatisch
+eine Karte "Ueberweisungsdatei erzeugen" → `SubsidyPayoutModal.tsx`
+erzeugt eine SEPA-Datei (`utils/sepa.ts`, pain.001.001.03)) existierte
+bereits vollstaendig und lief automatisch. Die tatsaechliche Luecke:
+keine Benachrichtigung beim letzten Schritt - man musste zufaellig in
+den Zuschuesse-Tab schauen, um die neue Karte zu bemerken. Fix: derselbe
+bestehende Effekt loest jetzt zusaetzlich eine In-App-/Push-
+Benachrichtigung aus ("💶 Zuschuesse zur Auszahlung bereit"), gebuendelt
+pro Sammelbeschluss statt einzeln pro Zuschuss (`releasedByResolution`-
+Map). Debugging-Erkenntnis: die Betrags-/Anzahl-Berechnung fuer die
+Benachrichtigung darf NICHT innerhalb des `setSubsidies(prev => ...)`-
+Updaters befuellt und direkt danach synchron ausgelesen werden - React
+garantiert nicht, dass der Updater synchron mit dem `setSubsidies()`-
+Aufruf laeuft (fuehrte zu einer leeren Map beim Auslesen trotz korrekt
+durchgefuehrter State-Aenderung); die Berechnung laeuft jetzt VOR dem
+`setSubsidies()`-Aufruf auf Basis von `subsidies` aus dem Hook-State.
+Live getestet (Testdaten manipuliert, Beschluss auf "angenommen"
+gebracht): Zuschuss-Status-Wechsel, Benachrichtigung und die
+Ueberweisungsdatei-Karte erscheinen korrekt; Benachrichtigung feuert im
+lokalen Dev-Modus zweimal (bekannte, bereits dokumentierte React-
+StrictMode-Eigenheit, nicht in Produktion).
