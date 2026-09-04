@@ -841,3 +841,30 @@ export async function resendSubsidyProofLink(input: {
     return { ok: false, error: 'Verbindung fehlgeschlagen. Bitte erneut versuchen.' };
   }
 }
+
+/**
+ * Vom Vorstand aus einem Beschluss heraus ausgeloest: verschickt einen
+ * Link ohne Login, mit dem die angegebene Person eine Rechnung/einen
+ * Beleg zu diesem Beschluss nachreichen kann (siehe api/invoice.ts
+ * handleRequestInvoiceAttachmentLink).
+ */
+export async function requestInvoiceAttachmentLink(input: {
+  resolutionId: string;
+  recipientEmail: string;
+  recipientName?: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const res = await fetch('/api/invoice/request-link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { ok: false, error: data?.error || 'Der Link konnte nicht versendet werden.' };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, error: 'Verbindung fehlgeschlagen. Bitte erneut versuchen.' };
+  }
+}

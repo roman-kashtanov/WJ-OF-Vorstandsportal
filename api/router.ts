@@ -10,6 +10,11 @@ import {
   handleResendProofLink,
   handleGetSubsidyCatalogue,
 } from './subsidy';
+import {
+  handleRequestInvoiceAttachmentLink,
+  handleGetInvoiceAttachmentStatus,
+  handleSubmitInvoiceAttachment,
+} from './invoice';
 
 export interface ApiResponse {
   status: number;
@@ -116,6 +121,22 @@ export async function handleApiRequest(
 
   if (method === 'POST' && route === 'subsidy/resend-proof-link') {
     const result = await handleResendProofLink(payload || {}, origin || '/');
+    return { status: result.status, body: result.body };
+  }
+
+  if (method === 'POST' && route === 'invoice/request-link') {
+    const result = await handleRequestInvoiceAttachmentLink(payload || {}, origin || '/');
+    return { status: result.status, body: result.body };
+  }
+
+  if (method === 'GET' && route === 'invoice/attachment') {
+    const token = query?.get('t') || '';
+    const result = await handleGetInvoiceAttachmentStatus(token);
+    return { status: result.status, body: result.body };
+  }
+
+  if (method === 'POST' && route === 'invoice/attachment') {
+    const result = await handleSubmitInvoiceAttachment(payload || {});
     return { status: result.status, body: result.body };
   }
 

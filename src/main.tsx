@@ -42,6 +42,14 @@ if (path === '/antrag') {
       </StrictMode>
     );
   });
+} else if (path === '/beleg') {
+  import('./public/InvoiceAttachmentUploadPage').then(({ InvoiceAttachmentUploadPage }) => {
+    root.render(
+      <StrictMode>
+        <InvoiceAttachmentUploadPage />
+      </StrictMode>
+    );
+  });
 } else {
   import('./App').then(({ default: App }) => {
     root.render(

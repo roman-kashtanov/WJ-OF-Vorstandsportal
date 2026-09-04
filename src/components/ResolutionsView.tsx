@@ -62,6 +62,7 @@ import { downloadAttachment, getAttachmentType, formatFileSize } from '../utils/
 import { prepareFileForStorage, formatBytes } from '../utils/fileStorage';
 import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
 import { RevisionHistory } from './RevisionHistory';
+import { RequestInvoiceLinkModal } from './RequestInvoiceLinkModal';
 
 interface ResolutionsViewProps {
   currentMember: BoardMember;
@@ -123,6 +124,8 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
   securitySettings,
 }) => {
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
+  const [isRequestInvoiceLinkOpen, setIsRequestInvoiceLinkOpen] = useState(false);
+  const [requestInvoiceLinkResolutionId, setRequestInvoiceLinkResolutionId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterYear, setFilterYear] = useState<string>('all');
   const [filterMonth, setFilterMonth] = useState<string>('all');
@@ -1282,6 +1285,18 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                         )}
                       </span>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRequestInvoiceLinkResolutionId(activeResolution.id);
+                        setIsRequestInvoiceLinkOpen(true);
+                      }}
+                      className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-[#003594] border border-blue-200 rounded-lg text-xs font-bold flex items-center space-x-1 transition-colors cursor-pointer"
+                      title="Link ohne Login verschicken, um eine Rechnung nachzureichen"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Beleg-Link senden</span>
+                    </button>
                     {onOpenNewInvoiceWithResolution && (
                       <button
                         type="button"
@@ -1594,6 +1609,16 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
       )}
 
       <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
+
+      <RequestInvoiceLinkModal
+        isOpen={isRequestInvoiceLinkOpen}
+        onClose={() => setIsRequestInvoiceLinkOpen(false)}
+        resolutionId={requestInvoiceLinkResolutionId}
+        resolutionLabel={
+          resolutions.find((r) => r.id === requestInvoiceLinkResolutionId)?.number || ''
+        }
+        members={members}
+      />
     </div>
   );
 };
