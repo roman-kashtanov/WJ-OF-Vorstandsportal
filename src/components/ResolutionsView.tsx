@@ -61,7 +61,7 @@ import { verifyDeleteCode } from '../utils/security';
 import { downloadAttachment, getAttachmentType, formatFileSize } from '../utils/fileHelpers';
 import { prepareFileForStorage, formatBytes } from '../utils/fileStorage';
 import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
-import { RevisionHistory } from './RevisionHistory';
+import { RevisionHistoryModal } from './RevisionHistoryModal';
 import { RequestInvoiceLinkModal } from './RequestInvoiceLinkModal';
 
 interface ResolutionsViewProps {
@@ -126,6 +126,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
   const [isRequestInvoiceLinkOpen, setIsRequestInvoiceLinkOpen] = useState(false);
   const [requestInvoiceLinkResolutionId, setRequestInvoiceLinkResolutionId] = useState<string | null>(null);
+  const [historyModalResolutionId, setHistoryModalResolutionId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterYear, setFilterYear] = useState<string>('all');
   const [filterMonth, setFilterMonth] = useState<string>('all');
@@ -1426,18 +1427,21 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                 )}
               </div>
 
-              {/* Revisionshistorie */}
-              <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs">
-                <div className="flex items-center space-x-2 mb-3">
+              {/* Revisionshistorie - auf Wunsch abrufbar statt dauerhaft eingeblendet */}
+              <button
+                type="button"
+                onClick={() => setHistoryModalResolutionId(activeResolution.id)}
+                className="w-full flex items-center justify-between gap-2 bg-white rounded-xl border border-slate-200 p-3.5 shadow-2xs hover:border-slate-300 transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
                   <HistoryIcon className="w-4 h-4 text-slate-500" />
-                  <h4 className="text-xs uppercase font-bold text-slate-700 tracking-wider">
-                    Historie
-                  </h4>
-                </div>
-                <RevisionHistory
-                  entries={auditLog.filter((a) => a.entityType === 'resolution' && a.entityId === activeResolution.id)}
-                />
-              </div>
+                  <span className="text-xs font-bold text-slate-700">Historie anzeigen</span>
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  {auditLog.filter((a) => a.entityType === 'resolution' && a.entityId === activeResolution.id).length}{' '}
+                  Einträge
+                </span>
+              </button>
 
               {/* Kommentare */}
               <div className="space-y-3 pt-2">
@@ -1618,6 +1622,15 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
           resolutions.find((r) => r.id === requestInvoiceLinkResolutionId)?.number || ''
         }
         members={members}
+      />
+
+      <RevisionHistoryModal
+        isOpen={!!historyModalResolutionId}
+        onClose={() => setHistoryModalResolutionId(null)}
+        title={resolutions.find((r) => r.id === historyModalResolutionId)?.number || 'Historie'}
+        entries={auditLog.filter(
+          (a) => a.entityType === 'resolution' && a.entityId === historyModalResolutionId
+        )}
       />
     </div>
   );

@@ -9,7 +9,7 @@ import {
   InvoiceFolder,
   AuditLogEntry
 } from '../types';
-import { RevisionHistory } from './RevisionHistory';
+import { RevisionHistoryModal } from './RevisionHistoryModal';
 import { 
   formatCurrency, 
   formatDate, 
@@ -61,6 +61,14 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
   onUpdateBookkeepingStatus,
   onSelectResolution,
 }) => {
+  const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
+  // Diese Komponente bleibt permanent gemountet (nur `invoice` togglet den
+  // Inhalt) - beim Wechsel auf eine andere/keine Rechnung soll das
+  // Historie-Fenster nicht einfach offen bleiben.
+  React.useEffect(() => {
+    setIsHistoryOpen(false);
+  }, [invoice?.id]);
+
   useBodyScrollLock(!!invoice);
   if (!invoice) return null;
 
@@ -324,17 +332,22 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
             </div>
           </div>
 
-          {/* Revisionshistorie */}
+          {/* Revisionshistorie - auf Wunsch abrufbar statt dauerhaft eingeblendet */}
           <div className="pt-2 border-t border-slate-200">
-            <div className="flex items-center space-x-2 mb-2">
-              <HistoryIcon className="w-4 h-4 text-slate-500" />
-              <h4 className="text-xs uppercase font-bold text-slate-700 tracking-wider">
-                Historie
-              </h4>
-            </div>
-            <RevisionHistory
-              entries={auditLog.filter((a) => a.entityType === 'invoice' && a.entityId === invoice.id)}
-            />
+            <button
+              type="button"
+              onClick={() => setIsHistoryOpen(true)}
+              className="w-full flex items-center justify-between gap-2 bg-slate-50 rounded-xl border border-slate-200 p-3 hover:border-slate-300 transition-colors cursor-pointer"
+            >
+              <span className="flex items-center gap-2">
+                <HistoryIcon className="w-4 h-4 text-slate-500" />
+                <span className="text-xs font-bold text-slate-700">Historie anzeigen</span>
+              </span>
+              <span className="text-[11px] text-slate-400">
+                {auditLog.filter((a) => a.entityType === 'invoice' && a.entityId === invoice.id).length}{' '}
+                Einträge
+              </span>
+            </button>
           </div>
         </div>
 
@@ -348,6 +361,13 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
           </button>
         </div>
       </div>
+
+      <RevisionHistoryModal
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        title={invoice.invoiceNumber}
+        entries={auditLog.filter((a) => a.entityType === 'invoice' && a.entityId === invoice.id)}
+      />
     </div>
   );
 };

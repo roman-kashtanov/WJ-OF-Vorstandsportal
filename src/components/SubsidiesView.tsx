@@ -12,7 +12,7 @@ import { CATEGORY_LABEL, SubsidyLimits } from '../data/subsidyCatalogue';
 import { formatIban } from '../utils/sepa';
 import { EmailService, resendSubsidyProofLink } from '../utils/emailService';
 import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
-import { RevisionHistory } from './RevisionHistory';
+import { RevisionHistoryModal } from './RevisionHistoryModal';
 import {
   HandCoins,
   Plus,
@@ -32,6 +32,7 @@ import {
   CalendarClock,
   Send,
   ListTree,
+  History as HistoryIcon,
 } from 'lucide-react';
 
 interface Props {
@@ -88,6 +89,7 @@ export const SubsidiesView: React.FC<Props> = ({
   const [previewFile, setPreviewFile] = useState<PreviewableFile | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [resendState, setResendState] = useState<Record<string, 'busy' | 'done' | 'error'>>({});
+  const [historySubsidyId, setHistorySubsidyId] = useState<string | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const [importMessage, setImportMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -709,13 +711,17 @@ export const SubsidiesView: React.FC<Props> = ({
 
                   {s.note && <div className="text-slate-600">{s.note}</div>}
 
-                  <div className="pt-1">
-                    <div className="font-semibold text-slate-500 mb-1">Historie</div>
-                    <RevisionHistory
-                      entries={auditLog.filter((a) => a.entityType === 'subsidy' && a.entityId === s.id)}
-                      compact
-                    />
-                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setHistorySubsidyId(s.id);
+                    }}
+                    className="text-[11px] font-bold text-[#003594] hover:underline inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <HistoryIcon className="w-3 h-3" strokeWidth={1.75} />
+                    Historie anzeigen
+                  </button>
 
                   <div className="flex flex-wrap items-center gap-2 pt-1">
                     <select
@@ -760,6 +766,16 @@ export const SubsidiesView: React.FC<Props> = ({
       </div>
 
       <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
+
+      <RevisionHistoryModal
+        isOpen={!!historySubsidyId}
+        onClose={() => setHistorySubsidyId(null)}
+        title={(() => {
+          const s = subsidies.find((x) => x.id === historySubsidyId);
+          return s ? `${s.personName} – ${s.eventName}` : 'Historie';
+        })()}
+        entries={auditLog.filter((a) => a.entityType === 'subsidy' && a.entityId === historySubsidyId)}
+      />
     </div>
   );
 };
