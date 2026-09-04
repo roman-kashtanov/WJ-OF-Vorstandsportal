@@ -16,8 +16,10 @@ import {
   getOutlookCalendarUrl
 } from '../utils/calendar';
 import { prepareFileForStorage, formatBytes } from '../utils/fileStorage';
+import { scanMeetingProtocol, ScannedResolutionCandidate } from '../utils/meetingScan';
 import { DropzoneFileInput } from './DropzoneFileInput';
 import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
+import { ProtocolScanResultsModal } from './ProtocolScanResultsModal';
 import {
   Calendar as CalendarIcon,
   Video,
@@ -57,6 +59,9 @@ interface MeetingsViewProps {
     field: 'protocolFile' | 'agendaFile',
     file: MeetingAttachment | undefined
   ) => void;
+  onCreateResolution: (
+    data: Omit<Resolution, 'id' | 'votes' | 'comments' | 'linkedInvoiceIds' | 'createdAt'>
+  ) => void;
   onOpenTeamsSettings?: () => void;
   defaultTeamsUrl?: string;
 }
@@ -71,6 +76,7 @@ export const MeetingsView: React.FC<MeetingsViewProps> = ({
   onSelectResolution,
   onUpdateMeetingTeamsLink,
   onUpdateMeetingFile,
+  onCreateResolution,
   onOpenTeamsSettings,
   defaultTeamsUrl,
 }) => {
@@ -81,6 +87,9 @@ export const MeetingsView: React.FC<MeetingsViewProps> = ({
   const [fileBusy, setFileBusy] = useState<'protocolFile' | 'agendaFile' | null>(null);
   const [fileError, setFileError] = useState<{ field: 'protocolFile' | 'agendaFile'; message: string } | null>(null);
   const [previewFile, setPreviewFile] = useState<PreviewableFile | null>(null);
+  const [isScanning, setIsScanning] = useState<boolean>(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [scanCandidates, setScanCandidates] = useState<ScannedResolutionCandidate[] | null>(null);
 
   const activeMeeting = meetings.find((m) => m.id === selectedMeetingId) || meetings[0];
 
@@ -120,6 +129,22 @@ export const MeetingsView: React.FC<MeetingsViewProps> = ({
     } finally {
       setFileBusy(null);
     }
+  };
+
+  const handleScanProtocol = async () => {
+    if (!activeMeeting?.protocolFile?.dataUrl) return;
+    setIsScanning(true);
+    setScanError(null);
+    const result = await scanMeetingProtocol({
+      meetingId: activeMeeting.id,
+      fileDataUrl: activeMeeting.protocolFile.dataUrl,
+    });
+    setIsScanning(false);
+    if (result.ok === false) {
+      setScanError(result.error);
+      return;
+    }
+    setScanCandidates(result.candidates);
   };
 
   // Get current member attendee status for active meeting
@@ -438,23 +463,39 @@ export const MeetingsView: React.FC<MeetingsViewProps> = ({
                       <p className="text-[11px] text-slate-400">{hint}</p>
 
                       {file ? (
-                        <div className="flex items-center justify-between gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
-                          <button
-                            type="button"
-                            onClick={() => setPreviewFile(file)}
-                            className="truncate text-left text-[#003594] font-semibold text-xs hover:underline cursor-pointer flex items-center gap-1"
-                          >
-                            <Eye className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
-                            <span className="truncate">{file.name}</span>
-                            <span className="text-slate-400 font-normal shrink-0">({file.size})</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onUpdateMeetingFile(activeMeeting.id, field, undefined)}
-                            className="p-1 text-slate-400 hover:text-rose-600 shrink-0 cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
-                          </button>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewFile(file)}
+                              className="truncate text-left text-[#003594] font-semibold text-xs hover:underline cursor-pointer flex items-center gap-1"
+                            >
+                              <Eye className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
+                              <span className="truncate">{file.name}</span>
+                              <span className="text-slate-400 font-normal shrink-0">({file.size})</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onUpdateMeetingFile(activeMeeting.id, field, undefined)}
+                              className="p-1 text-slate-400 hover:text-rose-600 shrink-0 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                            </button>
+                          </div>
+                          {field === 'protocolFile' && (
+                            <button
+                              type="button"
+                              onClick={handleScanProtocol}
+                              disabled={isScanning}
+                              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#003594]/5 hover:bg-[#003594]/10 disabled:opacity-50 text-[#003594] font-bold text-[11px] border border-[#003594]/20 transition-all cursor-pointer"
+                            >
+                              <Sparkles className="w-3.5 h-3.5" strokeWidth={1.75} />
+                              <span>{isScanning ? 'Protokoll wird analysiert…' : 'Beschlüsse erkennen'}</span>
+                            </button>
+                          )}
+                          {field === 'protocolFile' && scanError && (
+                            <p className="text-[11px] font-semibold text-rose-700">{scanError}</p>
+                          )}
                         </div>
                       ) : (
                         <DropzoneFileInput
@@ -605,6 +646,17 @@ export const MeetingsView: React.FC<MeetingsViewProps> = ({
       )}
 
       <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
+
+      <ProtocolScanResultsModal
+        isOpen={scanCandidates !== null}
+        onClose={() => setScanCandidates(null)}
+        candidates={scanCandidates || []}
+        meetingLabel={activeMeeting?.title || ''}
+        currentMember={currentMember}
+        members={members}
+        existingResolutionCount={resolutions.length}
+        onCreateResolution={onCreateResolution}
+      />
     </div>
   );
 };

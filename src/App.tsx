@@ -741,6 +741,7 @@ export default function App() {
             }}
             onUpdateMeetingTeamsLink={handleUpdateMeetingTeamsLink}
             onUpdateMeetingFile={handleUpdateMeetingFile}
+            onCreateResolution={handleCreateResolution}
             onOpenTeamsSettings={() => setIsTeamsSettingsOpen(true)}
             defaultTeamsUrl={defaultTeamsUrl}
           />
