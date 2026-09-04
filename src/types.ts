@@ -215,10 +215,16 @@ export interface MeetingAttendee {
   updatedAt: string;
 }
 
+export type MeetingType =
+  | 'Reguläre Vorstandssitzung'
+  | 'Außerordentliche Sitzung'
+  | 'Klausurtagung'
+  | 'Jour Fixe';
+
 export interface Meeting {
   id: string;
   title: string;
-  type: 'Reguläre Vorstandssitzung' | 'Außerordentliche Sitzung' | 'Klausurtagung' | 'Jour Fixe';
+  type: MeetingType;
   date: string; // YYYY-MM-DD
   startTime: string; // HH:mm
   endTime: string; // HH:mm
@@ -229,6 +235,69 @@ export interface Meeting {
   attendees: MeetingAttendee[];
   protocol?: string;
   isUpcoming: boolean;
+  /** Gehört dieser Termin zu einer wiederkehrenden Serie? (MeetingSeries.id) */
+  seriesId?: string;
+  /** Hochgeladenes Sitzungsprotokoll (Datei) - unabhängig vom Altfeld `protocol`. */
+  protocolFile?: MeetingAttachment;
+  /** Hochgeladene Agenda-Datei - zusätzlich zur strukturierten `agenda`-TOP-Liste. */
+  agendaFile?: MeetingAttachment;
+}
+
+export interface MeetingAttachment {
+  id: string;
+  name: string;
+  size: string;
+  mimeType?: string;
+  dataUrl?: string;
+  uploadedAt: string;
+}
+
+export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
+
+/**
+ * Wiederholungsregel für Termin-Serien (Outlook-artig). Je nach
+ * `frequency` sind nur die passenden Zusatzfelder relevant - siehe
+ * src/utils/recurrence.ts für die Auswertung.
+ */
+export interface RecurrenceRule {
+  frequency: RecurrenceFrequency;
+  /** "alle X Tage/Wochen/Monate/Jahre" */
+  interval: number;
+  /** Nur bei 'weekly': welche Wochentage (0=So..6=Sa). */
+  weekdays?: number[];
+  /** Nur bei 'monthly'/'yearly': fester Tag im Monat, oder Nter Wochentag. */
+  monthlyMode?: 'dayOfMonth' | 'weekday';
+  /** 1-31, bei monthlyMode='dayOfMonth'. */
+  dayOfMonth?: number;
+  /** 1.-4. Wochentag im Monat, oder -1 für den letzten. */
+  weekdayOrdinal?: 1 | 2 | 3 | 4 | -1;
+  /** 0=So..6=Sa, bei monthlyMode='weekday'. */
+  weekday?: number;
+  /** 1-12, nur bei 'yearly'. */
+  month?: number;
+  endMode: 'never' | 'onDate' | 'afterCount';
+  endDate?: string;
+  count?: number;
+}
+
+/**
+ * Vorlage für eine wiederkehrende Termin-Serie. Beim Anlegen/Ändern
+ * werden daraus konkrete `Meeting`-Datensätze generiert (`seriesId`
+ * gesetzt) - jeder danach unabhängig editierbar, siehe useMeetings.ts.
+ */
+export interface MeetingSeries {
+  id: string;
+  title: string;
+  type: MeetingType;
+  startTime: string;
+  endTime: string;
+  location: string;
+  teamsUrl: string;
+  description: string;
+  recurrence: RecurrenceRule;
+  /** Anker-Datum der Serie (erster Termin), YYYY-MM-DD. */
+  seriesStartDate: string;
+  createdAt: string;
 }
 
 export type ActiveTab = 'dashboard' | 'resolutions' | 'invoices' | 'meetings' | 'subsidies' | 'email-center' | 'storage-guide';

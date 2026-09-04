@@ -22,7 +22,8 @@ import {
   EmailServerConfig,
   AppVersionConfig,
   InvoiceFolder,
-  AuditLogEntry
+  AuditLogEntry,
+  MeetingSeries
 } from '../types';
 import { SubsidyCatalogueSettings } from '../data/subsidyCatalogue';
 
@@ -312,6 +313,45 @@ export const FirebaseSync = {
       updateStatus({ isSyncing: false, lastSyncedAt: new Date().toISOString(), isConnected: true, error: null });
     } catch (err: any) {
       console.warn('Failed to delete meeting from Firebase:', err.message);
+      updateStatus({ isSyncing: false, error: err.message });
+    }
+  },
+
+  // Listen to MeetingSeries collection in realtime (Wiederholungsregeln)
+  subscribeMeetingSeries(callback: (series: MeetingSeries[]) => void) {
+    try {
+      return onSnapshot(
+        collection(db, 'meetingSeries'),
+        (snapshot) => {
+          const list: MeetingSeries[] = snapshot.docs.map((docSnap) => docSnap.data() as MeetingSeries);
+          list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+          callback(list);
+        },
+        (err) => console.warn('Firebase MeetingSeries subscription warning:', err.message)
+      );
+    } catch (e) {
+      return () => {};
+    }
+  },
+
+  async saveMeetingSeries(series: MeetingSeries) {
+    try {
+      updateStatus({ isSyncing: true });
+      await setDoc(doc(db, 'meetingSeries', series.id), cleanData(series), { merge: true });
+      updateStatus({ isSyncing: false, lastSyncedAt: new Date().toISOString(), isConnected: true, error: null });
+    } catch (err: any) {
+      console.warn('Failed to save meeting series to Firebase:', err.message);
+      updateStatus({ isSyncing: false, error: err.message });
+    }
+  },
+
+  async deleteMeetingSeries(seriesId: string) {
+    try {
+      updateStatus({ isSyncing: true });
+      await deleteDoc(doc(db, 'meetingSeries', seriesId));
+      updateStatus({ isSyncing: false, lastSyncedAt: new Date().toISOString(), isConnected: true, error: null });
+    } catch (err: any) {
+      console.warn('Failed to delete meeting series from Firebase:', err.message);
       updateStatus({ isSyncing: false, error: err.message });
     }
   },

@@ -11,7 +11,8 @@ import {
   InAppNotification,
   NotificationSettings,
   EmailServerConfig,
-  AuditLogEntry
+  AuditLogEntry,
+  MeetingSeries
 } from '../types';
 import { INITIAL_BOARD_MEMBERS, INITIAL_RESOLUTIONS, INITIAL_INVOICES, INITIAL_INVOICE_FOLDERS, INITIAL_MEETINGS, INITIAL_SECURITY_SETTINGS } from '../data/initialData';
 import { normalizeSecuritySettings } from './security';
@@ -54,6 +55,7 @@ const STORAGE_KEYS = {
   INVOICES: 'wj_offenbach_invoices_v1',
   INVOICE_FOLDERS: 'wj_offenbach_invoice_folders_v1',
   MEETINGS: 'wj_offenbach_meetings_v1',
+  MEETING_SERIES: 'wj_offenbach_meeting_series_v1',
   SECURITY: 'wj_offenbach_security_v1',
   AUTH_SESSION: 'wj_offenbach_auth_session_v1',
   EMAIL_LOGS: 'wj_offenbach_email_logs_v1',
@@ -260,6 +262,23 @@ export const AppStorage = {
       localStorage.setItem(STORAGE_KEYS.MEETINGS, JSON.stringify(meetings));
     } catch (e) {
       console.error('Error saving meetings', e);
+    }
+  },
+
+  getMeetingSeries(): MeetingSeries[] {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.MEETING_SERIES);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  saveMeetingSeriesList(series: MeetingSeries[]) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.MEETING_SERIES, JSON.stringify(series));
+    } catch (e) {
+      console.error('Error saving meeting series', e);
     }
   },
 
