@@ -792,3 +792,93 @@ Live im Browser getestet (Katalog-Editor: Obergrenzen ändern inkl.
 Default-Fallback). Die E-Mail-Textbausteine selbst konnten wie bisher
 nicht live verschickt werden (kein SMTP/Resend lokal), nur durch
 Code-Lesen verifiziert.
+
+## Benachrichtigungen erweitert + Revisionshistorie + Beleg-Nachreichelink (v3.7.0)
+
+Drei zusammenhängende Ergänzungen, alle motiviert durch dieselbe Lücke:
+Vorgänge außerhalb der eingeloggten App (öffentliche Formulare,
+E-Mail-Links) hinterließen bisher keine sichtbare Spur für den Vorstand.
+
+**Zwei neue, einfache Firestore-Collections** (kein Regel-Update nötig -
+die bestehende Catch-all-Regel in `firestore.rules` deckt jede neue
+Collection automatisch ab):
+- `notifications/{id}` - servergeschrieben, clientseitig live abonniert
+  (`FirebaseSync.subscribeNotifications`, Muster wie `subscribeSubsidies`).
+  In `App.tsx`s zentraler Subscribe-`useEffect` werden nur **neue** IDs
+  additiv in den bestehenden `notifications`-State gemergt (nicht die
+  ganze Liste ersetzt), damit lokale `isRead`-Änderungen erhalten bleiben.
+  Bewusst **kein** Push dafür - diese Benachrichtigungen laufen nie über
+  `addInAppAndPushNotification` (das würde auch pushen), sondern
+  ausschließlich über diesen Merge-Pfad.
+- `auditLog/{id}` (`AuditLogEntry`, `src/types.ts`) - die Revisionshistorie:
+  kurze, lesbare Ereignisse ("Status auf 'Geprüft' gesetzt", "Anna stimmte:
+  Ja") statt vollständiger Feld-Diffs. Neuer `src/hooks/useAuditLog.ts`
+  (Muster wie `useNotifications.ts`), `addAuditLogEntry` wird - genau wie
+  `addInAppAndPushNotification` - als Parameter in `useResolutions.ts`,
+  `useInvoices.ts`, `useSubsidies.ts` hereingereicht und dort an jeder
+  wichtigen Mutation aufgerufen. Bewusst **kein** Eintrag beim endgültigen
+  Löschen (der Datensatz ist danach weg, der Eintrag wäre verwaist).
+
+**Serverseitig** (`api/notify.ts`, neu, gemeinsam genutzt von `api/subsidy.ts`,
+`api/vote.ts`, `api/invoice.ts`): `writeNotification`/`writeAuditLogEntry`
+schreiben per `FirestoreAdmin.patchDocument` in beide Collections - bei
+jedem öffentlich eingereichten Zuschuss-Antrag, jedem über den
+Nachweis-Link hochgeladenen Nachweis, jeder per E-Mail-Link abgegebenen
+Stimme und jedem über den neuen Beleg-Link eingereichten Beleg.
+
+**Neue `src/components/RevisionHistory.tsx`** (reine Anzeige, Aufrufer
+filtert `entries` nach `entityId`) - eingebunden bei Beschlüssen
+(`ResolutionsView.tsx`), Rechnungen (`InvoiceDetailModal.tsx`) und
+Zuschüssen (`SubsidiesView.tsx`, in der schon bestehenden aufklappbaren
+Zeile).
+
+**Einstellungen → neuer 6. Tab „Historie"** (`SettingsModal.tsx`):
+gesperrt hinter dem **bereits bestehenden Löschcode**
+(`verifyDeleteCode`/`deleteCodeHash`, Standard `1122334455` - derselbe
+Code wie beim endgültigen Löschen archivierter Beschlüsse in
+`ResolutionsView.tsx`, **nicht** der normale App-Zugangscode). Zeigt alle
+Beschlüsse, aufklappbar mit vollständiger Abstimmungsübersicht (direkt
+aus `Resolution.votes`, kein neuer Speicher) und der zugehörigen
+Revisionshistorie.
+
+**Neuer Link-Flow `/beleg?t=<token>`** (`api/invoiceAttachmentToken.ts`,
+Kopie von `subsidyProofToken.ts` mit eigenem Secret
+`INVOICE_ATTACHMENT_LINK_SECRET`; `api/invoice.ts`;
+`src/public/InvoiceAttachmentUploadPage.tsx`, Pfad-Weiche in `main.tsx`):
+der Vorstand verschickt aus einem Beschluss heraus (Button "Beleg-Link
+senden" in `ResolutionsView.tsx`, neues `RequestInvoiceLinkModal.tsx` -
+Empfänger wählbar aus den Mitgliedern **oder** frei per E-Mail) einen
+Link ohne Login. Anders als beim Zuschuss-Nachweis gibt es **kein**
+"locked"-Konzept - ein Beschluss darf beliebig viele Rechnungen sammeln.
+Die eingereichte Datei wird ein vollwertiger `Invoice`-Datensatz
+(gleiche Feldbefüllung wie `useInvoices.ts::handleCreateInvoice`),
+verknüpft mit dem Beschluss (`linkedInvoiceIds`) UND automatisch in der
+normalen Belege-Übersicht sichtbar (beide lesen aus derselben
+`invoices`-Collection) - Nutzeranforderung: "Rechnungen die separat nur
+zum Beschluss angehängt sind, müssen auch bei Rechnungsübersicht
+angezeigt werden."
+
+**Zwei Fallstricke, live beim Testen entdeckt:**
+- **Neue Backend-Dateien brauchen einen Dev-Server-Neustart.** Der lokale
+  `server.ts`/tsx-Watch-Prozess erkennt Aenderungen an bereits geladenen
+  Dateien sofort, aber neue Dateien (`api/notify.ts`, `api/invoice.ts`,
+  `api/invoiceAttachmentToken.ts`), die von `api/router.ts` neu importiert
+  werden, erst nach einem manuellen Neustart (`preview_stop`+`preview_start`)
+  - vorher liefert die neue Route einen irreführenden 404 "Unbekannter
+  Endpunkt", obwohl der Code korrekt ist.
+- **React 18 StrictMode verdoppelt Side-Effects in `setState`-Updatern im
+  Dev-Server** (nicht im Produktions-Build): Ein Muster wie
+  `setResolutions((prev) => prev.map((r) => { FirebaseSync.saveX(...); return r; }))`
+  lässt den Updater beim lokalen Testen zweimal laufen, wodurch z. B. ein
+  einzelner Kommentar zwei identische Revisionshistorie-Einträge erzeugt.
+  Kein echter Bug (die Produktion ist nicht betroffen), aber beim
+  Live-Testen zu erwarten - nicht mit doppelten echten Aufrufen verwechseln.
+
+Live im Browser getestet: Revisionshistorie bei Beschluss (Kommentar),
+Rechnung (Statuswechsel) und Zuschuss (Statuswechsel); Einstellungen →
+Historie-Tab (Code-Sperre, Abstimmungsübersicht + Änderungen);
+Beleg-Link-Modal (Mitglieder-Dropdown, freie E-Mail, Serveraufruf bis
+zum erwarteten 500 lokal); `/beleg`-Formular inkl. Drag&Drop. Die
+tatsächliche Zustellung von Benachrichtigungen/E-Mails ließ sich wie
+bisher nur bis zum erwarteten Fehler ohne echtes Firestore-Dienstkonto
+pruefen.
