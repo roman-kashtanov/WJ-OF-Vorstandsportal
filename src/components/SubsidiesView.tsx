@@ -87,6 +87,7 @@ export const SubsidiesView: React.FC<Props> = ({
   const [activeStage, setActiveStage] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [manualOverrideId, setManualOverrideId] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<PreviewableFile | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [resendState, setResendState] = useState<Record<string, 'busy' | 'done' | 'error'>>({});
@@ -770,20 +771,6 @@ export const SubsidiesView: React.FC<Props> = ({
                   )}
 
                   <div className="flex flex-wrap items-center gap-2 pt-1">
-                    <select
-                      value={s.status}
-                      onChange={(e) => onUpdateStatus(s.id, e.target.value as SubsidyStatus)}
-                      className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#003594]"
-                    >
-                      {(Object.keys(STATUS_LABEL) as SubsidyStatus[])
-                        .filter((st) => !PIPELINE_MANAGED_STATUSES.includes(st) || st === s.status)
-                        .map((st) => (
-                          <option key={st} value={st}>
-                            {STATUS_LABEL[st]}
-                          </option>
-                        ))}
-                    </select>
-
                     <button
                       type="button"
                       onClick={() => onEdit(s)}
@@ -803,6 +790,45 @@ export const SubsidiesView: React.FC<Props> = ({
                       <Trash2 className="w-3 h-3" strokeWidth={1.75} />
                       Entfernen
                     </button>
+                  </div>
+
+                  {/* Der Stand laeuft normalerweise vollautomatisch durch die
+                      Pipeline (siehe useSubsidies.ts) - manuelles Setzen ist
+                      bewusst als Ausnahme versteckt, nicht gleichrangig neben
+                      Bearbeiten/Entfernen. */}
+                  <div className="pt-1">
+                    {manualOverrideId === s.id ? (
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={s.status}
+                          onChange={(e) => onUpdateStatus(s.id, e.target.value as SubsidyStatus)}
+                          className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#003594]"
+                        >
+                          {(Object.keys(STATUS_LABEL) as SubsidyStatus[])
+                            .filter((st) => !PIPELINE_MANAGED_STATUSES.includes(st) || st === s.status)
+                            .map((st) => (
+                              <option key={st} value={st}>
+                                {STATUS_LABEL[st]}
+                              </option>
+                            ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => setManualOverrideId(null)}
+                          className="text-[11px] font-semibold text-slate-400 hover:text-slate-700 cursor-pointer"
+                        >
+                          Fertig
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setManualOverrideId(s.id)}
+                        className="text-[11px] font-semibold text-slate-400 hover:text-slate-600 underline decoration-dotted cursor-pointer"
+                      >
+                        Status manuell ändern (Ausnahme)
+                      </button>
+                    )}
                   </div>
                 </div>
               )}

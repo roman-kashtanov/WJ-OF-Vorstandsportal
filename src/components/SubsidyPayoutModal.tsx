@@ -89,6 +89,10 @@ export const SubsidyPayoutModal: React.FC<Props> = ({
     const result = buildSepaCreditTransfer(account, payments, executionDate);
     downloadSepaFile(result);
     onSaveClubAccount(account);
+    // Datei erzeugen und als erledigt markieren sind EIN Schritt - kein
+    // separater Bestaetigungs-Klick mehr noetig (Nutzerwunsch: der Ablauf
+    // soll nahezu vollstaendig automatisch laufen).
+    onMarkPaid(chosen.flatMap((g) => g.items.map((i) => i.id)));
     setGenerated({ count: result.count, sum: result.sum });
   };
 
@@ -139,22 +143,15 @@ export const SubsidyPayoutModal: React.FC<Props> = ({
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  onMarkPaid(chosen.flatMap((g) => g.items.map((i) => i.id)));
-                  onClose();
-                }}
-                className="w-full py-3 rounded-2xl bg-[#003594] hover:bg-[#00266B] text-white font-bold text-xs transition-colors cursor-pointer"
-              >
-                Als „Bezahlt" markieren
-              </button>
+              <p className="text-[11px] text-emerald-700 font-semibold">
+                Die ausgewählten Zuschüsse wurden automatisch als erledigt markiert.
+              </p>
               <button
                 type="button"
                 onClick={onClose}
-                className="w-full py-2.5 rounded-2xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-50 transition-colors cursor-pointer"
+                className="w-full py-3 rounded-2xl bg-[#003594] hover:bg-[#00266B] text-white font-bold text-xs transition-colors cursor-pointer"
               >
-                Später markieren
+                Fertig
               </button>
             </div>
           ) : (
