@@ -104,6 +104,7 @@ export default function App() {
       resolutions,
       invoices,
       meetings,
+      meetingSeries,
       invoiceRequests,
       securitySettings,
       folders,
@@ -124,6 +125,7 @@ export default function App() {
       invoices: true,
       folders: true,
       meetings: true,
+      meetingSeries: true,
       members: true,
       requests: true,
       subsidies: true,
@@ -176,6 +178,12 @@ export default function App() {
     const unsubMeet = FirebaseSync.subscribeMeetings((remote) =>
       applyRemote('meetings', remote, local.meetings, setMeetings, (m) =>
         FirebaseSync.saveMeeting(m).catch(() => {})
+      )
+    );
+
+    const unsubMeetSeries = FirebaseSync.subscribeMeetingSeries((remote) =>
+      applyRemote('meetingSeries', remote, local.meetingSeries, setMeetingSeries, (s) =>
+        FirebaseSync.saveMeetingSeries(s).catch(() => {})
       )
     );
 
@@ -255,6 +263,7 @@ export default function App() {
       unsubInv();
       unsubFolders();
       unsubMeet();
+      unsubMeetSeries();
       unsubMem();
       unsubReq();
       unsubSubs();
@@ -286,6 +295,8 @@ export default function App() {
   const {
     meetings,
     setMeetings,
+    meetingSeries,
+    setMeetingSeries,
     defaultTeamsUrl,
     setDefaultTeamsUrl,
     isNewMeetingOpen,
@@ -298,6 +309,9 @@ export default function App() {
     handleUpdateAttendeeStatus,
     handleUpdateMeetingTeamsLink,
     handleSaveDefaultTeamsUrl,
+    handleCreateMeetingSeries,
+    handleUpdateMeetingSeries,
+    handleDeleteMeetingSeries,
   } = useMeetings({ members, setSystemBanner, setActiveTab });
 
   const handleUpdateVersionConfig = async (newConfig: Partial<AppVersionConfig>) => {
