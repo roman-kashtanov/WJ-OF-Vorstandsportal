@@ -410,6 +410,27 @@ export async function handleUploadProof(
       };
     }
 
+    // Schutz gegen stillschweigendes Ueberschreiben: die /nachweis-Seite
+    // fragt bei jedem Oeffnen den LIVE-Stand ab und blendet das Formular
+    // fuer einen bereits hochgeladenen Nachweis aus - das greift aber nicht,
+    // wenn jemand eine Seite von einem AELTEREN Link noch offen hatte
+    // (z. B. weil zwischenzeitlich ein Erinnerungslink verschickt und
+    // darueber schon hochgeladen wurde) und danach trotzdem absendet.
+    const alreadyUploaded =
+      proofType === 'attendance'
+        ? subsidy.proofState === 'hochgeladen'
+        : subsidy.costProofState === 'hochgeladen';
+    if (alreadyUploaded) {
+      return {
+        status: 409,
+        body: {
+          error: `${
+            proofType === 'attendance' ? 'Der Teilnahmenachweis' : 'Der Kostennachweis'
+          } liegt bereits vor und kann über diesen Link nicht mehr ersetzt werden. Bitte den Vorstand kontaktieren, falls er ausgetauscht werden muss.`,
+        },
+      };
+    }
+
     const now = new Date().toISOString();
     const uploadedFile = {
       name: file.name,

@@ -906,3 +906,33 @@ genau 700 KB in ~2 s komprimiert; ein realistisches 12-MP-Handyfoto
 (1,4 MB) in ~150 ms auf 578 KB. `MAX_STORED_BYTES` (700 KB, mit Blick
 auf Firestores 1-MiB-Dokumentgrenze samt Base64-Overhead) bewusst
 unverändert gelassen - nur die Komprimierung selbst ist gründlicher.
+
+## Lücke geschlossen: doppelter Zuschuss-Nachweis-Upload über zwei Links (v3.7.2)
+
+Szenario aus der Praxis: Antragsteller bekommt beim Antrag einen
+Nachweis-Link, vergisst hochzuladen; der Vorstand fordert per
+„Nachweis-Link senden" (`handleResendProofLink`) einen zweiten,
+frischen Link an - jetzt existieren zwei gültige Links für denselben
+Zuschuss (`subsidyProofToken.ts` erlaubt bewusst mehrfaches Öffnen,
+kein Einmalverbrauch). Lädt die Person über den alten Link hoch und
+später versehentlich nochmal über den neuen, überschrieb
+`handleUploadProof` (`api/subsidy.ts`) die bereits hochgeladene Datei
+bisher **stillschweigend** - kein Schutz, keine Warnung.
+
+Die `/nachweis`-Seite selbst schützt bereits vor dem Normalfall: sie
+fragt bei jedem Öffnen den *aktuellen* Firestore-Stand ab (nicht
+irgendetwas aus dem Link) und blendet das Formular für einen bereits
+hochgeladenen Nachweis aus ("liegt bereits vor"). Die Lücke betraf nur
+eine **bereits vorher geöffnete, nicht neu geladene** Seite (z. B. ein
+alter Browser-Tab), die danach trotzdem abgeschickt wird.
+
+Fix: `handleUploadProof` prüft jetzt zusätzlich zum bestehenden
+resolutionId/bezahlt/abgelehnt-Schutz, ob `proofState`/`costProofState`
+für den jeweiligen `proofType` bereits `'hochgeladen'` ist, und lehnt in
+dem Fall mit `409` und einer klaren Fehlermeldung ab ("liegt bereits vor
+... bitte den Vorstand kontaktieren"), statt zu überschreiben. Konnte
+lokal nur bis `tsc`/Build verifiziert werden (kein Firestore-
+Dienstkonto lokal, wie bei allen `/api/subsidy/*`-Handlern in dieser
+Sitzung) - die Logik selbst ist eine einfache, isolierte
+Zusatzbedingung direkt neben dem bereits bestehenden, identisch
+aufgebauten Sperr-Check.
