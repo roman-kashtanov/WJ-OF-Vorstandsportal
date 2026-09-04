@@ -121,7 +121,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    const matched = members.find((m) => (m.email || '').toLowerCase().trim() === email);
+    // Massgeblich ist auch hier NICHT der lokale `members`-State (Prop),
+    // sondern eine frische, autoritative Abfrage direkt aus Firestore -
+    // die zugehoerige Allowlist-Freigabe existiert jetzt bereits, also
+    // erlauben die Sicherheitsregeln diesen Lesezugriff bereits (siehe
+    // firestore.rules: isBoardMember() prueft exakt diesen Allowlist-
+    // Eintrag). Der lokale State ist auf einem neuen Geraet dagegen immer
+    // leer (kein localStorage) und fuehrte zuvor zu doppelt angelegten
+    // Profilen UND zu versehentlicher Admin-Vergabe an jeden Erstlogin auf
+    // einem neuen Geraet, egal wie viele Mitglieder es tatsaechlich schon
+    // gab.
+    const membersResult = await FirebaseSync.getMembersOnce();
+    if (membersResult.ok === false) {
+      setError(
+        `Die Mitgliederliste konnte nicht geprüft werden (${membersResult.reason}). Bitte erneut versuchen.`
+      );
+      await signOut(auth).catch(() => {});
+      return;
+    }
+
+    const matched = membersResult.members.find(
+      (m) => (m.email || '').toLowerCase().trim() === email
+    );
 
     if (matched) {
       proceedWith({ ...matched, name: matched.name || googleUser.displayName || matched.name });
@@ -148,7 +169,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       initials,
       avatarColor: 'bg-[#003594]',
       // Der erste Zugang ueberhaupt richtet den Vorstand ein
-      isAdmin: members.length === 0,
+      isAdmin: membersResult.members.length === 0,
       isPermanentStaff: false,
     } as BoardMember);
   };

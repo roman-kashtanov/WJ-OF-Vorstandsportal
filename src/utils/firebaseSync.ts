@@ -379,6 +379,30 @@ export const FirebaseSync = {
     }
   },
 
+  /**
+   * Einmalige, autoritative Abfrage der Mitgliederliste direkt aus
+   * Firestore - im Unterschied zu `subscribeMembers()` wird hier NICHT auf
+   * den lokalen, geraeteeigenen React-State zurueckgegriffen. Wird beim
+   * Google-Login gebraucht: unmittelbar nach der Anmeldung ist der lokale
+   * `members`-State auf einem neuen Geraet immer leer (nichts im
+   * localStorage), was faelschlich wie "es gibt noch gar keine
+   * Vorstandsmitglieder" aussah und zu doppelt angelegten Profilen sowie
+   * versehentlicher Admin-Vergabe fuehrte (siehe AuthModal.tsx).
+   */
+  async getMembersOnce(): Promise<{ ok: true; members: BoardMember[] } | { ok: false; reason: string }> {
+    try {
+      const snap = await getDocs(collection(db, 'members'));
+      return { ok: true, members: snap.docs.map((docSnap) => docSnap.data() as BoardMember) };
+    } catch (err: any) {
+      // Absichtlich NICHT als "leere Liste" zurueckgeben: das saehe fuer den
+      // Aufrufer (Login-Fluss) identisch zu "es gibt wirklich noch niemanden"
+      // aus und wuerde denselben Fehler reproduzieren, den diese Funktion
+      // beheben soll (siehe AuthModal.tsx).
+      console.warn('Failed to load members from Firebase:', err.message);
+      return { ok: false, reason: err?.message || 'unbekannter Fehler' };
+    }
+  },
+
   // Save member to Firestore
   async saveMember(member: BoardMember) {
     try {
