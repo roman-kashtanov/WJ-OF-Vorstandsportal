@@ -1081,3 +1081,79 @@ Textbasis") - keine laufenden API-Kosten, keine Abhaengigkeit von einem
 externen KI-Anbieter, funktioniert offline/lokal ohne Secrets. Endpunkt,
 Server-Config (`ANTHROPIC_API_KEY`/`ANTHROPIC_MODEL`) und
 `.env.example`-Eintraege wieder entfernt.
+
+## Format-Hinweis fuer Copilot einblendbar gemacht (v3.9.x)
+
+Der Vorstand fragte, wo er das feste "BESCHLUSS/Titel/Text/Betrag/
+Kategorie"-Format fuer Copilot wiederfindet. Bei den Sitzungen gibt es
+dafuer jetzt einen aufklappbaren Hinweis ("Format fuer Copilot anzeigen")
+mit der Vorlage + einem "Format kopieren"-Button. In den Einstellungen
+(Tab "MS Teams Link") laesst sich dieser Hinweis ausblenden - eine rein
+lokale Geraete-Einstellung (`AppStorage.getShowProtocolFormatHint()`/
+`saveShowProtocolFormatHint()`, kein Firestore-Sync), damit jedes
+Vorstandsmitglied selbst entscheidet.
+
+## Sitzungen-Ansicht ueberarbeitet: Detail-Fenster, korrekte naechste Sitzung, Absagen, Teams-App-Link (v3.10.0)
+
+Nach dem Anlegen echter Vorstandssitzungen (inkl. Serie) meldete der
+Nutzer mehrere konkrete Probleme, alle in einem Rutsch behoben:
+
+**1. Fehlerhafte "naechste Sitzung"-Berechnung.** Frueher wurde an DREI
+unabhaengigen Stellen (`App.tsx`, `Header.tsx` per Prop, `DashboardView.tsx`)
+jeweils separat `upcomingMeetings[0] || meetings[0]` berechnet - nahm
+einfach das erste Array-Element und filterte nur nach dem statischen,
+nie aktualisierten `isUpcoming`-Flag (wird bei Erstellung auf `true`
+gesetzt und nie wieder neu bewertet), nicht nach dem echten Datum. Damit
+konnte eine bereits vergangene Sitzung als "naechste" angezeigt werden.
+Fix: EINE zentrale Quelle in `useMeetings.ts`
+(`upcomingMeetingsSorted`/`nextMeeting`/`upcomingMeetingsCount`, per
+`useMemo` aus `meetings.filter(m => !m.cancelled && m.date >= heute)`
+berechnet), an alle drei Stellen durchgereicht.
+
+**2. Layout-Grundproblem: dauerhafte Liste+Detail-Spalten-Ansicht.** Bei
+einer langen Serie (Termine ueber mehrere Jahre) war die alte
+Liste+Detail-Ansicht unuebersichtlich, und Details weiter unten in der
+Liste liessen sich wegen eines separaten Layout-Fehlers
+(`.wj-view-enter`-Transform brach `position: fixed`, siehe eigener
+CLAUDE.md-Eintrag/Fix) teils gar nicht oeffnen. Neu: `MeetingsView.tsx`
+zeigt standardmaessig NUR die naechste Sitzung als Karte; ein Button
+"Weitere Termine anzeigen (N)" klappt bei Bedarf die vollstaendige,
+nach Datum sortierte Liste auf (inkl. vergangener/abgesagter Termine mit
+entsprechenden Badges). Jede Karte oeffnet beim Klick ein eigenstaendiges
+Fenster: `MeetingDetailModal.tsx` (neu), extrahiert aus dem bisher fest
+in `MeetingsView.tsx` verdrahteten Detailblock (Teams-Link, Kalender-
+Sync, Protokoll-/Agenda-Upload, Beschlusserkennung, RSVP, TOP-Liste) -
+Modularisierung passend zu [[feedback-avoid-monolithic-files]] und
+gleichzeitig die vom Nutzer gewuenschte "in separatem Fenster oeffnen"-UX.
+
+**3. Sitzung absagen, ohne sie zu loeschen.** Neues optionales Feld
+`Meeting.cancelled`, Toggle-Button im Modal-Header ("Sitzung absagen" /
+"Absage zuruecknehmen", `handleToggleMeetingCancelled` in
+`useMeetings.ts`). Abgesagte Sitzungen zaehlen nicht mehr als
+"naechste Sitzung", bleiben aber mit rotem "Abgesagt"-Badge in der
+Liste sichtbar; Protokoll/Agenda/TOPs bleiben erhalten.
+`isUntouchedOccurrence()` behandelt abgesagte Serientermine wie bereits
+bearbeitete - eine Serien-Aktualisierung ueberschreibt eine bewusste
+Absage nicht mehr automatisch.
+
+**4. MS-Teams-App-Deep-Link.** Neue Hilfsfunktion
+`getTeamsAppDeepLink()` (`src/utils/calendar.ts`) ersetzt das Schema
+`https://` durch `msteams://` (Rest der URL unveraendert - bestaetigtes
+Format laut Microsoft-Doku). Zusaetzlicher Button "In Teams-App oeffnen"
+neben dem bestehenden "Jetzt beitreten"-Browser-Link; ohne installierte
+Teams-Desktop-App laeuft er ins Leere, deshalb nie als Ersatz, nur als
+Zusatz-Option.
+
+**5. Pulsierender Punkt im oberen Banner entfernt.** Der Nutzer meinte
+mit "auffaelliges Dings da oben" nicht die Teams-Link-Box im Termin-
+Detail (wie zunaechst angenommen), sondern den gruenen, pulsierenden
+Punkt (`animate-pulse`) vor "Naechste Vorstandssitzung" im globalen
+Banner (`Header.tsx`) - wirkte wie ein Aufnahme-Symbol. Ersatzlos
+entfernt, der Banner selbst bleibt unveraendert klein.
+
+Live getestet: korrekte naechste Sitzung nach Filterkorrektur, Detail-
+Fenster oeffnet auch fuer einen weit unten in einer langen, gescrollten
+Serie liegenden Termin (2028) korrekt im sichtbaren Bereich (bestaetigt
+indirekt, dass der separat behobene Fixed-Modal-Layout-Fehler bereits
+griff), Absagen/Zuruecknehmen funktioniert und wirkt sich sofort auf die
+"naechste Sitzung"-Auswahl aus, `msteams://`-Link wird korrekt erzeugt.
