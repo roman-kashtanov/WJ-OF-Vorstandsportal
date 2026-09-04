@@ -977,3 +977,81 @@ Live getestet: ein 9-MB-PNG (Groessenordnung des im Screenshot
 gemeldeten Fotos) komprimiert jetzt auf 290 KB roh / 386 KB
 Base64-Zeichenkette - zwei solche Dateien bleiben bei ≈772 KB, sicher
 unter der 1-MiB-Grenze.
+
+## Termine: Wiederkehrende Serien, Protokoll-/Agenda-Upload, KI-Beschlusserkennung (v3.8.0)
+
+Bisher musste jede Vorstandssitzung einzeln angelegt werden - kein
+Wiederholungsmuster, kein Datei-Anhang fuers Protokoll, keine separate
+Agenda-Datei. Vier Teile, alle ueber mehrere Phasen mit Commit nach
+jeder Phase umgesetzt:
+
+**1. Wiederkehrende Serien** (`src/utils/recurrence.ts`, neu -
+reine Datumslogik ohne React/Firebase-Abhaengigkeit): Outlook-artiges
+`RecurrenceRule`-Modell (taeglich / woechentlich mit Wochentags-Set /
+monatlich - Tag X oder "3. Donnerstag" / jaehrlich - Datum oder "letzter
+Freitag im November"), `generateOccurrenceDates()` erzeugt daraus eine
+konkrete ISO-Datumsliste (Ende ueber `endDate`, `count` oder einen
+24-Monats-Horizont), `describeRecurrence()` eine menschenlesbare
+Zusammenfassung fuers UI. Wichtiger Bugfix: bei `endMode:'afterCount'`
+darf der 24-Monats-Horizont NICHT als harte Grenze gelten (sonst wird
+vor Erreichen der gewuenschten Anzahl abgeschnitten) - dafuer gilt dort
+eine 50-Jahres-Grenze, `count` begrenzt dann tatsaechlich.
+
+`useMeetings.ts` bekam dazu `meetingSeries`-State (eigene
+Firestore-Collection, Sync-Muster identisch zu `meetings`) und
+`handleCreateMeetingSeries`/`handleUpdateMeetingSeries`/
+`handleDeleteMeetingSeries`. Jeder generierte Termin ist ein normaler,
+unabhaengig editierbarer `Meeting`-Datensatz (`seriesId` gesetzt) - kein
+volles Ausnahme-Tracking wie in Outlook. Stattdessen eine bewusst
+einfachere Heuristik ("unveraenderter Termin" = keine Agenda, keine
+Anhaenge, keine Teilnahme-Antworten): Aendern/Loeschen einer Serie
+ersetzt bzw. entfernt nur zukuenftige, noch unveraenderte Termine -
+bereits bearbeitete bleiben unangetastet, mit Hinweis an den Vorstand,
+wie viele das betrifft.
+
+`NewMeetingModal.tsx`: Umschalter "Einzeltermin"/"Wiederkehrende Serie"
+mit Outlook-artigem Muster-Editor (Haeufigkeit, Intervall, je nach Typ
+passende Zusatzfelder, Serien-Ende, Live-Vorschau via
+`describeRecurrence()`). Der MS-Teams-Link wird - Nutzerwunsch
+ausdruecklich bestaetigt ("der Link fuer Teams bleibt gleich, ist einmal
+zu hinterlegen") - **einmal fuer die ganze Serie** aus dem bestehenden
+`defaultTeamsUrl`-Feld uebernommen, nicht pro Termin neu abgefragt.
+
+**2. Protokoll- und Agenda-Datei-Upload** (`MeetingsView.tsx`): zwei
+neue Upload-Abschnitte in der Termin-Detailansicht, nach dem etablierten
+Muster (`DropzoneFileInput` + `prepareFileForStorage`, inkl. der
+Komprimierung/Groessengrenze aus v3.7.1/v3.7.3). Neue `MeetingAttachment`-
+Felder `protocolFile`/`agendaFile` an `Meeting` (das alte, ungenutzte
+`protocol: string`-Feld blieb unangetastet stehen). Die Agenda-Datei ist
+**zusaetzlich** zur bestehenden strukturierten TOP-Liste (`agenda:
+AgendaItem[]`), die unveraendert bleibt - explizite Nutzervorgabe, da die
+TOP-Liste u. a. fuers Dashboard genutzt wird.
+
+**3. KI-Beschlusserkennung** (`api/protocolScan.ts`, neu): neuer
+Endpunkt `POST meeting/scan-protocol` - prueft per
+`FirestoreAdmin.getDocument`, dass die `meetingId` existiert
+(Missbrauchsschutz, gleiches Muster wie bei den anderen internen
+Endpunkten), ruft dann die Anthropic Messages API mit dem Protokoll als
+`document`-Content-Block auf (natives PDF-Verstaendnis, keine separate
+Text-Extraktion noetig) und bittet um AUSSCHLIESSLICH ein JSON-Array
+erkannter Beschluss-Kandidaten (`title`, `motionText`,
+`requestedBudget?`, `category?`). Neue Server-Config
+`ANTHROPIC_API_KEY`/`ANTHROPIC_MODEL` (`api/config.ts`,
+`.env.example`).
+
+**Wichtigste Leitplanke der ganzen Funktion** (Nutzerentscheidung nach
+Rueckfrage, "dringend empfohlen"): die KI legt **nie selbst** einen
+Beschluss an. `ProtocolScanResultsModal.tsx` (neu) zeigt jeden
+erkannten Kandidaten einzeln mit Checkbox (Standard: angehakt) und
+editierbaren Feldern; erst der Button "X Beschluesse anlegen" ruft fuer
+die angehakten Eintraege die **bestehende** `handleCreateResolution`
+(`useResolutions.ts`) auf - dadurch laufen Benachrichtigung,
+Revisionshistorie und der Abstimmungs-E-Mail-Versand automatisch mit,
+ohne die Logik zu duplizieren. Der Button "Beschluesse erkennen" in
+`MeetingsView.tsx` ist nur aktiv, wenn ein `protocolFile` vorliegt.
+
+Lokal (kein `ANTHROPIC_API_KEY`/`FIREBASE_SERVICE_ACCOUNT` gesetzt)
+ausschliesslich bis zur erwarteten, klaren Fehlermeldung pruefbar - wie
+bei allen serverseitigen Flows dieser Sitzung. Der eigentliche KI-Aufruf
+selbst kann daher nur nach dem Setzen echter Secrets auf Netlify final
+verifiziert werden.
