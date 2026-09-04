@@ -8,6 +8,7 @@ import {
   handleGetProofStatus,
   handleUploadProof,
   handleResendProofLink,
+  handleGetSubsidyCatalogue,
 } from './subsidy';
 
 export interface ApiResponse {
@@ -93,6 +94,11 @@ export async function handleApiRequest(
 
   if (method === 'POST' && route === 'subsidy/submit') {
     const result = await handleSubmitSubsidy(payload || {}, origin || '/');
+    return { status: result.status, body: result.body };
+  }
+
+  if (method === 'GET' && route === 'subsidy/catalogue') {
+    const result = await handleGetSubsidyCatalogue();
     return { status: result.status, body: result.body };
   }
 

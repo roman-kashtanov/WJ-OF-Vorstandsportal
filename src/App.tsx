@@ -36,6 +36,7 @@ import { BiometricLock } from './components/BiometricLock';
 import { SubsidiesView } from './components/SubsidiesView';
 import { NewSubsidyModal } from './components/NewSubsidyModal';
 import { SubsidyPeopleModal } from './components/SubsidyPeopleModal';
+import { SubsidyCatalogueModal } from './components/SubsidyCatalogueModal';
 import { SubsidyPayoutModal } from './components/SubsidyPayoutModal';
 import { BundleSubsidiesModal } from './components/BundleSubsidiesModal';
 import { useSubsidies } from './hooks/useSubsidies';
@@ -218,6 +219,10 @@ export default function App() {
       }
     });
 
+    const unsubCatalogue = FirebaseSync.subscribeSubsidyCatalogueSettings((remoteCatalogue) => {
+      if (remoteCatalogue) setCatalogueSettings(remoteCatalogue);
+    });
+
     return () => {
       unsubStatus();
       unsubVersion();
@@ -231,6 +236,7 @@ export default function App() {
       unsubSubPeople();
       unsubSec();
       unsubMeetingConfig();
+      unsubCatalogue();
     };
   }, []);
 
@@ -467,12 +473,16 @@ export default function App() {
     subsidyYear,
     setSubsidyYear,
     clubAccount,
+    catalogueSettings,
+    setCatalogueSettings,
     isSubsidyModalOpen,
     setIsSubsidyModalOpen,
     editingSubsidy,
     setEditingSubsidy,
     isSubsidyPeopleOpen,
     setIsSubsidyPeopleOpen,
+    isSubsidyCatalogueOpen,
+    setIsSubsidyCatalogueOpen,
     isPayoutOpen,
     setIsPayoutOpen,
     isBundleModalOpen,
@@ -487,6 +497,8 @@ export default function App() {
     handleSaveClubAccount,
     handleMergeSubsidyPeople,
     handleImportSubsidyCsv,
+    handleSaveCatalogueSettings,
+    handleResetCatalogueToDefault,
   } = useSubsidies({
     resolutions,
     createResolution: handleCreateResolution,
@@ -685,6 +697,7 @@ export default function App() {
             subsidies={subsidies}
             people={subsidyPeople}
             year={subsidyYear}
+            limits={catalogueSettings.limits}
             onChangeYear={setSubsidyYear}
             onOpenNew={() => {
               setEditingSubsidy(null);
@@ -697,6 +710,7 @@ export default function App() {
             onDelete={handleDeleteSubsidy}
             onUpdateStatus={handleUpdateSubsidyStatus}
             onManagePeople={() => setIsSubsidyPeopleOpen(true)}
+            onManageCatalogue={() => setIsSubsidyCatalogueOpen(true)}
             onOpenPayout={() => setIsPayoutOpen(true)}
             onOpenBundle={() => setIsBundleModalOpen(true)}
             onImportCsv={handleImportSubsidyCsv}
@@ -818,6 +832,8 @@ export default function App() {
           subsidies={subsidies}
           editing={editingSubsidy}
           year={subsidyYear}
+          catalogue={catalogueSettings.entries}
+          limits={catalogueSettings.limits}
           onSubmit={handleSaveSubsidy}
           onManagePeople={() => setIsSubsidyPeopleOpen(true)}
         />
@@ -829,9 +845,18 @@ export default function App() {
         people={subsidyPeople}
         subsidies={subsidies}
         year={subsidyYear}
+        limits={catalogueSettings.limits}
         onSave={handleSaveSubsidyPerson}
         onDelete={handleDeleteSubsidyPerson}
         onMerge={handleMergeSubsidyPeople}
+      />
+
+      <SubsidyCatalogueModal
+        isOpen={isSubsidyCatalogueOpen}
+        onClose={() => setIsSubsidyCatalogueOpen(false)}
+        settings={catalogueSettings}
+        onSave={handleSaveCatalogueSettings}
+        onResetToDefault={handleResetCatalogueToDefault}
       />
 
       <SubsidyPayoutModal

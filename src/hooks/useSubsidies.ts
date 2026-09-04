@@ -4,7 +4,7 @@ import { FirebaseSync } from '../utils/firebaseSync';
 import { SubsidyStorage } from '../utils/storage';
 import { generateSubsidyReceiptPdf } from '../utils/subsidyReceipt';
 import { normalizeNameKey } from '../utils/subsidies';
-import { catalogueEntry } from '../data/subsidyCatalogue';
+import { SubsidyCatalogueSettings, DEFAULT_SUBSIDY_CATALOGUE_SETTINGS } from '../data/subsidyCatalogue';
 import { parseSubsidyBackupCsv } from '../utils/subsidyBackupCsv';
 
 /**
@@ -40,14 +40,19 @@ export function useSubsidies({
   );
   const [subsidyYear, setSubsidyYear] = useState<number>(new Date().getFullYear());
   const [clubAccount, setClubAccount] = useState(() => SubsidyStorage.getClubAccount());
+  const [catalogueSettings, setCatalogueSettings] = useState<SubsidyCatalogueSettings>(() =>
+    SubsidyStorage.getCatalogueSettings()
+  );
   const [isSubsidyModalOpen, setIsSubsidyModalOpen] = useState(false);
   const [editingSubsidy, setEditingSubsidy] = useState<Subsidy | null>(null);
   const [isSubsidyPeopleOpen, setIsSubsidyPeopleOpen] = useState(false);
+  const [isSubsidyCatalogueOpen, setIsSubsidyCatalogueOpen] = useState(false);
   const [isPayoutOpen, setIsPayoutOpen] = useState(false);
   const [isBundleModalOpen, setIsBundleModalOpen] = useState(false);
 
   useEffect(() => SubsidyStorage.saveSubsidies(subsidies), [subsidies]);
   useEffect(() => SubsidyStorage.savePeople(subsidyPeople), [subsidyPeople]);
+  useEffect(() => SubsidyStorage.saveCatalogueSettings(catalogueSettings), [catalogueSettings]);
 
   const handleSaveSubsidy = (s: Subsidy) => {
     setSubsidies((prev) => {
@@ -230,7 +235,7 @@ export function useSubsidies({
     if (!parsed) {
       return { ok: false, error: 'Diese Datei sieht nicht wie eine WJOF-Sicherungsdatei aus.' };
     }
-    const entry = catalogueEntry(parsed.eventKey);
+    const entry = catalogueSettings.entries.find((e) => e.key === parsed.eventKey);
     if (!entry) {
       return { ok: false, error: 'Unbekannte Veranstaltung in der Sicherungsdatei.' };
     }
@@ -303,6 +308,22 @@ export function useSubsidies({
     SubsidyStorage.saveClubAccount(a);
   };
 
+  /**
+   * Speichert den admin-editierbaren Zuschuss-Katalog (Veranstaltungen +
+   * Jahres-Obergrenzen) - lokal, per Firestore synchronisiert (siehe
+   * subscribeSubsidyCatalogueSettings in App.tsx) und im Backend gelesen
+   * (api/subsidy.ts::loadCatalogueSettings), damit /antrag denselben Stand
+   * sieht wie die Admin-Ansicht.
+   */
+  const handleSaveCatalogueSettings = (settings: SubsidyCatalogueSettings) => {
+    setCatalogueSettings(settings);
+    FirebaseSync.saveSubsidyCatalogueSettings(settings).catch(() => {});
+  };
+
+  const handleResetCatalogueToDefault = () => {
+    handleSaveCatalogueSettings(DEFAULT_SUBSIDY_CATALOGUE_SETTINGS);
+  };
+
   return {
     subsidies,
     setSubsidies,
@@ -311,12 +332,16 @@ export function useSubsidies({
     subsidyYear,
     setSubsidyYear,
     clubAccount,
+    catalogueSettings,
+    setCatalogueSettings,
     isSubsidyModalOpen,
     setIsSubsidyModalOpen,
     editingSubsidy,
     setEditingSubsidy,
     isSubsidyPeopleOpen,
     setIsSubsidyPeopleOpen,
+    isSubsidyCatalogueOpen,
+    setIsSubsidyCatalogueOpen,
     isPayoutOpen,
     setIsPayoutOpen,
     isBundleModalOpen,
@@ -331,5 +356,7 @@ export function useSubsidies({
     handleSaveClubAccount,
     handleMergeSubsidyPeople,
     handleImportSubsidyCsv,
+    handleSaveCatalogueSettings,
+    handleResetCatalogueToDefault,
   };
 }

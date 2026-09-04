@@ -14,6 +14,7 @@ import {
 } from '../types';
 import { INITIAL_BOARD_MEMBERS, INITIAL_RESOLUTIONS, INITIAL_INVOICES, INITIAL_INVOICE_FOLDERS, INITIAL_MEETINGS, INITIAL_SECURITY_SETTINGS } from '../data/initialData';
 import { normalizeSecuritySettings } from './security';
+import { SubsidyCatalogueSettings, DEFAULT_SUBSIDY_CATALOGUE_SETTINGS } from '../data/subsidyCatalogue';
 
 const INITIAL_NOTIFICATIONS: InAppNotification[] = [];
 
@@ -63,6 +64,7 @@ const STORAGE_KEYS = {
   SUBSIDIES: 'wj_offenbach_subsidies_v1',
   SUBSIDY_PEOPLE: 'wj_offenbach_subsidy_people_v1',
   CLUB_ACCOUNT: 'wj_offenbach_club_account_v1',
+  SUBSIDY_CATALOGUE: 'wj_offenbach_subsidy_catalogue_v1',
 };
 
 
@@ -455,6 +457,19 @@ export const SubsidyStorage = {
   saveClubAccount(account: { name: string; iban: string; bic?: string }) {
     try {
       localStorage.setItem(STORAGE_KEYS.CLUB_ACCOUNT, JSON.stringify(account));
+    } catch {}
+  },
+  /** Admin-editierbarer Zuschuss-Katalog (Veranstaltungen + Jahres-Obergrenzen). */
+  getCatalogueSettings(): SubsidyCatalogueSettings {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.SUBSIDY_CATALOGUE);
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return DEFAULT_SUBSIDY_CATALOGUE_SETTINGS;
+  },
+  saveCatalogueSettings(settings: SubsidyCatalogueSettings) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.SUBSIDY_CATALOGUE, JSON.stringify(settings));
     } catch {}
   },
 };

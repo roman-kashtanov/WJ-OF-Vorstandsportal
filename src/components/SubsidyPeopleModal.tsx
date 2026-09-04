@@ -3,7 +3,7 @@ import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { SubsidyPerson, SubsidyPersonType, Subsidy } from '../types';
 import { formatCurrency } from '../utils/formatters';
 import { PERSON_TYPE_LABEL, personBudget, normalizeNameKey } from '../utils/subsidies';
-import { SUBSIDY_LIMITS } from '../data/subsidyCatalogue';
+import { SubsidyLimits } from '../data/subsidyCatalogue';
 import { isValidIban, formatIban } from '../utils/sepa';
 import { X, UserPlus, Trash2, Pencil, Check, Users2 } from 'lucide-react';
 
@@ -13,6 +13,7 @@ interface Props {
   people: SubsidyPerson[];
   subsidies: Subsidy[];
   year: number;
+  limits: SubsidyLimits;
   onSave: (person: SubsidyPerson) => void;
   onDelete: (personId: string) => void;
   onMerge: (keepId: string, mergeId: string) => void;
@@ -37,6 +38,7 @@ export const SubsidyPeopleModal: React.FC<Props> = ({
   people,
   subsidies,
   year,
+  limits,
   onSave,
   onDelete,
   onMerge,
@@ -276,7 +278,7 @@ export const SubsidyPeopleModal: React.FC<Props> = ({
             )}
 
             {sorted.map((p) => {
-              const pb = personBudget(subsidies, p.id, year);
+              const pb = personBudget(subsidies, p.id, year, limits);
               const hasBank = !!p.iban;
               return (
                 <div
@@ -302,7 +304,7 @@ export const SubsidyPeopleModal: React.FC<Props> = ({
                       )}
                       <div>
                         {year}: {formatCurrency(pb.used)} von{' '}
-                        {formatCurrency(SUBSIDY_LIMITS.perPersonPerYear)} verbraucht
+                        {formatCurrency(limits.perPersonPerYear)} verbraucht
                       </div>
                     </div>
                   </div>

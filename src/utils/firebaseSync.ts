@@ -23,6 +23,7 @@ import {
   AppVersionConfig,
   InvoiceFolder
 } from '../types';
+import { SubsidyCatalogueSettings } from '../data/subsidyCatalogue';
 
 export interface FirebaseSyncStatus {
   isConnected: boolean;
@@ -465,6 +466,38 @@ export const FirebaseSync = {
       updateStatus({ isSyncing: false, lastSyncedAt: new Date().toISOString(), isConnected: true, error: null });
     } catch (err: any) {
       console.warn('Failed to save security settings to Firebase:', err.message);
+      updateStatus({ isSyncing: false, error: err.message });
+    }
+  },
+
+  // Subscribe to the admin-editable subsidy catalogue (events + Jahres-Obergrenzen)
+  subscribeSubsidyCatalogueSettings(callback: (settings: SubsidyCatalogueSettings) => void) {
+    try {
+      const docRef = doc(db, 'settings', 'subsidyCatalogue');
+      return onSnapshot(
+        docRef,
+        (snap) => {
+          if (snap.exists()) {
+            callback(snap.data() as SubsidyCatalogueSettings);
+          }
+        },
+        (err) => {
+          console.warn('Firebase SubsidyCatalogueSettings subscription warning:', err.message);
+        }
+      );
+    } catch (e) {
+      return () => {};
+    }
+  },
+
+  async saveSubsidyCatalogueSettings(settings: SubsidyCatalogueSettings) {
+    try {
+      updateStatus({ isSyncing: true });
+      const payload = cleanData(settings);
+      await setDoc(doc(db, 'settings', 'subsidyCatalogue'), payload, { merge: true });
+      updateStatus({ isSyncing: false, lastSyncedAt: new Date().toISOString(), isConnected: true, error: null });
+    } catch (err: any) {
+      console.warn('Failed to save subsidy catalogue settings to Firebase:', err.message);
       updateStatus({ isSyncing: false, error: err.message });
     }
   },

@@ -7,7 +7,7 @@ import {
   SubsidyStatus,
   SubsidyProofState,
 } from '../types';
-import { SUBSIDY_CATALOGUE, catalogueEntry, CATEGORY_LABEL } from '../data/subsidyCatalogue';
+import { SubsidyCatalogueEntry, SubsidyLimits, CATEGORY_LABEL } from '../data/subsidyCatalogue';
 import { checkSubsidy, STATUS_LABEL, PIPELINE_MANAGED_STATUSES, personBudget } from '../utils/subsidies';
 import { formatCurrency } from '../utils/formatters';
 import { prepareFileForStorage, formatBytes } from '../utils/fileStorage';
@@ -22,6 +22,8 @@ interface Props {
   subsidies: Subsidy[];
   editing?: Subsidy | null;
   year: number;
+  catalogue: SubsidyCatalogueEntry[];
+  limits: SubsidyLimits;
   onSubmit: (subsidy: Subsidy) => void;
   onManagePeople: () => void;
 }
@@ -33,6 +35,8 @@ export const NewSubsidyModal: React.FC<Props> = ({
   subsidies,
   editing,
   year,
+  catalogue,
+  limits,
   onSubmit,
   onManagePeople,
 }) => {
@@ -58,7 +62,7 @@ export const NewSubsidyModal: React.FC<Props> = ({
   const [costFileError, setCostFileError] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<PreviewableFile | null>(null);
 
-  const entry = catalogueEntry(eventKey);
+  const entry = catalogue.find((c) => c.key === eventKey);
   const category: SubsidyCategory = entry?.category || 'sonstiges';
   const numericAmount = parseFloat(amount) || 0;
 
@@ -74,20 +78,21 @@ export const NewSubsidyModal: React.FC<Props> = ({
         actualCost: actualCost ? parseFloat(actualCost) : undefined,
       },
       subsidies,
+      limits,
       editing?.id
     );
-  }, [personId, category, numericAmount, eventKey, year, actualCost, subsidies, editing?.id]);
+  }, [personId, category, numericAmount, eventKey, year, actualCost, subsidies, limits, editing?.id]);
 
-  const budget = personId ? personBudget(subsidies, personId, year) : null;
+  const budget = personId ? personBudget(subsidies, personId, year, limits) : null;
 
   useBodyScrollLock(isOpen);
   if (!isOpen) return null;
 
   const pickEvent = (key: string) => {
     setEventKey(key);
-    const e = catalogueEntry(key);
+    const e = catalogue.find((c) => c.key === key);
     if (e) {
-      if (!eventName || SUBSIDY_CATALOGUE.some((c) => c.label === eventName)) {
+      if (!eventName || catalogue.some((c) => c.label === eventName)) {
         setEventName(e.label);
       }
       if (e.amount > 0 && !amount) setAmount(String(e.amount));
@@ -245,7 +250,7 @@ export const NewSubsidyModal: React.FC<Props> = ({
               className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#003594]"
             >
               <option value="">— aus der Richtlinie wählen —</option>
-              {SUBSIDY_CATALOGUE.map((c) => (
+              {catalogue.map((c) => (
                 <option key={c.key} value={c.key}>
                   {c.label}
                   {c.amount > 0 ? ` · ${c.amount} €` : ''}

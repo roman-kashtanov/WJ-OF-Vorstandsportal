@@ -8,7 +8,7 @@ import {
   budgetOverview,
   isPayable,
 } from '../utils/subsidies';
-import { CATEGORY_LABEL, SUBSIDY_LIMITS } from '../data/subsidyCatalogue';
+import { CATEGORY_LABEL, SubsidyLimits } from '../data/subsidyCatalogue';
 import { formatIban } from '../utils/sepa';
 import { EmailService, resendSubsidyProofLink } from '../utils/emailService';
 import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
@@ -30,18 +30,21 @@ import {
   Check,
   CalendarClock,
   Send,
+  ListTree,
 } from 'lucide-react';
 
 interface Props {
   subsidies: Subsidy[];
   people: SubsidyPerson[];
   year: number;
+  limits: SubsidyLimits;
   onChangeYear: (year: number) => void;
   onOpenNew: () => void;
   onEdit: (subsidy: Subsidy) => void;
   onDelete: (id: string) => void;
   onUpdateStatus: (id: string, status: SubsidyStatus) => void;
   onManagePeople: () => void;
+  onManageCatalogue: () => void;
   onOpenPayout: () => void;
   onOpenBundle: () => void;
   onImportCsv: (text: string) => { ok: true } | { ok: false; error: string };
@@ -61,12 +64,14 @@ export const SubsidiesView: React.FC<Props> = ({
   subsidies,
   people,
   year,
+  limits,
   onChangeYear,
   onOpenNew,
   onEdit,
   onDelete,
   onUpdateStatus,
   onManagePeople,
+  onManageCatalogue,
   onOpenPayout,
   onOpenBundle,
   onImportCsv,
@@ -151,7 +156,7 @@ export const SubsidiesView: React.FC<Props> = ({
       .sort((a, b) => (b.appliedAt || '').localeCompare(a.appliedAt || ''));
   }, [subsidies, year, filterPerson, filterType, filterStatus, search, personById]);
 
-  const overview = budgetOverview(subsidies, year);
+  const overview = budgetOverview(subsidies, year, limits);
   const payable = subsidies.filter((s) => s.year === year && isPayable(s));
   const bundlable = subsidies.filter((s) => s.year === year && s.status === 'bestaetigt');
   const notYetHappened = subsidies.filter(
@@ -228,6 +233,15 @@ export const SubsidiesView: React.FC<Props> = ({
         </div>
 
         <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={onManageCatalogue}
+            className="p-2 sm:px-3 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
+            title="Veranstaltungen, Beträge und Obergrenzen verwalten"
+          >
+            <ListTree className="w-4 h-4" strokeWidth={1.75} />
+            <span className="hidden sm:inline">Katalog</span>
+          </button>
           <button
             type="button"
             onClick={onManagePeople}

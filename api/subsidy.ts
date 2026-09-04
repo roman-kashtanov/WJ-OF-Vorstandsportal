@@ -3,7 +3,7 @@ import { FirestoreAdmin } from './firestoreAdmin';
 import { verifySubsidyFormCode } from './subsidyAccessCode';
 import { createSubsidyProofToken, verifySubsidyProofToken } from './subsidyProofToken';
 import { sendEmail } from './email';
-import { catalogueEntry } from '../src/data/subsidyCatalogue';
+import { SUBSIDY_CATALOGUE, SubsidyCatalogueEntry } from '../src/data/subsidyCatalogue';
 import { isValidIban } from '../src/utils/sepa';
 import { dataUrlBytes } from '../src/utils/fileStorage';
 
@@ -36,6 +36,44 @@ function validateProofFile(file?: ProofFileInput): string | null {
     return 'Die Datei ist zu groß (maximal 800 KB nach Komprimierung).';
   }
   return null;
+}
+
+/**
+ * Der Zuschuss-Katalog (Veranstaltungen + Beträge) ist admin-editierbar
+ * (settings/subsidyCatalogue, siehe SubsidyCatalogueModal.tsx) - anders als
+ * frueher kann er nicht mehr statisch importiert werden. Ohne Dokument
+ * (frische Installation, oder lokal ohne FIREBASE_SERVICE_ACCOUNT) wird der
+ * eingebaute Standard aus der Richtlinie als Fallback verwendet.
+ */
+async function loadCatalogueEntries(): Promise<SubsidyCatalogueEntry[]> {
+  try {
+    const settings = await FirestoreAdmin.getDocument('settings/subsidyCatalogue');
+    if (settings?.entries && Array.isArray(settings.entries) && settings.entries.length > 0) {
+      return settings.entries as SubsidyCatalogueEntry[];
+    }
+  } catch {
+    // faellt unten auf den Standard zurueck
+  }
+  return SUBSIDY_CATALOGUE;
+}
+
+export async function handleGetSubsidyCatalogue(): Promise<{ status: number; body: any }> {
+  const entries = await loadCatalogueEntries();
+  return { status: 200, body: { entries } };
+}
+
+/**
+ * Baut aus den beiden Nachweis-Status eine konkrete, fuer Antragsteller
+ * verstaendliche Liste - genutzt sowohl in der Erstbestaetigung
+ * (handleSubmitSubsidy) als auch beim erneuten Anfordern
+ * (handleResendProofLink), damit beide Mails immer sagen, WAS genau fehlt,
+ * statt nur generisch "den Nachweis".
+ */
+function missingProofLabels(hasAttendanceProof: boolean, hasCostProof: boolean): string[] {
+  return [
+    !hasAttendanceProof ? 'Teilnahmenachweis' : null,
+    !hasCostProof ? 'Kostennachweis (Rechnung)' : null,
+  ].filter((x): x is string => x !== null);
 }
 
 export async function handleVerifySubsidyCode(code: string): Promise<{ status: number; body: any }> {
@@ -90,7 +128,8 @@ export async function handleSubmitSubsidy(
   if (!iban || !isValidIban(iban)) {
     return { status: 400, body: { error: 'Diese IBAN ist ungültig.' } };
   }
-  const entry = catalogueEntry(eventKey);
+  const catalogueEntries = await loadCatalogueEntries();
+  const entry = catalogueEntries.find((e) => e.key === eventKey);
   if (!entry) {
     return { status: 400, body: { error: 'Bitte eine gültige Zuschuss-Art auswählen.' } };
   }
@@ -172,16 +211,19 @@ export async function handleSubmitSubsidy(
       createdAt: now,
     });
 
+    const missing = missingProofLabels(hasAttendanceProof, hasCostProof);
+
     let proofUploadUrl: string | undefined;
-    if (!hasAttendanceProof || !hasCostProof) {
+    if (missing.length > 0) {
       const token = createSubsidyProofToken(subsidyId);
       if (token) {
         proofUploadUrl = `${appUrl.replace(/\/$/, '')}/nachweis?t=${token}`;
+        const missingText = missing.join(' und ');
         await sendEmail({
           to: [personEmail],
           subject: 'Dein Nachweis-Link – Wirtschaftsjunioren Offenbach',
-          html: `<p>Hallo ${personName},</p><p>vielen Dank für deinen Zuschuss-Antrag (${entry.label}). Bitte reiche deine fehlenden Nachweise (Teilnahme- und/oder Kostennachweis) über folgenden Link nach:</p><p><a href="${proofUploadUrl}">${proofUploadUrl}</a></p><p>Bitte diesen Link aufbewahren.</p>`,
-          text: `Hallo ${personName}, bitte reiche deine fehlenden Nachweise über diesen Link nach: ${proofUploadUrl}`,
+          html: `<p>Hallo ${personName},</p><p>vielen Dank für deinen Zuschuss-Antrag (${entry.label}). Es fehlt uns noch: <strong>${missingText}</strong>. Bitte über folgenden Link nachreichen:</p><p><a href="${proofUploadUrl}">${proofUploadUrl}</a></p><p>Bitte diesen Link aufbewahren.</p>`,
+          text: `Hallo ${personName}, es fehlt uns noch: ${missingText}. Bitte über diesen Link nachreichen: ${proofUploadUrl}`,
         }).catch(() => {});
       }
     }
@@ -190,10 +232,6 @@ export async function handleSubmitSubsidy(
     const settings = await FirestoreAdmin.getDocument('settings/security').catch(() => null);
     const adminEmail = settings?.adminEmail;
     if (adminEmail) {
-      const missing = [
-        !hasAttendanceProof ? 'Teilnahmenachweis' : null,
-        !hasCostProof ? 'Kostennachweis' : null,
-      ].filter(Boolean);
       await sendEmail({
         to: [adminEmail],
         subject: `Neuer Zuschuss-Antrag: ${personName} – ${entry.label}`,
@@ -256,11 +294,23 @@ export async function handleResendProofLink(
     const personName = input.personName || subsidy.personName || '';
     const eventName = input.eventName || subsidy.eventName || '';
 
+    const missing = missingProofLabels(
+      subsidy.proofState === 'hochgeladen',
+      subsidy.costProofState === 'hochgeladen'
+    );
+    if (missing.length === 0) {
+      return {
+        status: 400,
+        body: { error: 'Beide Nachweise liegen bereits vor - kein Link nötig.' },
+      };
+    }
+    const missingText = missing.join(' und ');
+
     const result = await sendEmail({
       to: [email],
       subject: `Erinnerung: Nachweis für deinen Zuschuss-Antrag${eventName ? ` (${eventName})` : ''}`,
-      html: `<p>Hallo ${personName},</p><p>der Vorstand bittet dich, den fehlenden Nachweis zu deinem Zuschuss-Antrag${eventName ? ` für "${eventName}"` : ''} über folgenden Link nachzureichen:</p><p><a href="${proofUploadUrl}">${proofUploadUrl}</a></p>`,
-      text: `Hallo ${personName}, bitte reiche den fehlenden Nachweis über diesen Link nach: ${proofUploadUrl}`,
+      html: `<p>Hallo ${personName},</p><p>der Vorstand bittet dich, zu deinem Zuschuss-Antrag${eventName ? ` für "${eventName}"` : ''} noch <strong>${missingText}</strong> nachzureichen:</p><p><a href="${proofUploadUrl}">${proofUploadUrl}</a></p>`,
+      text: `Hallo ${personName}, bitte reiche noch ${missingText} über diesen Link nach: ${proofUploadUrl}`,
     });
 
     if (result.status >= 400) {

@@ -1,5 +1,11 @@
 import { Subsidy, SubsidyCategory, SubsidyPerson, SubsidyStatus } from '../types';
-import { SUBSIDY_LIMITS } from '../data/subsidyCatalogue';
+import { SubsidyLimits } from '../data/subsidyCatalogue';
+
+/** `null` heißt "kein Limit" (siehe SubsidyLimits) - fürs Rechnen als Infinity behandeln. */
+function resolveCategoryLimit(limits: SubsidyLimits, category: SubsidyCategory): number {
+  const raw = limits.perCategoryPerYear[category];
+  return raw === null || raw === undefined ? Infinity : raw;
+}
 
 /**
  * Auswertungen zur Zuschuss-Richtlinie.
@@ -59,7 +65,11 @@ export interface BudgetOverview {
   isExhausted: boolean;
 }
 
-export function budgetOverview(subsidies: Subsidy[], year: number): BudgetOverview {
+export function budgetOverview(
+  subsidies: Subsidy[],
+  year: number,
+  limits: SubsidyLimits
+): BudgetOverview {
   const ofYear = subsidies.filter((s) => s.year === year && countsTowardsBudget(s));
   const used = ofYear.reduce((sum, s) => sum + (s.amount || 0), 0);
   const paid = ofYear
@@ -68,12 +78,12 @@ export function budgetOverview(subsidies: Subsidy[], year: number): BudgetOvervi
 
   return {
     year,
-    total: SUBSIDY_LIMITS.totalPerYear,
+    total: limits.totalPerYear,
     used,
-    remaining: Math.max(0, SUBSIDY_LIMITS.totalPerYear - used),
+    remaining: Math.max(0, limits.totalPerYear - used),
     paid,
     committed: used - paid,
-    isExhausted: used >= SUBSIDY_LIMITS.totalPerYear,
+    isExhausted: used >= limits.totalPerYear,
   };
 }
 
@@ -87,7 +97,8 @@ export interface PersonBudget {
 export function personBudget(
   subsidies: Subsidy[],
   personId: string,
-  year: number
+  year: number,
+  limits: SubsidyLimits
 ): PersonBudget {
   const own = subsidies.filter(
     (s) => s.personId === personId && s.year === year && countsTowardsBudget(s)
@@ -98,7 +109,7 @@ export function personBudget(
     const used = own
       .filter((s) => s.category === cat)
       .reduce((sum, s) => sum + (s.amount || 0), 0);
-    const limit = SUBSIDY_LIMITS.perCategoryPerYear[cat];
+    const limit = resolveCategoryLimit(limits, cat);
     perCategory[cat] = {
       used,
       limit,
@@ -110,7 +121,7 @@ export function personBudget(
   return {
     personId,
     used,
-    remaining: Math.max(0, SUBSIDY_LIMITS.perPersonPerYear - used),
+    remaining: Math.max(0, limits.perPersonPerYear - used),
     perCategory,
   };
 }
@@ -129,6 +140,7 @@ export interface SubsidyWarning {
 export function checkSubsidy(
   draft: { personId: string; category: SubsidyCategory; amount: number; eventKey?: string; year: number; actualCost?: number },
   existing: Subsidy[],
+  limits: SubsidyLimits,
   editingId?: string
 ): SubsidyWarning[] {
   const warnings: SubsidyWarning[] = [];
@@ -142,7 +154,7 @@ export function checkSubsidy(
     });
   }
 
-  const pb = personBudget(others, draft.personId, draft.year);
+  const pb = personBudget(others, draft.personId, draft.year, limits);
 
   // Kategoriegrenze (§ 5 Abs. 4, § 6 Abs. 2, § 7 Abs. 2)
   const cat = pb.perCategory[draft.category];
@@ -154,19 +166,19 @@ export function checkSubsidy(
   }
 
   // Persönliche Jahresgrenze
-  if (pb.used + draft.amount > SUBSIDY_LIMITS.perPersonPerYear) {
+  if (pb.used + draft.amount > limits.perPersonPerYear) {
     warnings.push({
       level: 'warnung',
-      text: `Persönliche Jahresgrenze überschritten: bereits ${pb.used} € von ${SUBSIDY_LIMITS.perPersonPerYear} € verbraucht.`,
+      text: `Persönliche Jahresgrenze überschritten: bereits ${pb.used} € von ${limits.perPersonPerYear} € verbraucht.`,
     });
   }
 
   // Gesamtbudget (§ 8)
-  const overview = budgetOverview(others, draft.year);
-  if (overview.used + draft.amount > SUBSIDY_LIMITS.totalPerYear) {
+  const overview = budgetOverview(others, draft.year, limits);
+  if (overview.used + draft.amount > limits.totalPerYear) {
     warnings.push({
       level: 'warnung',
-      text: `Das Gesamtbudget von ${SUBSIDY_LIMITS.totalPerYear} € für ${draft.year} wird überschritten (bereits ${overview.used} € verplant).`,
+      text: `Das Gesamtbudget von ${limits.totalPerYear} € für ${draft.year} wird überschritten (bereits ${overview.used} € verplant).`,
     });
   }
 

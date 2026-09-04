@@ -715,3 +715,80 @@ setzen, verifizieren, danach unbedingt zurücksetzen, bevor committet wird.
 Drag&Drop lässt sich ohne echten OS-Dateidialog über `javascript_tool`
 prüfen: ein `File`-Objekt in ein `DataTransfer` packen und ein
 `DragEvent('drop', …)` auf das Dropzone-`<label>` dispatchen.
+
+## Zuschuss-Katalog admin-editierbar (v3.6.0)
+
+Veranstaltungen/Beträge und die Jahres-Obergrenzen (Gesamtbudget, pro
+Person, je Kategorie) waren fest im Code (`src/data/subsidyCatalogue.ts`).
+Jetzt admin-editierbar über ein neues Firestore-Settings-Dokument
+`settings/subsidyCatalogue` (`{ entries, limits }`), exakt nach dem
+bereits bestehenden `settings/security`-Muster (siehe
+`FirebaseSync.subscribeSecuritySettings`/`saveSecuritySettings`):
+`FirebaseSync.subscribeSubsidyCatalogueSettings`/
+`saveSubsidyCatalogueSettings`, Subscription in der zentralen
+Firestore-`useEffect` in `App.tsx`, State+Handler
+(`catalogueSettings`, `handleSaveCatalogueSettings`,
+`handleResetCatalogueToDefault`) in `useSubsidies.ts`, `localStorage`
+über `SubsidyStorage.getCatalogueSettings`/`saveCatalogueSettings`.
+
+**Ein Katalog-Eintrag = ein aktueller Betrag, keine Jahres-Historie**
+(bewusste Entscheidung, siehe Rückfrage im Plan): bereits gestellte
+Anträge speichern `amount`/`category`/`eventName` schon als eigene Felder
+auf dem `Subsidy`-Datensatz, nicht als Referenz auf den Katalog - eine
+Änderung am Katalog wirkt sich nur auf künftige Anträge aus.
+
+**`null` statt `Infinity` für "kein Limit"** (`SubsidyLimits.perCategoryPerYear`):
+Firestore/JSON kennen kein `Infinity` (`cleanData()` in `firebaseSync.ts`
+macht per `JSON.stringify`-Rundreise sonst unkontrolliert `null` daraus) -
+hier wird das absichtlich so gehandhabt. `resolveCategoryLimit()` in
+`utils/subsidies.ts` übersetzt beim Rechnen zurück auf `Infinity`.
+`budgetOverview`/`personBudget`/`checkSubsidy` bekommen `limits` jetzt als
+expliziten Parameter statt eines statischen Imports - alle Aufrufer
+(`SubsidiesView.tsx`, `SubsidyPeopleModal.tsx`, `NewSubsidyModal.tsx`)
+reichen `catalogueSettings.limits` durch.
+
+**Backend** (`api/subsidy.ts`) kann den Katalog nicht mehr statisch
+importieren (der ist jetzt admin-editierbar, also zur Laufzeit
+unbekannt) - `loadCatalogueEntries()` liest `settings/subsidyCatalogue`
+per `FirestoreAdmin.getDocument`, fällt bei fehlendem Dokument (frische
+Installation, oder lokal ohne `FIREBASE_SERVICE_ACCOUNT`) auf den
+eingebauten `SUBSIDY_CATALOGUE`-Standard zurück. Neuer öffentlicher
+Endpunkt `GET subsidy/catalogue` (kein Zugangscode nötig - wird im
+Formular erst nach bestandenem Code-Schritt abgerufen, der Code-Schritt
+bleibt der einzige Gatekeeper); `SubsidyApplicationPage.tsx` laedt den
+Katalog jetzt darüber statt aus dem gebündelten Modul.
+
+**Admin-UI**: neue `src/components/SubsidyCatalogueModal.tsx` (Button
+"Katalog" in `SubsidiesView.tsx`, neben "Personen") - Obergrenzen-Formular
+oben, Veranstaltungsliste mit Bearbeiten/Löschen/Neu-anlegen darunter,
+"Auf Richtlinien-Standard zurücksetzen". Neue Einträge bekommen einen aus
+der Bezeichnung generierten `key` (klein, `[a-z0-9]+`, Kollisionen per
+Zähler aufgelöst).
+
+**Regression beim Bauen vermieden, nicht erst live gefunden:** Diese
+Modal-Komponente bleibt wie `SubsidyPeopleModal.tsx` permanent gemountet
+(nur `isOpen` togglet den Inhalt). Der Obergrenzen-Entwurf (`limitsDraft`)
+darf deshalb NICHT per bloßem `useState(settings.limits)`-Initializer
+gesetzt werden (der würde nur beim allerersten Render laufen und den
+Stand von damals dauerhaft einfrieren) - stattdessen ein
+`useEffect(() => { if (isOpen) setLimitsDraft(settings.limits); }, [isOpen])`,
+der bei jedem Öffnen frisch synchronisiert. Exakt dieselbe Lektion wie
+beim `EmailVoteModal`-Fix weiter oben in dieser Datei - hier direkt beim
+Schreiben angewendet statt erst durch einen Live-Test entdeckt.
+
+**Nachweis-Erinnerung präzisiert** (`handleResendProofLink` und die
+Bestätigungs-Mail in `handleSubmitSubsidy`, beide `api/subsidy.ts`): neue
+gemeinsame Hilfsfunktion `missingProofLabels(hasAttendance, hasCost)`
+baut aus den beiden Nachweis-Status eine konkrete Liste ("Teilnahmenachweis
+und Kostennachweis (Rechnung)") statt der bisherigen generischen
+Formulierung "den fehlenden Nachweis". Sind beim erneuten Anfordern
+bereits beide Nachweise vorhanden, gibt es einen `400`-Fehler statt einer
+sinnlosen E-Mail.
+
+Live im Browser getestet (Katalog-Editor: Obergrenzen ändern inkl.
+"kein Limit"-Checkbox, Veranstaltung anlegen/löschen, sofortige
+Übernahme in `NewSubsidyModal` und der Budget-Anzeige, Reset-Button);
+`GET /api/subsidy/catalogue` direkt aufgerufen (liefert lokal den
+Default-Fallback). Die E-Mail-Textbausteine selbst konnten wie bisher
+nicht live verschickt werden (kein SMTP/Resend lokal), nur durch
+Code-Lesen verifiziert.

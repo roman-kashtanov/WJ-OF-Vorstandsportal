@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { SUBSIDY_CATALOGUE, CATEGORY_LABEL, catalogueEntry } from '../data/subsidyCatalogue';
+import { CATEGORY_LABEL, SubsidyCatalogueEntry } from '../data/subsidyCatalogue';
 import { isValidIban } from '../utils/sepa';
 import { prepareFileForStorage } from '../utils/fileStorage';
 import { DropzoneFileInput } from '../components/DropzoneFileInput';
@@ -29,11 +29,19 @@ async function postJson(path: string, body: unknown) {
   return { ok: res.ok, status: res.status, data };
 }
 
+async function getJson(path: string) {
+  const res = await fetch(`/api/${path}`);
+  const data = await res.json().catch(() => ({}));
+  return { ok: res.ok, status: res.status, data };
+}
+
 export const SubsidyApplicationPage: React.FC = () => {
   const [step, setStep] = useState<Step>('code');
   const [code, setCode] = useState('');
   const [codeError, setCodeError] = useState<string | null>(null);
   const [checkingCode, setCheckingCode] = useState(false);
+  const [catalogue, setCatalogue] = useState<SubsidyCatalogueEntry[]>([]);
+  const [catalogueError, setCatalogueError] = useState<string | null>(null);
 
   const [personName, setPersonName] = useState('');
   const [personEmail, setPersonEmail] = useState('');
@@ -60,7 +68,7 @@ export const SubsidyApplicationPage: React.FC = () => {
   const [proofUploadUrl, setProofUploadUrl] = useState<string | undefined>(undefined);
   const [copied, setCopied] = useState(false);
 
-  const entry = useMemo(() => catalogueEntry(eventKey), [eventKey]);
+  const entry = useMemo(() => catalogue.find((c) => c.key === eventKey), [catalogue, eventKey]);
   const actualCostNumber = Number(actualCost.replace(',', '.'));
 
   const handleCheckCode = async (e: React.FormEvent) => {
@@ -71,6 +79,21 @@ export const SubsidyApplicationPage: React.FC = () => {
       const { data } = await postJson('subsidy/verify-code', { code });
       if (data?.ok) {
         setStep('form');
+        // Katalog erst nach bestandenem Code laden - der Zugangscode-Schritt
+        // bleibt so der einzige Gatekeeper, kein zusaetzlicher Auth-Aufwand
+        // fuer diesen Endpunkt noetig (Inhalt - Veranstaltungen/Preise - ist
+        // nicht sensibel).
+        setCatalogueError(null);
+        try {
+          const { ok, data: catalogueData } = await getJson('subsidy/catalogue');
+          if (ok && Array.isArray(catalogueData?.entries)) {
+            setCatalogue(catalogueData.entries);
+          } else {
+            setCatalogueError('Die Liste der Veranstaltungen konnte nicht geladen werden.');
+          }
+        } catch {
+          setCatalogueError('Die Liste der Veranstaltungen konnte nicht geladen werden.');
+        }
       } else {
         setCodeError('Dieser Zugangscode ist nicht korrekt.');
       }
@@ -257,12 +280,15 @@ export const SubsidyApplicationPage: React.FC = () => {
                   className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-[#003594]"
                 >
                   <option value="">Bitte auswählen…</option>
-                  {SUBSIDY_CATALOGUE.map((c) => (
+                  {catalogue.map((c) => (
                     <option key={c.key} value={c.key}>
                       {c.label} ({CATEGORY_LABEL[c.category]})
                     </option>
                   ))}
                 </select>
+                {catalogueError && (
+                  <p className="text-[11px] font-semibold text-rose-700 mt-1">{catalogueError}</p>
+                )}
                 {entry?.hint && (
                   <p className="text-[11px] text-slate-400 mt-1">{entry.hint}</p>
                 )}

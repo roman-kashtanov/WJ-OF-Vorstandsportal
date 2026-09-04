@@ -95,3 +95,40 @@ export const SUBSIDY_LIMITS = {
 export function catalogueEntry(key?: string): SubsidyCatalogueEntry | undefined {
   return SUBSIDY_CATALOGUE.find((e) => e.key === key);
 }
+
+/**
+ * Ab hier: admin-editierbare Fassung (Settings-Dokument
+ * `settings/subsidyCatalogue`, siehe FirebaseSync.subscribeSubsidyCatalogueSettings).
+ * Die Konstanten oben bleiben unveraendert bestehen als Default/Fallback -
+ * fuer neue Installationen und fuer lokales Testen ohne Firestore-Dienstkonto.
+ *
+ * `null` statt `Infinity` fuer "kein Limit": Firestore/JSON kennen kein
+ * Infinity (ein Roundtrip durch JSON.stringify macht sonst unkontrolliert
+ * `null` daraus) - hier wird das absichtlich und explizit so gehandhabt.
+ */
+export interface SubsidyLimits {
+  perCategoryPerYear: Record<SubsidyCategory, number | null>;
+  perPersonPerYear: number;
+  totalPerYear: number;
+}
+
+export interface SubsidyCatalogueSettings {
+  entries: SubsidyCatalogueEntry[];
+  limits: SubsidyLimits;
+}
+
+export const DEFAULT_SUBSIDY_LIMITS: SubsidyLimits = {
+  perCategoryPerYear: {
+    academy: SUBSIDY_LIMITS.perCategoryPerYear.academy,
+    training: SUBSIDY_LIMITS.perCategoryPerYear.training,
+    konferenz: SUBSIDY_LIMITS.perCategoryPerYear.konferenz,
+    sonstiges: null,
+  },
+  perPersonPerYear: SUBSIDY_LIMITS.perPersonPerYear,
+  totalPerYear: SUBSIDY_LIMITS.totalPerYear,
+};
+
+export const DEFAULT_SUBSIDY_CATALOGUE_SETTINGS: SubsidyCatalogueSettings = {
+  entries: SUBSIDY_CATALOGUE,
+  limits: DEFAULT_SUBSIDY_LIMITS,
+};
