@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import {
+  ActiveTab,
   AuditLogEntry,
   BoardMember,
+  NotificationSettings,
+  NotificationType,
   Resolution,
   ResolutionAttachment,
   Subsidy,
@@ -12,6 +15,7 @@ import { FirebaseSync } from '../utils/firebaseSync';
 import { SubsidyStorage } from '../utils/storage';
 import { generateSubsidyReceiptPdf } from '../utils/subsidyReceipt';
 import { normalizeNameKey, STATUS_LABEL } from '../utils/subsidies';
+import { formatCurrency } from '../utils/formatters';
 import { SubsidyCatalogueSettings, DEFAULT_SUBSIDY_CATALOGUE_SETTINGS } from '../data/subsidyCatalogue';
 import { parseSubsidyBackupCsv } from '../utils/subsidyBackupCsv';
 
@@ -37,6 +41,15 @@ interface UseSubsidiesParams {
   /** = handleAddAttachment aus App.tsx */
   addResolutionAttachment: (resolutionId: string, attachment: ResolutionAttachment) => void;
   addAuditLogEntry: (entry: Omit<AuditLogEntry, 'id' | 'timestamp'>) => void;
+  notificationSettings: NotificationSettings;
+  addInAppAndPushNotification: (notif: {
+    title: string;
+    message: string;
+    type: NotificationType;
+    targetTab?: ActiveTab;
+    targetId?: string;
+    recipientMemberIds?: string[];
+  }) => void;
 }
 
 export function useSubsidies({
@@ -45,6 +58,8 @@ export function useSubsidies({
   createResolution,
   addResolutionAttachment,
   addAuditLogEntry,
+  notificationSettings,
+  addInAppAndPushNotification,
 }: UseSubsidiesParams) {
   const [subsidies, setSubsidies] = useState<Subsidy[]>(() => SubsidyStorage.getSubsidies());
   const [subsidyPeople, setSubsidyPeople] = useState<SubsidyPerson[]>(() =>
@@ -182,6 +197,28 @@ export function useSubsidies({
    * Statuswechsel lokal oder durch die Live-Firestore-Subscription hereinkam.
    */
   useEffect(() => {
+    // Sammelt pro Beschluss, wie viele/welcher Betrag an Zuschuessen in
+    // diesem Durchlauf zur Auszahlung freigegeben wurden - fuer EINE
+    // gebuendelte Benachrichtigung statt einer pro Einzelzuschuss (ein
+    // Sammelbeschluss kann mehrere Zuschuesse gleichzeitig freigeben).
+    //
+    // Bewusst AUSSERHALB des setSubsidies-Updaters berechnet (auf Basis von
+    // `subsidies` aus dem Hook-State, nicht `prev` im Updater): der an
+    // setState uebergebene Updater wird von React nicht garantiert
+    // synchron mit diesem Aufruf ausgefuehrt (insbesondere im Dev-Modus mit
+    // StrictMode), Code direkt danach saehe eine noch leere Map. Diese
+    // Berechnung hier ist rein lesend, hat also keine solche Race Condition.
+    const releasedByResolution = new Map<string, { count: number; total: number }>();
+    for (const s of subsidies) {
+      if (s.status !== 'im_beschluss' || !s.resolutionId) continue;
+      const res = resolutions.find((r) => r.id === s.resolutionId);
+      if (res?.status !== 'angenommen') continue;
+      const entry = releasedByResolution.get(res.id) || { count: 0, total: 0 };
+      entry.count += 1;
+      entry.total += s.amount || 0;
+      releasedByResolution.set(res.id, entry);
+    }
+
     setSubsidies((prev) => {
       let changed = false;
       const next = prev.map((s) => {
@@ -213,6 +250,22 @@ export function useSubsidies({
       });
       return changed ? next : prev;
     });
+
+    if (notificationSettings.notifyOnQuorumReached) {
+      releasedByResolution.forEach(({ count, total }, resolutionId) => {
+        const res = resolutions.find((r) => r.id === resolutionId);
+        const subject =
+          count === 1 ? `1 Zuschuss (${formatCurrency(total)})` : `${count} Zuschüsse (${formatCurrency(total)})`;
+        addInAppAndPushNotification({
+          title: '💶 Zuschüsse zur Auszahlung bereit',
+          message: `${subject} aus "${res?.title || 'einem Sammelbeschluss'}" ${
+            count === 1 ? 'kann' : 'können'
+          } jetzt überwiesen werden.`,
+          type: 'subsidy',
+          targetTab: 'subsidies',
+        });
+      });
+    }
   }, [resolutions]);
 
   /**

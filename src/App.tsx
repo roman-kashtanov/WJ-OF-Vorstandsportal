@@ -559,6 +559,8 @@ export default function App() {
     createResolution: handleCreateResolution,
     addResolutionAttachment: handleAddAttachment,
     addAuditLogEntry,
+    notificationSettings,
+    addInAppAndPushNotification,
   });
 
   // Compute pending votes for current member (only where eligible)
