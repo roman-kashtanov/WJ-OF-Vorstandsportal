@@ -115,9 +115,42 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     'members' | 'security' | 'notifications' | 'system' | 'teams' | 'history'
   >(initialTab || 'members');
 
-  /** Historie ist per Löschcode gesperrt (gleicher Code wie beim endgültigen
-   * Löschen archivierter Beschlüsse, siehe ResolutionsView.tsx) - setzt sich
-   * beim Schließen des Modals zurück. */
+  /** Der gesamte Einstellungen-Bereich ist per Löschcode gesperrt (gleicher
+   * Code wie beim endgültigen Löschen archivierter Beschlüsse) - hier
+   * werden u.a. Vorstandsmitglieder verwaltet, das darf nicht ohne Code
+   * für jeden zugänglich sein, der nur den App-Öffnen-Code kennt. Setzt
+   * sich beim Schließen des Modals zurück. */
+  const [isSettingsUnlocked, setIsSettingsUnlocked] = useState(false);
+  const [settingsCode, setSettingsCode] = useState('');
+  const [settingsCodeError, setSettingsCodeError] = useState<string | null>(null);
+  const [settingsCodeChecking, setSettingsCodeChecking] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setIsSettingsUnlocked(false);
+      setSettingsCode('');
+      setSettingsCodeError(null);
+    }
+  }, [isOpen]);
+
+  const checkSettingsCode = async () => {
+    setSettingsCodeChecking(true);
+    setSettingsCodeError(null);
+    const ok = await verifyDeleteCode(settingsCode, securitySettings);
+    setSettingsCodeChecking(false);
+    if (!ok) {
+      setSettingsCodeError('Code ungültig.');
+      setSettingsCode('');
+      return;
+    }
+    setIsSettingsUnlocked(true);
+  };
+
+  /** Historie ist zusätzlich per Löschcode gesperrt (gleicher Code wie beim
+   * endgültigen Löschen archivierter Beschlüsse, siehe ResolutionsView.tsx)
+   * - eine zweite, redundante Sperre, da diese Ansicht besonders sensibel
+   * ist (komplettes Abstimmungsverhalten). Setzt sich beim Schließen des
+   * Modals zurück. */
   const [isHistoryUnlocked, setIsHistoryUnlocked] = useState(false);
   const [historyCode, setHistoryCode] = useState('');
   const [historyCodeError, setHistoryCodeError] = useState<string | null>(null);
@@ -557,6 +590,45 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
         </div>
 
+        {!isSettingsUnlocked ? (
+          <div className="p-4 sm:p-6 overflow-y-auto">
+            <div className="max-w-sm mx-auto py-8 text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center mx-auto">
+                <Lock className="w-6 h-6" strokeWidth={1.75} />
+              </div>
+              <h4 className="font-bold text-slate-900 text-sm">Gesperrter Bereich</h4>
+              <p className="text-slate-500 text-xs leading-relaxed">
+                Hier werden u. a. Vorstandsmitglieder verwaltet. Bitte den Löschcode eingeben
+                (gleicher Code wie beim endgültigen Löschen archivierter Beschlüsse).
+              </p>
+              <input
+                type="password"
+                inputMode="numeric"
+                autoFocus
+                value={settingsCode}
+                onChange={(e) => {
+                  setSettingsCode(e.target.value);
+                  setSettingsCodeError(null);
+                }}
+                onKeyDown={(e) => e.key === 'Enter' && checkSettingsCode()}
+                placeholder="Code"
+                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-center text-base focus:outline-none focus:ring-2 focus:ring-[#003594]"
+              />
+              {settingsCodeError && (
+                <p className="text-[11px] font-semibold text-rose-700">{settingsCodeError}</p>
+              )}
+              <button
+                type="button"
+                onClick={checkSettingsCode}
+                disabled={!settingsCode.trim() || settingsCodeChecking}
+                className="w-full py-2.5 bg-[#003594] hover:bg-[#00266B] disabled:opacity-50 text-white font-bold rounded-xl transition-all cursor-pointer"
+              >
+                {settingsCodeChecking ? 'Prüfe…' : 'Entsperren'}
+              </button>
+            </div>
+          </div>
+        ) : (
+        <>
         {/* Minimalist Tabs Bar */}
         <div className="flex border-b border-slate-200 bg-slate-50/80 px-4 pt-2 gap-2 text-xs font-semibold text-slate-600 overflow-x-auto shrink-0">
           <button
@@ -1472,6 +1544,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           )}
 
         </div>
+        </>
+        )}
 
         {/* Footer */}
         <div className="p-3.5 sm:px-5 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">

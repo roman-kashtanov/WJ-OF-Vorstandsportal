@@ -149,8 +149,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    // Freigegeben, aber noch kein Profil hinterlegt (z.B. allererste
-    // Einrichtung oder ein gerade neu freigegebenes Konto).
+    // Freigegeben (Allowlist-Eintrag existiert), aber kein Mitgliedsprofil
+    // gefunden. Das darf NUR beim allerersten Zugang ueberhaupt (komplett
+    // leere Mitgliederliste) automatisch ein Profil anlegen - das richtet
+    // einmalig den Vorstand ein. In jedem anderen Fall darf sich niemand
+    // anmelden, der nicht vom Admin unter Einstellungen -> Vorstand explizit
+    // angelegt wurde: die Freigabe allein (Allowlist) reicht nicht, ein
+    // Mitgliedsprofil muss vorher existieren. Sonst koennte z.B. ein per
+    // Erinnerungslink erneut eingeladenes, aber noch nicht fertig anlegtes
+    // Konto sich selbst (moeglicherweise sogar mit Admin-Rechten) anlegen.
+    if (membersResult.members.length > 0) {
+      setError(
+        `Das Konto ${email} ist zwar freigegeben, hat aber noch kein Vorstandsprofil.\n\nEin Administrator muss diese Person zuerst unter Einstellungen → Vorstand vollständig anlegen.`
+      );
+      await signOut(auth).catch(() => {});
+      return;
+    }
+
+    // Wirklich der allererste Zugang ueberhaupt (Mitgliederliste komplett
+    // leer) - richtet einmalig den Vorstand ein.
     const name = googleUser.displayName || email.split('@')[0];
     const initials = name
       .split(' ')
@@ -159,8 +176,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       .slice(0, 2)
       .toUpperCase();
 
-    // Freigegeben, aber noch ohne Profil: Das ist der Normalfall bei der
-    // allerersten Einrichtung und bei frisch freigeschalteten Konten.
     proceedWith({
       id: `mem_${Date.now()}`,
       name,
@@ -168,8 +183,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       email,
       initials,
       avatarColor: 'bg-[#003594]',
-      // Der erste Zugang ueberhaupt richtet den Vorstand ein
-      isAdmin: membersResult.members.length === 0,
+      isAdmin: true,
       isPermanentStaff: false,
     } as BoardMember);
   };

@@ -1,6 +1,7 @@
 import { FirestoreAdmin } from './firestoreAdmin';
 import { verifyVoteToken } from './voteToken';
 import { writeNotification, writeAuditLogEntry } from './notify';
+import { calculateVoteStats } from '../src/utils/formatters';
 
 /**
  * Verbucht eine Stimme, die ueber einen Einmal-Link aus einer E-Mail kommt -
@@ -88,18 +89,41 @@ export async function handleVoteLink(token: string, appUrl: string): Promise<Vot
     const memberName = members?.name || 'Vorstandsmitglied';
     const memberRole = members?.role || '';
 
-    // Nur das eine Stimmfeld schreiben - alles andere bleibt unberuehrt,
-    // damit gleichzeitige Aenderungen anderer nicht verloren gehen.
-    await FirestoreAdmin.patchDocument(`resolutions/${resolutionId}`, {
-      [`votes.${memberId}`]: {
-        memberId,
-        memberName,
-        memberRole,
-        vote,
-        timestamp: new Date().toISOString(),
-        note: 'Stimmabgabe über den Link in der E-Mail',
-      },
-    });
+    const newVoteEntry = {
+      memberId,
+      memberName,
+      memberRole,
+      vote,
+      timestamp: new Date().toISOString(),
+      note: 'Stimmabgabe über den Link in der E-Mail',
+    };
+
+    // Status/Quorum neu berechnen, mit derselben Formel wie im Portal
+    // selbst (useResolutions.ts::handleVoteForMember) - sonst bleibt ein
+    // Beschluss, der ausschliesslich per E-Mail-Link abgestimmt wird, fuer
+    // immer auf "in_abstimmung" stehen, weil bisher NUR das Stimmfeld
+    // geschrieben, der Status aber nie neu bewertet wurde.
+    const updatedVotes = { ...(resolution.votes || {}), [memberId]: newVoteEntry };
+    const stats = calculateVoteStats({ ...resolution, votes: updatedVotes } as any, 0);
+    const wasAccepted = resolution.status === 'angenommen';
+    let newStatus: string | undefined;
+    if (stats.isQuorumReached && stats.yesCount > stats.eligibleCount / 2) {
+      newStatus = 'angenommen';
+    } else if (stats.isQuorumReached && stats.noCount >= stats.eligibleCount / 2) {
+      newStatus = 'abgelehnt';
+    }
+
+    // Nur das Stimmfeld + ggf. Status/passedAt schreiben - alles andere
+    // bleibt unberuehrt, damit gleichzeitige Aenderungen anderer nicht
+    // verloren gehen.
+    const resolutionPatch: Record<string, any> = { [`votes.${memberId}`]: newVoteEntry };
+    if (newStatus) {
+      resolutionPatch.status = newStatus;
+      if (newStatus === 'angenommen' && !resolution.passedAt) {
+        resolutionPatch.passedAt = new Date().toISOString();
+      }
+    }
+    await FirestoreAdmin.patchDocument(`resolutions/${resolutionId}`, resolutionPatch);
 
     await FirestoreAdmin.patchDocument(`usedVoteLinks/${nonce}`, {
       resolutionId,
@@ -123,6 +147,16 @@ export async function handleVoteLink(token: string, appUrl: string): Promise<Vot
       action: `${memberName} stimmte per E-Mail-Link: ${VOTE_LABEL[vote]}`,
       actorName: 'E-Mail-Stimme',
     });
+
+    if (newStatus === 'angenommen' && !wasAccepted) {
+      await writeNotification({
+        title: `🎉 Beschluss angenommen: ${resolutionLabel}`,
+        message: `"${resolution.title || resolutionLabel}" hat mit ${stats.yesCount} Ja-Stimmen das Quorum erreicht und ist offiziell gültig.`,
+        type: 'vote',
+        targetTab: 'resolutions',
+        targetId: resolutionId,
+      });
+    }
 
     return {
       status: 200,

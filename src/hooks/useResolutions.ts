@@ -104,7 +104,11 @@ export function useResolutions({
         let newStatus = res.status;
         let passedAt = res.passedAt;
 
-        if (stats.isQuorumReached && stats.yesCount > members.length / 2) {
+        // Mehrheit bezieht sich auf die STIMMBERECHTIGTEN (eligibleCount),
+        // nicht auf alle Mitglieder (members.length) - sonst zaehlen auch
+        // nicht stimmberechtigte Festangestellte mit und ein Beschluss kann
+        // trotz Ja-Mehrheit aller Stimmberechtigten nie "angenommen" werden.
+        if (stats.isQuorumReached && stats.yesCount > stats.eligibleCount / 2) {
           newStatus = 'angenommen';
           if (!passedAt) passedAt = new Date().toISOString();
 
@@ -119,7 +123,7 @@ export function useResolutions({
               recipientMemberIds: res.eligibleVoterIds,
             });
           }
-        } else if (stats.isQuorumReached && stats.noCount >= members.length / 2) {
+        } else if (stats.isQuorumReached && stats.noCount >= stats.eligibleCount / 2) {
           newStatus = 'abgelehnt';
         }
 
