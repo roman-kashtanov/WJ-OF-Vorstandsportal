@@ -107,14 +107,14 @@
 
   /* Sanftes Einblenden ganzer Bereiche beim Wechsel */
   .wj-view-enter {
-    animation: wj-enter 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: wj-enter 220ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
     --wj-enter-opacity: 0;
     --wj-enter-y: 0.4rem;
   }
 
   /* Aufklappen der Kurzinfo in Listen */
   .wj-expand {
-    animation: wj-enter 160ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: wj-enter 160ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
     --wj-enter-opacity: 0;
     --wj-enter-y: -0.25rem;
   }
