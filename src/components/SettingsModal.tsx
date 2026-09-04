@@ -15,9 +15,8 @@ import {
   UserPlus, 
   ShieldCheck, 
   Trash2, 
-  Check, 
-  Crown, 
-  KeyRound, 
+  Check,
+  KeyRound,
   RefreshCw,
   BellRing,
   Mail, 
@@ -47,12 +46,15 @@ import { sendMail } from '../utils/emailService';
 import { Biometric } from '../utils/biometric';
 import { isVotingMember, formatDate } from '../utils/formatters';
 import { firebaseConfig } from '../lib/firebase';
+import { RoleCatalogueSettings } from '../data/roleCatalogue';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   members: BoardMember[];
   onUpdateMembers: (members: BoardMember[]) => void;
+  roleCatalogue: RoleCatalogueSettings;
+  onSaveRoleCatalogue: (catalogue: RoleCatalogueSettings) => void;
   securitySettings: SecuritySettings;
   onUpdateSecuritySettings: (settings: SecuritySettings) => void;
   onLogout: () => void;
@@ -73,25 +75,14 @@ interface SettingsModalProps {
   auditLog: AuditLogEntry[];
 }
 
-const AVAILABLE_ROLES: BoardRole[] = [
-  'Kreissprecher / Vorsitzender',
-  'Stv. Kreissprecher',
-  'Schatzmeister / Finanzen',
-  'Vorstand Bildung & Wirtschaft',
-  'Vorstand Events & Netzwerk',
-  'Vorstand Mitgliederbetreuung',
-  'Vorstand Digitalisierung & PR',
-  'Schriftführer / Protokoll',
-  'Past President / Beirat',
-  'IHK-Geschäftsführung (Festangestellt)',
-  'Vorstandsassistenz (Festangestellt)',
-];
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
   members,
   onUpdateMembers,
+  roleCatalogue,
+  onSaveRoleCatalogue,
   securitySettings,
   onUpdateSecuritySettings,
   onLogout,
@@ -187,9 +178,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [memberError, setMemberError] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
-  const [newRole, setNewRole] = useState<BoardRole>('Vorstand Events & Netzwerk');
+  const [newRole, setNewRole] = useState<BoardRole>('');
   const [isPermanentStaff, setIsPermanentStaff] = useState(false);
   const [newIsVoting, setNewIsVoting] = useState(true);
+
+  // Rollen-Katalog pflegen (Einstellungen -> Vorstand)
+  const [newRoleCatalogueEntry, setNewRoleCatalogueEntry] = useState('');
+
+  // Klick-zum-Bearbeiten je Mitglied (Rolle zuweisen, Einladung senden)
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
 
   // Security Passcode change state
   const [newPasscode, setNewPasscode] = useState('');
@@ -383,6 +380,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
     setNewName('');
     setNewEmail('');
+    setNewRole('');
     setNewIsVoting(true);
     setIsAddingMember(false);
   };
@@ -743,6 +741,68 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               )}
 
+              {/* Rollen-Katalog: aendert sich durch jaehrliche Neuwahlen,
+                  deshalb hier selbst pflegbar statt fest im Code. */}
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <h5 className="font-bold text-slate-700 text-xs">Vorstandsrollen (Posten)</h5>
+                <div className="flex flex-wrap gap-1.5">
+                  {roleCatalogue.roles.map((r) => (
+                    <span
+                      key={r}
+                      className="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-full bg-white border border-slate-200 text-[11px] font-semibold text-slate-700"
+                    >
+                      {r}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onSaveRoleCatalogue({
+                            roles: roleCatalogue.roles.filter((x) => x !== r),
+                          })
+                        }
+                        className="p-0.5 text-slate-400 hover:text-rose-600 cursor-pointer"
+                        title="Rolle entfernen"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                  {roleCatalogue.roles.length === 0 && (
+                    <span className="text-[11px] text-slate-400">Noch keine Rollen angelegt.</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    value={newRoleCatalogueEntry}
+                    onChange={(e) => setNewRoleCatalogueEntry(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Enter') return;
+                      e.preventDefault();
+                      const v = newRoleCatalogueEntry.trim();
+                      if (v && !roleCatalogue.roles.includes(v)) {
+                        onSaveRoleCatalogue({ roles: [...roleCatalogue.roles, v] });
+                      }
+                      setNewRoleCatalogueEntry('');
+                    }}
+                    placeholder="Neue Rolle, z. B. Schriftführer"
+                    className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#003594]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const v = newRoleCatalogueEntry.trim();
+                      if (v && !roleCatalogue.roles.includes(v)) {
+                        onSaveRoleCatalogue({ roles: [...roleCatalogue.roles, v] });
+                      }
+                      setNewRoleCatalogueEntry('');
+                    }}
+                    disabled={!newRoleCatalogueEntry.trim()}
+                    className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-[#003594] hover:bg-blue-50 disabled:opacity-40 cursor-pointer"
+                  >
+                    Hinzufügen
+                  </button>
+                </div>
+              </div>
+
               {/* Add Member Form */}
               {isAddingMember && (
                 <form onSubmit={handleAddMember} className="p-3.5 bg-blue-50/60 rounded-xl border border-blue-200 space-y-3 animate-in fade-in">
@@ -779,14 +839,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <div>
                       <label className="block font-bold text-slate-700 mb-1">
-                        Vorstandsrolle
+                        Vorstandsrolle <span className="font-normal text-slate-400">(optional, auch später zuweisbar)</span>
                       </label>
                       <select
                         value={newRole}
-                        onChange={(e) => setNewRole(e.target.value as BoardRole)}
+                        onChange={(e) => setNewRole(e.target.value)}
                         className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#003594] text-base sm:text-sm"
                       >
-                        {AVAILABLE_ROLES.map((r) => (
+                        <option value="">— noch keine —</option>
+                        {roleCatalogue.roles.map((r) => (
                           <option key={r} value={r}>{r}</option>
                         ))}
                       </select>
@@ -839,24 +900,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
               {/* Members List */}
               <div className="space-y-2">
-                {members.map((m) => (
+                {members.map((m) => {
+                  const isEditing = editingMemberId === m.id;
+                  return (
                   <div
                     key={m.id}
-                    className="p-3 bg-slate-50 hover:bg-white rounded-xl border border-slate-200 flex items-center justify-between transition-colors"
+                    className="p-3 bg-slate-50 hover:bg-white rounded-xl border border-slate-200 transition-colors"
                   >
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setEditingMemberId(isEditing ? null : m.id)}
+                      className="flex items-center space-x-3 text-left cursor-pointer flex-1 min-w-0"
+                    >
                       <div className={`w-9 h-9 rounded-xl ${m.avatarColor || 'bg-[#003594]'} text-white font-bold text-xs flex items-center justify-center shrink-0`}>
                         {m.initials}
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <div className="flex items-center space-x-2">
                           <span className="font-bold text-slate-900 text-xs">{m.name}</span>
-                          {m.isAdmin && (
-                            <span className="text-[9px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full flex items-center space-x-0.5">
-                              <Crown className="w-2.5 h-2.5" />
-                              <span>Admin</span>
-                            </span>
-                          )}
                           {m.isPermanentStaff && (
                             <span className="text-[9px] font-bold bg-blue-100 text-[#003594] px-1.5 py-0.5 rounded-full">
                               Festangestellt
@@ -869,12 +931,51 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           )}
                         </div>
                         <div className="text-[11px] text-slate-500 flex items-center space-x-2">
-                          <span>{m.role}</span>
+                          <span>{m.role || 'Noch keine Rolle'}</span>
                           <span>•</span>
-                          <span className="font-mono text-slate-700">{m.email}</span>
+                          <span className="font-mono text-slate-700 truncate">{m.email}</span>
+                        </div>
+                      </div>
+                    </button>
+
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteMember(m.id)}
+                        disabled={members.length <= 1}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors disabled:opacity-30 cursor-pointer"
+                        title="Mitglied entfernen"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                    </div>
+
+                    {isEditing && (
+                      <div className="mt-3 pt-3 border-t border-slate-200 space-y-2.5 wj-expand">
+                        <div>
+                          <label className="block font-bold text-slate-700 text-[11px] mb-1">
+                            Vorstandsrolle
+                          </label>
+                          <select
+                            value={m.role}
+                            onChange={(e) =>
+                              onUpdateMembers(
+                                members.map((x) =>
+                                  x.id === m.id ? { ...x, role: e.target.value } : x
+                                )
+                              )
+                            }
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#003594] text-base sm:text-sm"
+                          >
+                            <option value="">— noch keine —</option>
+                            {roleCatalogue.roles.map((r) => (
+                              <option key={r} value={r}>{r}</option>
+                            ))}
+                          </select>
                         </div>
 
-                        <label className="mt-1 flex items-center space-x-1.5 cursor-pointer w-fit">
+                        <label className="flex items-center space-x-1.5 cursor-pointer w-fit">
                           <input
                             type="checkbox"
                             checked={isVotingMember(m)}
@@ -887,26 +988,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             }
                             className="w-3.5 h-3.5 accent-[#003594]"
                           />
-                          <span className="text-[10px] font-semibold text-slate-600">
+                          <span className="text-[11px] font-semibold text-slate-600">
                             stimmberechtigt
                           </span>
                         </label>
                       </div>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteMember(m.id)}
-                        disabled={members.length <= 1}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors disabled:opacity-30 cursor-pointer"
-                        title="Mitglied entfernen"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

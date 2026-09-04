@@ -3,6 +3,7 @@ import { AuthSession, BoardMember, SecuritySettings } from '../types';
 import { AppStorage } from '../utils/storage';
 import { FirebaseSync } from '../utils/firebaseSync';
 import { Biometric } from '../utils/biometric';
+import { RoleCatalogueSettings, DEFAULT_ROLE_CATALOGUE } from '../data/roleCatalogue';
 
 /**
  * Kapselt Vorstandsmitglieder, Anmeldung/Google-Login-Freigabeliste,
@@ -43,6 +44,10 @@ export function useMembers() {
     AppStorage.getSecuritySettings()
   );
 
+  const [roleCatalogue, setRoleCatalogue] = useState<RoleCatalogueSettings>(() =>
+    AppStorage.getRoleCatalogue()
+  );
+
   useEffect(() => {
     AppStorage.saveMembers(members);
   }, [members]);
@@ -58,6 +63,10 @@ export function useMembers() {
   useEffect(() => {
     AppStorage.saveSecuritySettings(securitySettings);
   }, [securitySettings]);
+
+  useEffect(() => {
+    AppStorage.saveRoleCatalogue(roleCatalogue);
+  }, [roleCatalogue]);
 
   // Platzhalter, damit die App auch vor der ersten Anmeldung rendern kann
   // (die Vorstandsliste ist bei einer frischen Installation leer).
@@ -125,6 +134,11 @@ export function useMembers() {
     FirebaseSync.saveSecuritySettings(newSettings).catch(() => {});
   };
 
+  const handleSaveRoleCatalogue = (newCatalogue: RoleCatalogueSettings) => {
+    setRoleCatalogue(newCatalogue);
+    FirebaseSync.saveRoleCatalogue(newCatalogue).catch(() => {});
+  };
+
   return {
     members,
     setMembers,
@@ -138,11 +152,14 @@ export function useMembers() {
     setIsDeviceLocked,
     securitySettings,
     setSecuritySettings,
+    roleCatalogue,
+    setRoleCatalogue,
     currentMember,
     handleAuthSuccess,
     handleLogout,
     handleSelectMember,
     handleUpdateMembers,
     handleUpdateSecuritySettings,
+    handleSaveRoleCatalogue,
   };
 }

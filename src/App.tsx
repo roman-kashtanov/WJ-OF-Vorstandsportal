@@ -71,12 +71,15 @@ export default function App() {
     setIsDeviceLocked,
     securitySettings,
     setSecuritySettings,
+    roleCatalogue,
+    setRoleCatalogue,
     currentMember,
     handleAuthSuccess,
     handleLogout,
     handleSelectMember,
     handleUpdateMembers,
     handleUpdateSecuritySettings,
+    handleSaveRoleCatalogue,
   } = useMembers();
 
   const [versionConfig, setVersionConfig] = useState<AppVersionConfig | null>(() => DEFAULT_VERSION_CONFIG);
@@ -232,6 +235,10 @@ export default function App() {
       if (remoteCatalogue) setCatalogueSettings(remoteCatalogue);
     });
 
+    const unsubRoleCatalogue = FirebaseSync.subscribeRoleCatalogue((remoteRoles) => {
+      if (remoteRoles) setRoleCatalogue(remoteRoles);
+    });
+
     // Benachrichtigungen und Revisionshistorie fuer oeffentliche/externe
     // Vorgaenge (siehe api/*.ts) - anders als applyRemote() oben nur neue
     // IDs vorne einfuegen statt die ganze Liste zu ersetzen: beides sind
@@ -271,6 +278,7 @@ export default function App() {
       unsubSec();
       unsubMeetingConfig();
       unsubCatalogue();
+      unsubRoleCatalogue();
       unsubNotifications();
       unsubAuditLog();
     };
@@ -964,6 +972,8 @@ export default function App() {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         members={members}
+        roleCatalogue={roleCatalogue}
+        onSaveRoleCatalogue={handleSaveRoleCatalogue}
         onUpdateMembers={handleUpdateMembers}
         securitySettings={securitySettings}
         onUpdateSecuritySettings={handleUpdateSecuritySettings}

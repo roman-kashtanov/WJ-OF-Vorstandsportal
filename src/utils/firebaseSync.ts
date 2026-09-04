@@ -26,6 +26,7 @@ import {
   MeetingSeries
 } from '../types';
 import { SubsidyCatalogueSettings } from '../data/subsidyCatalogue';
+import { RoleCatalogueSettings } from '../data/roleCatalogue';
 
 export interface FirebaseSyncStatus {
   isConnected: boolean;
@@ -563,6 +564,37 @@ export const FirebaseSync = {
       updateStatus({ isSyncing: false, lastSyncedAt: new Date().toISOString(), isConnected: true, error: null });
     } catch (err: any) {
       console.warn('Failed to save subsidy catalogue settings to Firebase:', err.message);
+      updateStatus({ isSyncing: false, error: err.message });
+    }
+  },
+
+  subscribeRoleCatalogue(callback: (settings: RoleCatalogueSettings) => void) {
+    try {
+      const docRef = doc(db, 'settings', 'roleCatalogue');
+      return onSnapshot(
+        docRef,
+        (snap) => {
+          if (snap.exists()) {
+            callback(snap.data() as RoleCatalogueSettings);
+          }
+        },
+        (err) => {
+          console.warn('Firebase RoleCatalogue subscription warning:', err.message);
+        }
+      );
+    } catch (e) {
+      return () => {};
+    }
+  },
+
+  async saveRoleCatalogue(settings: RoleCatalogueSettings) {
+    try {
+      updateStatus({ isSyncing: true });
+      const payload = cleanData(settings);
+      await setDoc(doc(db, 'settings', 'roleCatalogue'), payload, { merge: true });
+      updateStatus({ isSyncing: false, lastSyncedAt: new Date().toISOString(), isConnected: true, error: null });
+    } catch (err: any) {
+      console.warn('Failed to save role catalogue to Firebase:', err.message);
       updateStatus({ isSyncing: false, error: err.message });
     }
   },

@@ -1,15 +1,13 @@
-export type BoardRole = 
-  | 'Kreissprecher / Vorsitzender'
-  | 'Stv. Kreissprecher'
-  | 'Schatzmeister / Finanzen'
-  | 'Vorstand Bildung & Wirtschaft'
-  | 'Vorstand Events & Netzwerk'
-  | 'Vorstand Mitgliederbetreuung'
-  | 'Vorstand Digitalisierung & PR'
-  | 'Schriftführer / Protokoll'
-  | 'Past President / Beirat'
-  | 'IHK-Geschäftsführung (Festangestellt)'
-  | 'Vorstandsassistenz (Festangestellt)';
+/**
+ * Rein ein Anzeige-Feld, keine Berechtigungslogik haengt an konkreten
+ * Werten (das steuern die separaten Felder `isVotingMember`/
+ * `isPermanentStaff` auf `BoardMember`) - deshalb bewusst `string` statt
+ * eines festen Unions-Typs. Die tatsaechlich waehlbaren Werte pflegt der
+ * Vorstand selbst ueber den Rollen-Katalog (siehe
+ * src/data/roleCatalogue.ts, `settings/roleCatalogue` in Firestore) -
+ * durch jaehrliche Neuwahlen aendert sich diese Liste.
+ */
+export type BoardRole = string;
 
 export interface BoardMember {
   id: string;

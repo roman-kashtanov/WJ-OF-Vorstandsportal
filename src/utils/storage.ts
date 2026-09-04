@@ -17,6 +17,7 @@ import {
 import { INITIAL_BOARD_MEMBERS, INITIAL_RESOLUTIONS, INITIAL_INVOICES, INITIAL_INVOICE_FOLDERS, INITIAL_MEETINGS, INITIAL_SECURITY_SETTINGS } from '../data/initialData';
 import { normalizeSecuritySettings } from './security';
 import { SubsidyCatalogueSettings, DEFAULT_SUBSIDY_CATALOGUE_SETTINGS } from '../data/subsidyCatalogue';
+import { RoleCatalogueSettings, DEFAULT_ROLE_CATALOGUE } from '../data/roleCatalogue';
 
 const INITIAL_NOTIFICATIONS: InAppNotification[] = [];
 
@@ -69,6 +70,7 @@ const STORAGE_KEYS = {
   SUBSIDY_PEOPLE: 'wj_offenbach_subsidy_people_v1',
   CLUB_ACCOUNT: 'wj_offenbach_club_account_v1',
   SUBSIDY_CATALOGUE: 'wj_offenbach_subsidy_catalogue_v1',
+  ROLE_CATALOGUE: 'wj_offenbach_role_catalogue_v1',
   AUDIT_LOG: 'wj_offenbach_audit_log_v1',
 };
 
@@ -476,6 +478,19 @@ export const AppStorage = {
     localStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
     localStorage.removeItem(STORAGE_KEYS.NOTIFICATION_SETTINGS);
     localStorage.removeItem(STORAGE_KEYS.EMAIL_CONFIG);
+  },
+  /** Admin-editierbare Vorstandsrollen (aendern sich durch jaehrliche Neuwahlen). */
+  getRoleCatalogue(): RoleCatalogueSettings {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.ROLE_CATALOGUE);
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return DEFAULT_ROLE_CATALOGUE;
+  },
+  saveRoleCatalogue(settings: RoleCatalogueSettings) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.ROLE_CATALOGUE, JSON.stringify(settings));
+    } catch {}
   },
 };
 

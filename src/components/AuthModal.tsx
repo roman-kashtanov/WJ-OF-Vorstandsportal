@@ -179,11 +179,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     proceedWith({
       id: `mem_${Date.now()}`,
       name,
-      role: 'Kreissprecher / Vorsitzender',
+      role: '',
       email,
       initials,
       avatarColor: 'bg-[#003594]',
-      isAdmin: true,
       isPermanentStaff: false,
     } as BoardMember);
   };
