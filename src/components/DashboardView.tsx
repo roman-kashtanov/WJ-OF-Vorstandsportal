@@ -29,7 +29,7 @@ interface DashboardViewProps {
   members: BoardMember[];
   resolutions: Resolution[];
   invoices: Invoice[];
-  meetings: Meeting[];
+  nextMeeting: Meeting | null;
   onNavigate: (tab: ActiveTab) => void;
   onOpenNewResolution: () => void;
   onOpenNewInvoice: () => void;
@@ -44,7 +44,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   members,
   resolutions,
   invoices,
-  meetings,
+  nextMeeting,
   onNavigate,
   onOpenNewResolution,
   onOpenNewInvoice,
@@ -63,10 +63,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     const isEligible = !res.eligibleVoterIds || res.eligibleVoterIds.length === 0 || res.eligibleVoterIds.includes(currentMember.id);
     return res.status === 'in_abstimmung' && isEligible && !res.votes[currentMember.id];
   });
-
-  // Next meeting (Always online)
-  const upcomingMeetings = meetings.filter((m) => m.isUpcoming);
-  const nextMeeting = upcomingMeetings[0] || meetings[0];
 
   return (
     <div className="space-y-4 max-w-4xl mx-auto">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActiveTab, BoardMember, Meeting, MeetingAttachment, MeetingSeries } from '../types';
 import { AppStorage } from '../utils/storage';
 import { FirebaseSync } from '../utils/firebaseSync';
@@ -46,6 +46,19 @@ export function useMeetings({ members, setSystemBanner, setActiveTab }: UseMeeti
     AppStorage.saveShowProtocolFormatHint(showProtocolFormatHint);
   }, [showProtocolFormatHint]);
 
+  /** Einzige Quelle der Wahrheit fuer "die naechste Sitzung" - ersetzt
+   *  frueher mehrfach unabhaengig (und fehlerhaft, weil nur nach dem nie
+   *  aktualisierten `isUpcoming`-Flag statt nach dem echten Datum
+   *  filternd) berechnete Varianten in App.tsx/DashboardView.tsx. */
+  const upcomingMeetingsSorted = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return meetings
+      .filter((m) => !m.cancelled && m.date >= today)
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [meetings]);
+  const nextMeeting = upcomingMeetingsSorted[0] || null;
+  const upcomingMeetingsCount = upcomingMeetingsSorted.length;
+
   const handleCreateMeeting = (data: Omit<Meeting, 'id'>) => {
     const newMeeting: Meeting = {
       ...data,
@@ -65,7 +78,8 @@ export function useMeetings({ members, setSystemBanner, setActiveTab }: UseMeeti
     m.attendees.length === 0 &&
     !m.protocolFile &&
     !m.agendaFile &&
-    !m.protocol;
+    !m.protocol &&
+    !m.cancelled;
 
   const buildOccurrenceMeetings = (series: MeetingSeries, dates: string[]): Meeting[] =>
     dates.map((date, i) => ({
@@ -250,6 +264,19 @@ export function useMeetings({ members, setSystemBanner, setActiveTab }: UseMeeti
     );
   };
 
+  /** Markiert eine Sitzung als abgesagt (oder nimmt die Absage zurueck),
+   *  ohne sie zu loeschen - Protokoll/Agenda/TOPs bleiben erhalten. */
+  const handleToggleMeetingCancelled = (meetingId: string) => {
+    setMeetings((prev) =>
+      prev.map((m) => {
+        if (m.id !== meetingId) return m;
+        const updatedMeeting = { ...m, cancelled: !m.cancelled };
+        FirebaseSync.saveMeeting(updatedMeeting).catch(() => {});
+        return updatedMeeting;
+      })
+    );
+  };
+
   const handleSaveDefaultTeamsUrl = async (url: string, applyToAllMeetings: boolean) => {
     setDefaultTeamsUrl(url);
     AppStorage.saveDefaultTeamsUrl(url);
@@ -279,6 +306,8 @@ export function useMeetings({ members, setSystemBanner, setActiveTab }: UseMeeti
   return {
     meetings,
     setMeetings,
+    nextMeeting,
+    upcomingMeetingsCount,
     meetingSeries,
     setMeetingSeries,
     defaultTeamsUrl,
@@ -295,6 +324,7 @@ export function useMeetings({ members, setSystemBanner, setActiveTab }: UseMeeti
     handleUpdateAttendeeStatus,
     handleUpdateMeetingTeamsLink,
     handleUpdateMeetingFile,
+    handleToggleMeetingCancelled,
     handleSaveDefaultTeamsUrl,
     handleCreateMeetingSeries,
     handleUpdateMeetingSeries,

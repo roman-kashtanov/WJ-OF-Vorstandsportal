@@ -122,7 +122,6 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
             {/* Left: Next Online Meeting */}
             <div className="flex items-center space-x-2.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
               <span className="font-bold text-blue-200 uppercase tracking-wide text-[10px]">
                 Nächste Vorstandssitzung (Online):
               </span>

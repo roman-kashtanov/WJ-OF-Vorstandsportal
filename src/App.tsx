@@ -295,6 +295,8 @@ export default function App() {
   const {
     meetings,
     setMeetings,
+    nextMeeting,
+    upcomingMeetingsCount,
     meetingSeries,
     setMeetingSeries,
     defaultTeamsUrl,
@@ -311,6 +313,7 @@ export default function App() {
     handleUpdateAttendeeStatus,
     handleUpdateMeetingTeamsLink,
     handleUpdateMeetingFile,
+    handleToggleMeetingCancelled,
     handleSaveDefaultTeamsUrl,
     handleCreateMeetingSeries,
     handleUpdateMeetingSeries,
@@ -574,8 +577,6 @@ export default function App() {
     (inv) => inv.status === 'eingereicht' || inv.status === 'geprueft'
   ).length;
 
-  const upcomingMeetings = meetings.filter((m) => m.isUpcoming);
-  const nextMeeting = upcomingMeetings[0] || null;
   const selectedInvoice = invoices.find((i) => i.id === selectedInvoiceId) || null;
 
   return (
@@ -673,7 +674,7 @@ export default function App() {
             members={members}
             resolutions={resolutions}
             invoices={invoices}
-            meetings={meetings}
+            nextMeeting={nextMeeting}
             onNavigate={setActiveTab}
             onOpenNewResolution={() => setIsNewResolutionOpen(true)}
             onOpenNewInvoice={() => setIsNewInvoiceOpen(true)}
@@ -734,6 +735,7 @@ export default function App() {
             currentMember={currentMember}
             members={members}
             meetings={meetings}
+            nextMeeting={nextMeeting}
             resolutions={resolutions}
             onOpenNewMeeting={() => setIsNewMeetingOpen(true)}
             onUpdateAttendeeStatus={handleUpdateAttendeeStatus}
@@ -744,6 +746,7 @@ export default function App() {
             onUpdateMeetingTeamsLink={handleUpdateMeetingTeamsLink}
             onUpdateMeetingFile={handleUpdateMeetingFile}
             onCreateResolution={handleCreateResolution}
+            onToggleMeetingCancelled={handleToggleMeetingCancelled}
             onOpenTeamsSettings={() => setIsTeamsSettingsOpen(true)}
             defaultTeamsUrl={defaultTeamsUrl}
             showProtocolFormatHint={showProtocolFormatHint}
@@ -1090,7 +1093,7 @@ export default function App() {
         onSelectTab={setActiveTab}
         pendingVotesCount={pendingVotesCount}
         openInvoicesCount={openInvoicesCount}
-        upcomingMeetingsCount={upcomingMeetings.length}
+        upcomingMeetingsCount={upcomingMeetingsCount}
         onOpenSettings={() => {
           setSettingsInitialTab('members');
           setIsSettingsOpen(true);

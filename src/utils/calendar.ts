@@ -126,3 +126,16 @@ export function getOutlookCalendarUrl(meeting: Meeting): string {
 
   return `https://outlook.live.com/calendar/0/deeplink/compose?${params.toString()}`;
 }
+
+/**
+ * Wandelt einen MS-Teams-Besprechungslink in den msteams://-Deep-Link um,
+ * der (bei installierter Desktop-App) direkt die Teams-App statt des
+ * Browsers oeffnet. Laut Microsoft-Doku genuegt es, das Schema
+ * "https://" durch "msteams://" zu ersetzen, der Rest der URL bleibt
+ * unveraendert. Ohne installierte App laeuft der Link ins Leere - er
+ * wird deshalb immer nur als Zusatz-Option neben dem normalen
+ * Browser-Link angeboten, nie als Ersatz.
+ */
+export function getTeamsAppDeepLink(url: string): string {
+  return url.replace(/^https?:\/\//, 'msteams://');
+}

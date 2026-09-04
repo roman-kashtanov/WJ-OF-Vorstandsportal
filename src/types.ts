@@ -241,6 +241,8 @@ export interface Meeting {
   protocolFile?: MeetingAttachment;
   /** Hochgeladene Agenda-Datei - zusätzlich zur strukturierten `agenda`-TOP-Liste. */
   agendaFile?: MeetingAttachment;
+  /** Sitzung abgesagt, ohne sie zu löschen (Protokoll/Agenda bleiben erhalten). */
+  cancelled?: boolean;
 }
 
 export interface MeetingAttachment {
