@@ -81,6 +81,61 @@ export function useResolutions({
     AppStorage.saveResolutions(resolutions);
   }, [resolutions]);
 
+  /**
+   * Selbstheilung: Beschluesse, die wegen eines frueheren Fehlers in der
+   * Mehrheits-/Quorum-Berechnung (Nenner `members.length` statt
+   * `eligibleCount`, bzw. serverseitige E-Mail-Stimmen, die den Status nie
+   * neu berechneten - siehe CLAUDE.md) eigentlich schon laengst entschieden
+   * waren, aber auf "in_abstimmung" haengen blieben - normalerweise loest
+   * NUR eine neue Stimme die Neuberechnung aus, ein bereits vollstaendig
+   * abgestimmter Beschluss bekommt also nie mehr die Chance, sich selbst zu
+   * korrigieren. Prueft deshalb bei jedem Laden alle offenen Beschluesse
+   * einmal gegen die aktuelle, korrekte Formel nach.
+   */
+  useEffect(() => {
+    setResolutions((prev) => {
+      let changed = false;
+      const next = prev.map((res) => {
+        if (res.status !== 'in_abstimmung') return res;
+        const stats = calculateVoteStats(res, members.length);
+        let newStatus: Resolution['status'] | null = null;
+        if (stats.isQuorumReached && stats.yesCount > stats.eligibleCount / 2) {
+          newStatus = 'angenommen';
+        } else if (stats.isQuorumReached && stats.noCount >= stats.eligibleCount / 2) {
+          newStatus = 'abgelehnt';
+        }
+        if (!newStatus) return res;
+
+        changed = true;
+        const updated: Resolution = {
+          ...res,
+          status: newStatus,
+          passedAt: newStatus === 'angenommen' ? res.passedAt || new Date().toISOString() : res.passedAt,
+        };
+        FirebaseSync.saveResolution(updated).catch(() => {});
+        addAuditLogEntry({
+          entityType: 'resolution',
+          entityId: res.id,
+          entityLabel: res.number,
+          action: `Status nachträglich auf "${newStatus === 'angenommen' ? 'Angenommen' : 'Abgelehnt'}" korrigiert (war bereits entschieden)`,
+          actorName: 'System',
+        });
+        if (newStatus === 'angenommen' && notificationSettings.notifyOnQuorumReached) {
+          addInAppAndPushNotification({
+            title: `🎉 Beschluss angenommen: ${res.number}`,
+            message: `"${res.title}" hat mit ${stats.yesCount} Ja-Stimmen das Quorum erreicht und ist offiziell gültig.`,
+            type: 'vote',
+            targetTab: 'resolutions',
+            targetId: res.id,
+            recipientMemberIds: res.eligibleVoterIds,
+          });
+        }
+        return updated;
+      });
+      return changed ? next : prev;
+    });
+  }, [resolutions, members, notificationSettings.notifyOnQuorumReached]);
+
   const handleVoteForMember = (resolutionId: string, member: BoardMember, voteType: VoteType, note?: string) => {
     setResolutions((prev) =>
       prev.map((res) => {
