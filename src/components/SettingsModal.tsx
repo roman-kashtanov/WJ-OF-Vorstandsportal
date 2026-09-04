@@ -63,6 +63,8 @@ interface SettingsModalProps {
   onUpdateVersionConfig?: (config: Partial<AppVersionConfig>) => Promise<void> | void;
   defaultTeamsUrl?: string;
   onSaveDefaultTeamsUrl?: (url: string, applyToAllMeetings: boolean) => void;
+  showProtocolFormatHint?: boolean;
+  onToggleShowProtocolFormatHint?: (value: boolean) => void;
   notificationSettings?: NotificationSettings;
   onUpdateNotificationSettings?: (settings: NotificationSettings) => void;
   onSendTestNotification?: () => void;
@@ -100,6 +102,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onUpdateVersionConfig,
   defaultTeamsUrl = '',
   onSaveDefaultTeamsUrl,
+  showProtocolFormatHint = true,
+  onToggleShowProtocolFormatHint,
   notificationSettings,
   onUpdateNotificationSettings,
   onSendTestNotification,
@@ -1329,6 +1333,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 >
                   Link speichern
                 </button>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <h4 className="font-bold text-slate-900 text-sm mb-1">
+                  Beschlusserkennung aus Protokolltext
+                </h4>
+                <p className="text-xs text-slate-500 leading-relaxed mb-3">
+                  Bei den Sitzungen kann der Vorstand Beschlüsse automatisch aus eingefügtem
+                  Protokolltext erkennen lassen. Dort wird das dafür nötige Textformat als
+                  aufklappbarer Hinweis angezeigt - hier lässt er sich ausblenden.
+                </p>
+                <label className="flex items-center justify-between gap-3 cursor-pointer">
+                  <span className="text-slate-700 font-semibold">
+                    Format-Hinweis bei den Sitzungen anzeigen
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={showProtocolFormatHint}
+                    onChange={(e) => onToggleShowProtocolFormatHint?.(e.target.checked)}
+                    className="w-4 h-4 accent-[#003594] shrink-0"
+                  />
+                </label>
               </div>
             </div>
           )}

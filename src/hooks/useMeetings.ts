@@ -27,6 +27,9 @@ export function useMeetings({ members, setSystemBanner, setActiveTab }: UseMeeti
   const [defaultTeamsUrl, setDefaultTeamsUrl] = useState<string>(() =>
     AppStorage.getDefaultTeamsUrl()
   );
+  const [showProtocolFormatHint, setShowProtocolFormatHint] = useState<boolean>(() =>
+    AppStorage.getShowProtocolFormatHint()
+  );
   const [isNewMeetingOpen, setIsNewMeetingOpen] = useState(false);
   const [isTeamsSettingsOpen, setIsTeamsSettingsOpen] = useState(false);
   const [isQuickAgendaOpen, setIsQuickAgendaOpen] = useState(false);
@@ -38,6 +41,10 @@ export function useMeetings({ members, setSystemBanner, setActiveTab }: UseMeeti
   useEffect(() => {
     AppStorage.saveMeetingSeriesList(meetingSeries);
   }, [meetingSeries]);
+
+  useEffect(() => {
+    AppStorage.saveShowProtocolFormatHint(showProtocolFormatHint);
+  }, [showProtocolFormatHint]);
 
   const handleCreateMeeting = (data: Omit<Meeting, 'id'>) => {
     const newMeeting: Meeting = {
@@ -276,6 +283,8 @@ export function useMeetings({ members, setSystemBanner, setActiveTab }: UseMeeti
     setMeetingSeries,
     defaultTeamsUrl,
     setDefaultTeamsUrl,
+    showProtocolFormatHint,
+    setShowProtocolFormatHint,
     isNewMeetingOpen,
     setIsNewMeetingOpen,
     isTeamsSettingsOpen,

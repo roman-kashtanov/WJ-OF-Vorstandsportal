@@ -299,6 +299,8 @@ export default function App() {
     setMeetingSeries,
     defaultTeamsUrl,
     setDefaultTeamsUrl,
+    showProtocolFormatHint,
+    setShowProtocolFormatHint,
     isNewMeetingOpen,
     setIsNewMeetingOpen,
     isTeamsSettingsOpen,
@@ -744,6 +746,7 @@ export default function App() {
             onCreateResolution={handleCreateResolution}
             onOpenTeamsSettings={() => setIsTeamsSettingsOpen(true)}
             defaultTeamsUrl={defaultTeamsUrl}
+            showProtocolFormatHint={showProtocolFormatHint}
           />
         )}
 
@@ -974,6 +977,8 @@ export default function App() {
         initialTab={settingsInitialTab}
         defaultTeamsUrl={defaultTeamsUrl}
         onSaveDefaultTeamsUrl={handleSaveDefaultTeamsUrl}
+        showProtocolFormatHint={showProtocolFormatHint}
+        onToggleShowProtocolFormatHint={setShowProtocolFormatHint}
         resolutions={resolutions}
         auditLog={auditLog}
       />

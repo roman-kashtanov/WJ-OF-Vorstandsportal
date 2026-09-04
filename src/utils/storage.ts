@@ -64,6 +64,7 @@ const STORAGE_KEYS = {
   NOTIFICATION_SETTINGS: 'wj_offenbach_notif_settings_v1',
   EMAIL_CONFIG: 'wj_offenbach_email_config_v1',
   DEFAULT_TEAMS_URL: 'wj_offenbach_default_teams_url_v1',
+  SHOW_PROTOCOL_FORMAT_HINT: 'wj_offenbach_show_protocol_format_hint_v1',
   SUBSIDIES: 'wj_offenbach_subsidies_v1',
   SUBSIDY_PEOPLE: 'wj_offenbach_subsidy_people_v1',
   CLUB_ACCOUNT: 'wj_offenbach_club_account_v1',
@@ -295,6 +296,25 @@ export const AppStorage = {
       localStorage.setItem(STORAGE_KEYS.DEFAULT_TEAMS_URL, url.trim());
     } catch (e) {
       console.error('Error saving default teams url', e);
+    }
+  },
+
+  /** Rein lokale Anzeige-Einstellung (kein Firestore-Sync noetig, jedes
+   *  Vorstandsmitglied entscheidet selbst auf seinem Geraet). */
+  getShowProtocolFormatHint(): boolean {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.SHOW_PROTOCOL_FORMAT_HINT);
+      return data === null ? true : data === 'true';
+    } catch {
+      return true;
+    }
+  },
+
+  saveShowProtocolFormatHint(value: boolean) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.SHOW_PROTOCOL_FORMAT_HINT, String(value));
+    } catch (e) {
+      console.error('Error saving protocol format hint visibility', e);
     }
   },
 

@@ -23,6 +23,11 @@ import {
 import { DropzoneFileInput } from './DropzoneFileInput';
 import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
 import { ProtocolScanResultsModal } from './ProtocolScanResultsModal';
+
+/** Vorlage, die dem Vorstand zeigt, wie Copilot Beschlüsse im Protokolltext
+ *  formatieren soll, damit parseResolutionsFromProtocolText() sie erkennt. */
+const PROTOCOL_FORMAT_EXAMPLE =
+  'BESCHLUSS 1\nTitel: Freigabe Budget Sommerfest 2026\nText: Der Vorstand beschließt die Bereitstellung eines Budgets von 2.500 € für die Durchführung des Sommerfests.\nBetrag: 2500\nKategorie: Veranstaltungen & Projekte';
 import {
   Calendar as CalendarIcon,
   Video,
@@ -38,6 +43,7 @@ import {
   XCircle,
   HelpCircle,
   ChevronRight,
+  ChevronDown,
   Sparkles,
   Layers,
   ArrowUpRight,
@@ -67,6 +73,7 @@ interface MeetingsViewProps {
   ) => void;
   onOpenTeamsSettings?: () => void;
   defaultTeamsUrl?: string;
+  showProtocolFormatHint?: boolean;
 }
 
 export const MeetingsView: React.FC<MeetingsViewProps> = ({
@@ -82,6 +89,7 @@ export const MeetingsView: React.FC<MeetingsViewProps> = ({
   onCreateResolution,
   onOpenTeamsSettings,
   defaultTeamsUrl,
+  showProtocolFormatHint = true,
 }) => {
   const [selectedMeetingId, setSelectedMeetingId] = useState<string>(meetings[0]?.id || '');
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
@@ -93,6 +101,8 @@ export const MeetingsView: React.FC<MeetingsViewProps> = ({
   const [protocolText, setProtocolText] = useState<string>('');
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanCandidates, setScanCandidates] = useState<ScannedResolutionCandidate[] | null>(null);
+  const [isFormatHintExpanded, setIsFormatHintExpanded] = useState<boolean>(false);
+  const [copiedFormat, setCopiedFormat] = useState<boolean>(false);
 
   const activeMeeting = meetings.find((m) => m.id === selectedMeetingId) || meetings[0];
 
@@ -509,20 +519,71 @@ export const MeetingsView: React.FC<MeetingsViewProps> = ({
                   </h4>
                 </div>
                 <p className="text-[11px] text-slate-400">
-                  Den von Copilot erzeugten Protokolltext hier einfügen. Jeder Beschluss darin
-                  muss mit einer Zeile <code className="font-mono">BESCHLUSS</code> beginnen und
-                  darunter <code className="font-mono">Titel:</code> sowie{' '}
-                  <code className="font-mono">Text:</code> enthalten (optional{' '}
-                  <code className="font-mono">Betrag:</code> und{' '}
-                  <code className="font-mono">Kategorie:</code>).
+                  Den von Copilot erzeugten Protokolltext hier einfügen.
                 </p>
+
+                {showProtocolFormatHint && (
+                  <div className="border border-slate-200 rounded-lg overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setIsFormatHintExpanded((prev) => !prev)}
+                      className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-left cursor-pointer"
+                    >
+                      <span className="text-[11px] font-bold text-slate-700">
+                        Format für Copilot anzeigen
+                      </span>
+                      <ChevronDown
+                        className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform ${
+                          isFormatHintExpanded ? 'rotate-180' : ''
+                        }`}
+                      />
+                    </button>
+                    {isFormatHintExpanded && (
+                      <div className="p-3 space-y-2 bg-white">
+                        <p className="text-[11px] text-slate-500 leading-relaxed">
+                          Bringt Copilot bei, jeden Beschluss im Sitzungsprotokoll in diesem
+                          festen Format auszugeben. Jeder Beschluss beginnt mit einer Zeile{' '}
+                          <code className="font-mono">BESCHLUSS</code> und enthält darunter{' '}
+                          <code className="font-mono">Titel:</code> sowie{' '}
+                          <code className="font-mono">Text:</code> (optional{' '}
+                          <code className="font-mono">Betrag:</code> und{' '}
+                          <code className="font-mono">Kategorie:</code> - muss einer der sieben
+                          Beschluss-Kategorien der App entsprechen).
+                        </p>
+                        <pre className="text-[11px] font-mono text-slate-700 bg-slate-50 border border-slate-200 rounded-lg p-2.5 whitespace-pre-wrap">
+                          {PROTOCOL_FORMAT_EXAMPLE}
+                        </pre>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(PROTOCOL_FORMAT_EXAMPLE);
+                            setCopiedFormat(true);
+                            setTimeout(() => setCopiedFormat(false), 2000);
+                          }}
+                          className="flex items-center gap-1.5 text-[11px] font-bold text-[#003594] hover:underline cursor-pointer"
+                        >
+                          {copiedFormat ? (
+                            <>
+                              <Check className="w-3.5 h-3.5" strokeWidth={1.75} />
+                              <span>Kopiert!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5" strokeWidth={1.75} />
+                              <span>Format kopieren</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <textarea
                   value={protocolText}
                   onChange={(e) => setProtocolText(e.target.value)}
                   rows={5}
-                  placeholder={
-                    'BESCHLUSS 1\nTitel: Freigabe Budget Sommerfest 2026\nText: Der Vorstand beschließt die Bereitstellung eines Budgets von 2.500 € für die Durchführung des Sommerfests.\nBetrag: 2500\nKategorie: Veranstaltungen & Projekte'
-                  }
+                  placeholder={PROTOCOL_FORMAT_EXAMPLE}
                   className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#003594] resize-y"
                 />
                 <button
