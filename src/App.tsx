@@ -957,6 +957,8 @@ export default function App() {
         initialTab={settingsInitialTab}
         defaultTeamsUrl={defaultTeamsUrl}
         onSaveDefaultTeamsUrl={handleSaveDefaultTeamsUrl}
+        resolutions={resolutions}
+        auditLog={auditLog}
       />
 
       <TeamsSettingsModal

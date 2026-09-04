@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  BoardMember, 
-  SecuritySettings, 
-  BoardRole, 
+import {
+  BoardMember,
+  SecuritySettings,
+  BoardRole,
   AppVersionConfig,
   EmailServerConfig,
-  NotificationSettings
+  NotificationSettings,
+  Resolution,
+  AuditLogEntry
 } from '../types';
 import { 
   X, 
@@ -26,12 +28,14 @@ import {
   AlertCircle,
   CheckCircle2,
   Lock,
-  ArrowRight
+  ArrowRight,
+  History as HistoryIcon
 } from 'lucide-react';
 import { FirebaseSync } from '../utils/firebaseSync';
 import { useModalTransition } from '../hooks/useModalTransition';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
-import { hashPasscode } from '../utils/security';
+import { hashPasscode, verifyDeleteCode } from '../utils/security';
+import { RevisionHistory } from './RevisionHistory';
 import { CURRENT_APP_VERSION } from '../constants/version';
 import {
   subscribeToPushServer,
@@ -62,7 +66,9 @@ interface SettingsModalProps {
   notificationSettings?: NotificationSettings;
   onUpdateNotificationSettings?: (settings: NotificationSettings) => void;
   onSendTestNotification?: () => void;
-  initialTab?: 'members' | 'security' | 'notifications' | 'system' | 'teams';
+  initialTab?: 'members' | 'security' | 'notifications' | 'system' | 'teams' | 'history';
+  resolutions: Resolution[];
+  auditLog: AuditLogEntry[];
 }
 
 const AVAILABLE_ROLES: BoardRole[] = [
@@ -98,10 +104,42 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onUpdateNotificationSettings,
   onSendTestNotification,
   initialTab,
+  resolutions,
+  auditLog,
 }) => {
   const [activeTab, setActiveTab] = useState<
-    'members' | 'security' | 'notifications' | 'system' | 'teams'
+    'members' | 'security' | 'notifications' | 'system' | 'teams' | 'history'
   >(initialTab || 'members');
+
+  /** Historie ist per Löschcode gesperrt (gleicher Code wie beim endgültigen
+   * Löschen archivierter Beschlüsse, siehe ResolutionsView.tsx) - setzt sich
+   * beim Schließen des Modals zurück. */
+  const [isHistoryUnlocked, setIsHistoryUnlocked] = useState(false);
+  const [historyCode, setHistoryCode] = useState('');
+  const [historyCodeError, setHistoryCodeError] = useState<string | null>(null);
+  const [historyCodeChecking, setHistoryCodeChecking] = useState(false);
+  const [expandedHistoryResolutionId, setExpandedHistoryResolutionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setIsHistoryUnlocked(false);
+      setHistoryCode('');
+      setHistoryCodeError(null);
+    }
+  }, [isOpen]);
+
+  const checkHistoryCode = async () => {
+    setHistoryCodeChecking(true);
+    setHistoryCodeError(null);
+    const ok = await verifyDeleteCode(historyCode, securitySettings);
+    setHistoryCodeChecking(false);
+    if (!ok) {
+      setHistoryCodeError('Code ungültig.');
+      setHistoryCode('');
+      return;
+    }
+    setIsHistoryUnlocked(true);
+  };
 
   useEffect(() => {
     if (isOpen && initialTab) setActiveTab(initialTab);
@@ -581,6 +619,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           >
             <Video className="w-4 h-4" />
             <span>MS Teams Link</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('history')}
+            className={`pb-2.5 px-3 border-b-2 font-bold cursor-pointer transition-colors flex items-center space-x-1.5 whitespace-nowrap ${
+              activeTab === 'history'
+                ? 'border-[#003594] text-[#003594]'
+                : 'border-transparent text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            <HistoryIcon className="w-4 h-4" />
+            <span>Historie</span>
           </button>
         </div>
 
@@ -1279,6 +1330,118 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   Link speichern
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* TAB: HISTORIE - per Löschcode gesperrt */}
+          {activeTab === 'history' && (
+            <div key="history" className="space-y-4 wj-expand">
+              {!isHistoryUnlocked ? (
+                <div className="max-w-sm mx-auto py-8 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center mx-auto">
+                    <Lock className="w-6 h-6" strokeWidth={1.75} />
+                  </div>
+                  <h4 className="font-bold text-slate-900 text-sm">Gesperrter Bereich</h4>
+                  <p className="text-slate-500">
+                    Bitte den Löschcode eingeben, um die Historie einzusehen (gleicher Code wie
+                    beim endgültigen Löschen archivierter Beschlüsse).
+                  </p>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    value={historyCode}
+                    onChange={(e) => {
+                      setHistoryCode(e.target.value);
+                      setHistoryCodeError(null);
+                    }}
+                    onKeyDown={(e) => e.key === 'Enter' && checkHistoryCode()}
+                    placeholder="Code"
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-center text-base focus:outline-none focus:ring-2 focus:ring-[#003594]"
+                  />
+                  {historyCodeError && (
+                    <p className="text-[11px] font-semibold text-rose-700">{historyCodeError}</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={checkHistoryCode}
+                    disabled={!historyCode.trim() || historyCodeChecking}
+                    className="w-full py-2.5 bg-[#003594] hover:bg-[#00266B] disabled:opacity-50 text-white font-bold rounded-xl transition-all cursor-pointer"
+                  >
+                    {historyCodeChecking ? 'Prüfe…' : 'Entsperren'}
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div>
+                    <h4 className="font-bold text-slate-900 text-sm">Beschlüsse</h4>
+                    <p className="text-slate-500">
+                      Aufklappen zeigt das komplette Abstimmungsverhalten sowie alle
+                      protokollierten Änderungen.
+                    </p>
+                  </div>
+                  {[...resolutions]
+                    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+                    .map((res) => {
+                      const isExpanded = expandedHistoryResolutionId === res.id;
+                      const votes = Object.values(res.votes || {});
+                      return (
+                        <div key={res.id} className="rounded-xl border border-slate-200 overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedHistoryResolutionId(isExpanded ? null : res.id)}
+                            className="w-full flex items-center justify-between gap-2 p-3 text-left cursor-pointer hover:bg-slate-50"
+                          >
+                            <div className="min-w-0">
+                              <span className="font-bold text-slate-900">{res.number}</span>
+                              <span className="text-slate-500"> · {res.title}</span>
+                            </div>
+                            <ArrowRight
+                              className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform ${
+                                isExpanded ? 'rotate-90' : ''
+                              }`}
+                            />
+                          </button>
+                          {isExpanded && (
+                            <div className="p-3 pt-0 space-y-3 wj-expand">
+                              <div>
+                                <div className="font-semibold text-slate-600 mb-1">
+                                  Abstimmung ({votes.length})
+                                </div>
+                                {votes.length === 0 ? (
+                                  <p className="text-slate-400">Noch keine Stimmen.</p>
+                                ) : (
+                                  <div className="space-y-1">
+                                    {votes.map((v) => (
+                                      <div key={v.memberId} className="flex items-center justify-between">
+                                        <span className="text-slate-700">{v.memberName}</span>
+                                        <span className="text-slate-400">
+                                          {v.vote === 'yes' ? 'Ja' : v.vote === 'no' ? 'Nein' : 'Enthaltung'} ·{' '}
+                                          {formatDate(v.timestamp)}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                              <div>
+                                <div className="font-semibold text-slate-600 mb-1">Änderungen</div>
+                                <RevisionHistory
+                                  entries={auditLog.filter(
+                                    (a) => a.entityType === 'resolution' && a.entityId === res.id
+                                  )}
+                                  compact
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  {resolutions.length === 0 && (
+                    <p className="text-slate-400 text-center py-6">Noch keine Beschlüsse vorhanden.</p>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
