@@ -868,3 +868,70 @@ export async function requestInvoiceAttachmentLink(input: {
     return { ok: false, error: 'Verbindung fehlgeschlagen. Bitte erneut versuchen.' };
   }
 }
+
+/**
+ * Einladungs-E-Mail fuer ein neu (oder erneut) freigegebenes
+ * Vorstandsmitglied: Link zum Portal + Installationsanleitung fuer
+ * iPhone/Android/Computer. Reine Info-Mail ohne Geheimnis/Token - nutzt
+ * deshalb direkt das einfache sendMail() statt eines eigenen
+ * Server-Endpunkts (anders als z.B. die Abstimmungs-/Nachweis-Links, die
+ * ein signiertes Token brauchen).
+ */
+export async function sendMemberInvite(
+  member: BoardMember
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!member.email) {
+    return { ok: false, error: 'Für diese Person ist keine E-Mail-Adresse hinterlegt.' };
+  }
+
+  const portalUrl = window.location.origin;
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #0f172a; max-width: 560px; margin: 0 auto;">
+      <div style="background: #003594; color: #fff; padding: 20px 24px; border-radius: 16px 16px 0 0;">
+        <div style="font-weight: 800; letter-spacing: -0.5px;">WJOF.</div>
+        <div style="font-size: 12px; color: #bfdbfe; margin-top: 2px;">Vorstandsportal</div>
+      </div>
+      <div style="background: #fff; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 16px 16px; padding: 24px;">
+        <p style="font-size: 14px; line-height: 1.6;">Hallo ${member.name || ''},</p>
+        <p style="font-size: 14px; line-height: 1.6;">
+          du wurdest für das Vorstandsportal der Wirtschaftsjunioren Offenbach freigeschaltet.
+          Melde dich mit deinem Google-Konto (<strong>${member.email}</strong>) an:
+        </p>
+        <p style="text-align: center; margin: 24px 0;">
+          <a href="${portalUrl}" style="display: inline-block; padding: 12px 24px; background: #003594; color: #fff; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 14px;">
+            Portal öffnen
+          </a>
+        </p>
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; font-size: 13px; line-height: 1.6; color: #334155;">
+          <strong style="display: block; margin-bottom: 8px;">Als App installieren (empfohlen)</strong>
+          <p style="margin: 0 0 8px;">
+            <strong>iPhone / iPad:</strong> Seite in Safari öffnen → Teilen-Symbol antippen →
+            „Zum Home-Bildschirm" wählen.
+          </p>
+          <p style="margin: 0 0 8px;">
+            <strong>Android:</strong> Seite in Chrome öffnen → Menü (⋮) rechts oben antippen →
+            „App installieren" bzw. „Zum Startbildschirm hinzufügen" wählen.
+          </p>
+          <p style="margin: 0;">
+            <strong>Computer:</strong> Nichts einzurichten - einfach den Link oben im Browser
+            öffnen, das Portal läuft direkt über die Cloud.
+          </p>
+        </div>
+        <p style="font-size: 12px; color: #94a3b8; margin-top: 20px;">
+          Diese E-Mail kam automatisch aus dem WJOF Vorstandsportal.
+        </p>
+      </div>
+    </div>
+  `;
+
+  try {
+    await sendMail({
+      to: [member.email],
+      subject: 'Einladung zum WJOF Vorstandsportal',
+      html,
+    });
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'Die Einladung konnte nicht versendet werden.' };
+  }
+}

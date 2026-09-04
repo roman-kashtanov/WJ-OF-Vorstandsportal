@@ -42,7 +42,7 @@ import {
   isDeviceSubscribed,
   PwaNotificationService,
 } from '../utils/pwaNotifications';
-import { sendMail } from '../utils/emailService';
+import { sendMail, sendMemberInvite } from '../utils/emailService';
 import { Biometric } from '../utils/biometric';
 import { isVotingMember, formatDate } from '../utils/formatters';
 import { firebaseConfig } from '../lib/firebase';
@@ -187,6 +187,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   // Klick-zum-Bearbeiten je Mitglied (Rolle zuweisen, Einladung senden)
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
+
+  // Einladungs-E-Mail: Rueckfrage direkt nach dem Anlegen + Senden-Status
+  // pro Mitglied (fuers erneute Senden aus dem Bearbeiten-Bereich).
+  const [pendingInviteMember, setPendingInviteMember] = useState<BoardMember | null>(null);
+  const [inviteState, setInviteState] = useState<Record<string, 'busy' | 'done' | 'error'>>({});
+  const [inviteError, setInviteError] = useState<string | null>(null);
+
+  const handleSendInvite = async (member: BoardMember) => {
+    setInviteState((prev) => ({ ...prev, [member.id]: 'busy' }));
+    setInviteError(null);
+    const result = await sendMemberInvite(member);
+    if (result.ok === false) {
+      setInviteState((prev) => ({ ...prev, [member.id]: 'error' }));
+      setInviteError(result.error);
+      return;
+    }
+    setInviteState((prev) => ({ ...prev, [member.id]: 'done' }));
+    onUpdateMembers(
+      members.map((x) =>
+        x.id === member.id ? { ...x, credentialsSentAt: new Date().toISOString() } : x
+      )
+    );
+  };
 
   // Security Passcode change state
   const [newPasscode, setNewPasscode] = useState('');
@@ -376,6 +399,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       );
     } else {
       setMemberError(null);
+      setPendingInviteMember(newMember);
     }
 
     setNewName('');
@@ -741,6 +765,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               )}
 
+              {/* Rueckfrage direkt nach dem Anlegen: Einladung per E-Mail? */}
+              {pendingInviteMember && (
+                <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3.5 space-y-2.5">
+                  <p className="text-[11px] text-emerald-900 leading-relaxed">
+                    <strong>{pendingInviteMember.name}</strong> wurde angelegt. Soll direkt eine
+                    Einladung per E-Mail an <span className="font-mono">{pendingInviteMember.email}</span>{' '}
+                    verschickt werden (mit Link + Installationsanleitung)?
+                  </p>
+                  {inviteError && inviteState[pendingInviteMember.id] === 'error' && (
+                    <p className="text-[11px] font-semibold text-rose-700">{inviteError}</p>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await handleSendInvite(pendingInviteMember);
+                        setPendingInviteMember(null);
+                      }}
+                      disabled={inviteState[pendingInviteMember.id] === 'busy'}
+                      className="px-3.5 py-1.5 bg-[#003594] hover:bg-[#00266B] disabled:opacity-50 text-white rounded-lg font-bold text-xs cursor-pointer"
+                    >
+                      {inviteState[pendingInviteMember.id] === 'busy' ? 'Wird gesendet…' : 'Ja, Einladung senden'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPendingInviteMember(null)}
+                      className="px-3.5 py-1.5 text-emerald-800 hover:bg-emerald-100 rounded-lg font-semibold text-xs cursor-pointer"
+                    >
+                      Nein, später
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Rollen-Katalog: aendert sich durch jaehrliche Neuwahlen,
                   deshalb hier selbst pflegbar statt fest im Code. */}
               <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
@@ -992,6 +1050,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             stimmberechtigt
                           </span>
                         </label>
+
+                        <div className="pt-1 flex items-center gap-2 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => handleSendInvite(m)}
+                            disabled={inviteState[m.id] === 'busy'}
+                            className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 font-semibold text-[11px] flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Mail className="w-3 h-3" strokeWidth={1.75} />
+                            {inviteState[m.id] === 'busy'
+                              ? 'Wird gesendet…'
+                              : m.credentialsSentAt
+                              ? 'Einladung erneut senden'
+                              : 'Einladung senden'}
+                          </button>
+                          {m.credentialsSentAt && (
+                            <span className="text-[10px] text-slate-400">
+                              Zuletzt gesendet am {formatDate(m.credentialsSentAt)}
+                            </span>
+                          )}
+                          {inviteState[m.id] === 'error' && (
+                            <span className="text-[10px] font-semibold text-rose-700">
+                              {inviteError}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
