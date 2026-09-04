@@ -47,9 +47,16 @@ export const NewSubsidyModal: React.FC<Props> = ({
   const [proofState, setProofState] = useState<SubsidyProofState>(editing?.proofState || 'offen');
   const [proofNote, setProofNote] = useState(editing?.proofNote || '');
   const [proofFile, setProofFile] = useState(editing?.proofFile);
+  const [costProofState, setCostProofState] = useState<SubsidyProofState>(
+    editing?.costProofState || 'offen'
+  );
+  const [costProofNote, setCostProofNote] = useState(editing?.costProofNote || '');
+  const [costProofFile, setCostProofFile] = useState(editing?.costProofFile);
   const [note, setNote] = useState(editing?.note || '');
   const fileRef = useRef<HTMLInputElement>(null);
+  const costFileRef = useRef<HTMLInputElement>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [costFileError, setCostFileError] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<PreviewableFile | null>(null);
 
   const entry = catalogueEntry(eventKey);
@@ -109,8 +116,35 @@ export const NewSubsidyModal: React.FC<Props> = ({
     setProofState('hochgeladen');
   };
 
+  const handleCostFile = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    setCostFileError(null);
+
+    const result = await prepareFileForStorage(file);
+    if (result.ok === false) {
+      setCostFileError(result.error);
+      return;
+    }
+
+    setCostProofFile({
+      name: file.name,
+      size: formatBytes(result.file.bytes),
+      mimeType: result.file.mimeType,
+      dataUrl: result.file.dataUrl,
+      uploadedAt: new Date().toISOString(),
+    });
+    setCostProofState('hochgeladen');
+  };
+
   const proofIncomplete = proofState === 'anderweitig' && !proofNote.trim();
-  const canSubmit = !!personId && !!eventName.trim() && numericAmount > 0 && !proofIncomplete;
+  const costProofIncomplete = costProofState === 'anderweitig' && !costProofNote.trim();
+  const canSubmit =
+    !!personId &&
+    !!eventName.trim() &&
+    numericAmount > 0 &&
+    !proofIncomplete &&
+    !costProofIncomplete;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -138,6 +172,9 @@ export const NewSubsidyModal: React.FC<Props> = ({
       proofState,
       proofNote: proofState === 'anderweitig' ? proofNote.trim() : undefined,
       proofFile: proofState === 'hochgeladen' ? proofFile : undefined,
+      costProofState,
+      costProofNote: costProofState === 'anderweitig' ? costProofNote.trim() : undefined,
+      costProofFile: costProofState === 'hochgeladen' ? costProofFile : undefined,
       note: note.trim() || undefined,
       year: editing?.year || year,
       createdAt: editing?.createdAt || now,
@@ -322,9 +359,9 @@ export const NewSubsidyModal: React.FC<Props> = ({
             )}
           </div>
 
-          {/* Nachweis */}
+          {/* Nachweis: Teilnahme */}
           <div>
-            <label className="font-bold text-slate-900 block mb-1.5">Nachweis</label>
+            <label className="font-bold text-slate-900 block mb-1.5">Teilnahmenachweis</label>
             <div className="grid grid-cols-3 gap-1.5">
               {(
                 [
@@ -408,6 +445,101 @@ export const NewSubsidyModal: React.FC<Props> = ({
                 {proofIncomplete && (
                   <p className="mt-1 text-[11px] font-semibold text-rose-700">
                     Bitte angeben, wo der Nachweis abgelegt ist.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Nachweis: Kosten (Rechnung) - § 9: Zuschuss darf die tatsächlichen
+              Kosten nicht übersteigen, daher eigener Nachweis. */}
+          <div>
+            <label className="font-bold text-slate-900 block mb-1.5">
+              Kostennachweis (Rechnung)
+            </label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(
+                [
+                  ['offen', 'Offen'],
+                  ['hochgeladen', 'Hier abgelegt'],
+                  ['anderweitig', 'Woanders'],
+                ] as [SubsidyProofState, string][]
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setCostProofState(value)}
+                  className={`py-2 rounded-xl text-[11px] font-bold border transition-colors cursor-pointer ${
+                    costProofState === value
+                      ? 'bg-[#003594] text-white border-[#003594]'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {costProofState === 'hochgeladen' && (
+              <div className="mt-2">
+                {costProofFile ? (
+                  <div className="flex items-center justify-between gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewFile(costProofFile)}
+                      className="truncate text-left text-[#003594] font-semibold hover:underline cursor-pointer"
+                    >
+                      {costProofFile.name}{' '}
+                      <span className="text-slate-400 font-normal">({costProofFile.size})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCostProofFile(undefined)}
+                      className="p-1 text-slate-400 hover:text-rose-600 shrink-0 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => costFileRef.current?.click()}
+                    className="w-full py-3 rounded-xl border border-dashed border-slate-300 text-slate-500 hover:border-[#003594] hover:text-[#003594] transition-colors cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Paperclip className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    <span>Rechnung oder Beleg auswählen</span>
+                  </button>
+                )}
+                <input
+                  ref={costFileRef}
+                  type="file"
+                  className="hidden"
+                  accept="image/*,application/pdf"
+                  onChange={(e) => handleCostFile(e.target.files)}
+                />
+                {costFileError && (
+                  <div className="mt-2 rounded-xl bg-rose-50 border border-rose-200 p-2.5 text-[11px] leading-relaxed text-rose-800">
+                    {costFileError}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {costProofState === 'anderweitig' && (
+              <div className="mt-2">
+                <input
+                  value={costProofNote}
+                  onChange={(e) => setCostProofNote(e.target.value)}
+                  placeholder="Wo liegt die Rechnung? *"
+                  className={`w-full px-3 py-2.5 bg-slate-50 border rounded-xl text-base sm:text-sm focus:outline-none focus:ring-2 ${
+                    costProofIncomplete
+                      ? 'border-rose-300 focus:ring-rose-400'
+                      : 'border-slate-200 focus:ring-[#003594]'
+                  }`}
+                />
+                {costProofIncomplete && (
+                  <p className="mt-1 text-[11px] font-semibold text-rose-700">
+                    Bitte angeben, wo die Rechnung abgelegt ist.
                   </p>
                 )}
               </div>

@@ -46,15 +46,19 @@ export async function handleVerifySubsidyCode(code: string): Promise<{ status: n
 export interface SubmitSubsidyInput {
   accessCode: string;
   personName: string;
-  personEmail?: string;
+  personEmail: string;
   iban: string;
   bic?: string;
   accountHolder?: string;
   eventKey: string;
-  eventDate?: string;
+  eventDate: string;
+  actualCost: number;
   comment?: string;
-  proofFile?: ProofFileInput;
+  attendanceProofFile?: ProofFileInput;
+  costProofFile?: ProofFileInput;
 }
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function handleSubmitSubsidy(
   input: SubmitSubsidyInput,
@@ -73,10 +77,16 @@ export async function handleSubmitSubsidy(
   }
 
   const personName = (input?.personName || '').trim();
+  const personEmail = (input?.personEmail || '').trim();
   const iban = (input?.iban || '').trim();
   const eventKey = (input?.eventKey || '').trim();
+  const eventDate = (input?.eventDate || '').trim();
+  const actualCost = Number(input?.actualCost);
 
   if (!personName) return { status: 400, body: { error: 'Bitte einen Namen angeben.' } };
+  if (!personEmail || !EMAIL_PATTERN.test(personEmail)) {
+    return { status: 400, body: { error: 'Bitte eine gültige E-Mail-Adresse angeben.' } };
+  }
   if (!iban || !isValidIban(iban)) {
     return { status: 400, body: { error: 'Diese IBAN ist ungültig.' } };
   }
@@ -84,9 +94,17 @@ export async function handleSubmitSubsidy(
   if (!entry) {
     return { status: 400, body: { error: 'Bitte eine gültige Zuschuss-Art auswählen.' } };
   }
+  if (!eventDate) {
+    return { status: 400, body: { error: 'Bitte das Datum der Veranstaltung angeben.' } };
+  }
+  if (!actualCost || actualCost <= 0) {
+    return { status: 400, body: { error: 'Bitte die tatsächlichen Kosten angeben.' } };
+  }
 
-  const proofError = validateProofFile(input.proofFile);
-  if (proofError) return { status: 400, body: { error: proofError } };
+  const attendanceProofError = validateProofFile(input.attendanceProofFile);
+  if (attendanceProofError) return { status: 400, body: { error: attendanceProofError } };
+  const costProofError = validateProofFile(input.costProofFile);
+  if (costProofError) return { status: 400, body: { error: costProofError } };
 
   try {
     const personId = newId('pub');
@@ -96,7 +114,7 @@ export async function handleSubmitSubsidy(
       id: personId,
       name: personName,
       type: 'interessent',
-      email: input.personEmail || undefined,
+      email: personEmail,
       iban,
       bic: input.bic || undefined,
       accountHolder: input.accountHolder || undefined,
@@ -106,7 +124,17 @@ export async function handleSubmitSubsidy(
     });
 
     const subsidyId = newId('sub');
-    const hasProof = !!input.proofFile;
+    const hasAttendanceProof = !!input.attendanceProofFile;
+    const hasCostProof = !!input.costProofFile;
+
+    // § 9 der Richtlinie: der Zuschuss darf die tatsächlichen Kosten nie
+    // uebersteigen - technisch durchgesetzt statt nur als Hinweis.
+    const amount = Math.min(entry.amount, actualCost);
+
+    // Liegt die Veranstaltung noch in der Zukunft, koennen zwangslaeufig
+    // noch keine Nachweise vorliegen - eigener Status, bis das Datum
+    // erreicht ist (siehe die automatische Kaskade in useSubsidies.ts).
+    const isFuture = eventDate > now.slice(0, 10);
 
     await FirestoreAdmin.patchDocument(`subsidies/${subsidyId}`, {
       id: subsidyId,
@@ -115,17 +143,27 @@ export async function handleSubmitSubsidy(
       category: entry.category,
       eventKey: entry.key,
       eventName: entry.label,
-      eventDate: input.eventDate || undefined,
-      amount: entry.amount,
-      status: 'beantragt',
+      eventDate,
+      amount,
+      actualCost,
+      status: isFuture ? 'nicht_stattgefunden' : 'beantragt',
       source: 'public',
       appliedAt: now,
-      proofState: hasProof ? 'hochgeladen' : 'offen',
-      proofFile: hasProof
+      proofState: hasAttendanceProof ? 'hochgeladen' : 'offen',
+      proofFile: hasAttendanceProof
         ? {
-            name: input.proofFile!.name,
-            mimeType: input.proofFile!.mimeType,
-            dataUrl: input.proofFile!.dataUrl,
+            name: input.attendanceProofFile!.name,
+            mimeType: input.attendanceProofFile!.mimeType,
+            dataUrl: input.attendanceProofFile!.dataUrl,
+            uploadedAt: now,
+          }
+        : undefined,
+      costProofState: hasCostProof ? 'hochgeladen' : 'offen',
+      costProofFile: hasCostProof
+        ? {
+            name: input.costProofFile!.name,
+            mimeType: input.costProofFile!.mimeType,
+            dataUrl: input.costProofFile!.dataUrl,
             uploadedAt: now,
           }
         : undefined,
@@ -135,18 +173,16 @@ export async function handleSubmitSubsidy(
     });
 
     let proofUploadUrl: string | undefined;
-    if (!hasProof) {
+    if (!hasAttendanceProof || !hasCostProof) {
       const token = createSubsidyProofToken(subsidyId);
       if (token) {
         proofUploadUrl = `${appUrl.replace(/\/$/, '')}/nachweis?t=${token}`;
-        if (input.personEmail) {
-          await sendEmail({
-            to: [input.personEmail],
-            subject: 'Dein Nachweis-Link – Wirtschaftsjunioren Offenbach',
-            html: `<p>Hallo ${personName},</p><p>vielen Dank für deinen Zuschuss-Antrag (${entry.label}). Bitte reiche deinen Nachweis über folgenden Link nach, sobald du ihn hast:</p><p><a href="${proofUploadUrl}">${proofUploadUrl}</a></p><p>Bitte diesen Link aufbewahren.</p>`,
-            text: `Hallo ${personName}, bitte reiche deinen Nachweis über diesen Link nach: ${proofUploadUrl}`,
-          }).catch(() => {});
-        }
+        await sendEmail({
+          to: [personEmail],
+          subject: 'Dein Nachweis-Link – Wirtschaftsjunioren Offenbach',
+          html: `<p>Hallo ${personName},</p><p>vielen Dank für deinen Zuschuss-Antrag (${entry.label}). Bitte reiche deine fehlenden Nachweise (Teilnahme- und/oder Kostennachweis) über folgenden Link nach:</p><p><a href="${proofUploadUrl}">${proofUploadUrl}</a></p><p>Bitte diesen Link aufbewahren.</p>`,
+          text: `Hallo ${personName}, bitte reiche deine fehlenden Nachweise über diesen Link nach: ${proofUploadUrl}`,
+        }).catch(() => {});
       }
     }
 
@@ -154,10 +190,16 @@ export async function handleSubmitSubsidy(
     const settings = await FirestoreAdmin.getDocument('settings/security').catch(() => null);
     const adminEmail = settings?.adminEmail;
     if (adminEmail) {
+      const missing = [
+        !hasAttendanceProof ? 'Teilnahmenachweis' : null,
+        !hasCostProof ? 'Kostennachweis' : null,
+      ].filter(Boolean);
       await sendEmail({
         to: [adminEmail],
         subject: `Neuer Zuschuss-Antrag: ${personName} – ${entry.label}`,
-        html: `<p>${personName} hat einen Zuschuss für "${entry.label}" beantragt${hasProof ? ' (Nachweis liegt bereits vor)' : ' (Nachweis folgt noch)'}.</p><p>Bitte im Vorstandsportal unter Zuschüsse prüfen.</p>`,
+        html: `<p>${personName} hat einen Zuschuss für "${entry.label}" beantragt.</p><p>${
+          missing.length > 0 ? `Es fehlt noch: ${missing.join(' und ')}.` : 'Beide Nachweise liegen bereits vor.'
+        }</p><p>Bitte im Vorstandsportal unter Zuschüsse prüfen.</p>`,
         text: `${personName} hat einen Zuschuss für "${entry.label}" beantragt. Bitte im Portal prüfen.`,
       }).catch(() => {});
     }
@@ -167,6 +209,69 @@ export async function handleSubmitSubsidy(
     return {
       status: 500,
       body: { error: err?.message || 'Der Antrag konnte nicht gespeichert werden.' },
+    };
+  }
+}
+
+export interface ResendProofLinkInput {
+  subsidyId: string;
+  email: string;
+  personName: string;
+  eventName: string;
+}
+
+/**
+ * Vom Vorstand aus der App heraus ausgeloest (nicht Teil des oeffentlichen
+ * Formulars), wenn ein Nachweis fehlt und noch einmal per E-Mail
+ * nachgefordert werden soll. Die Anzeige-Werte (Name/Veranstaltung) kennt
+ * die Admin-Ansicht bereits aus dem geladenen State - nur eine knappe
+ * Existenzpruefung der subsidyId schuetzt davor, den Endpunkt als
+ * beliebigen Mail-Versender zu missbrauchen.
+ */
+export async function handleResendProofLink(
+  input: ResendProofLinkInput,
+  appUrl: string
+): Promise<{ status: number; body: any }> {
+  if (!FirestoreAdmin.isConfigured()) {
+    return { status: 500, body: { error: 'Der Server ist nicht eingerichtet.' } };
+  }
+
+  const subsidyId = (input?.subsidyId || '').trim();
+  const email = (input?.email || '').trim();
+  if (!subsidyId || !email || !EMAIL_PATTERN.test(email)) {
+    return { status: 400, body: { error: 'subsidyId und eine gültige E-Mail werden benötigt.' } };
+  }
+
+  try {
+    const subsidy = await FirestoreAdmin.getDocument(`subsidies/${subsidyId}`);
+    if (!subsidy) {
+      return { status: 404, body: { error: 'Dieser Zuschuss existiert nicht mehr.' } };
+    }
+
+    const token = createSubsidyProofToken(subsidyId);
+    if (!token) {
+      return { status: 500, body: { error: 'SUBSIDY_PROOF_LINK_SECRET ist nicht gesetzt.' } };
+    }
+    const proofUploadUrl = `${appUrl.replace(/\/$/, '')}/nachweis?t=${token}`;
+    const personName = input.personName || subsidy.personName || '';
+    const eventName = input.eventName || subsidy.eventName || '';
+
+    const result = await sendEmail({
+      to: [email],
+      subject: `Erinnerung: Nachweis für deinen Zuschuss-Antrag${eventName ? ` (${eventName})` : ''}`,
+      html: `<p>Hallo ${personName},</p><p>der Vorstand bittet dich, den fehlenden Nachweis zu deinem Zuschuss-Antrag${eventName ? ` für "${eventName}"` : ''} über folgenden Link nachzureichen:</p><p><a href="${proofUploadUrl}">${proofUploadUrl}</a></p>`,
+      text: `Hallo ${personName}, bitte reiche den fehlenden Nachweis über diesen Link nach: ${proofUploadUrl}`,
+    });
+
+    if (result.status >= 400) {
+      return { status: result.status, body: result.body };
+    }
+
+    return { status: 200, body: { ok: true } };
+  } catch (err: any) {
+    return {
+      status: 500,
+      body: { error: err?.message || 'Der Nachweis-Link konnte nicht versendet werden.' },
     };
   }
 }
@@ -195,7 +300,8 @@ export async function handleGetProofStatus(token: string): Promise<{ status: num
         ok: true,
         eventName: subsidy.eventName,
         personName: subsidy.personName,
-        proofState: subsidy.proofState,
+        attendanceProofState: subsidy.proofState,
+        costProofState: subsidy.costProofState,
         locked,
       },
     };
@@ -206,7 +312,8 @@ export async function handleGetProofStatus(token: string): Promise<{ status: num
 
 export async function handleUploadProof(
   token: string,
-  file: ProofFileInput
+  file: ProofFileInput,
+  proofType: 'attendance' | 'cost'
 ): Promise<{ status: number; body: any }> {
   const check = verifySubsidyProofToken(token);
   if (check.ok === false) {
@@ -214,6 +321,9 @@ export async function handleUploadProof(
   }
   if (!FirestoreAdmin.isConfigured()) {
     return { status: 500, body: { error: 'Der Server ist nicht eingerichtet.' } };
+  }
+  if (proofType !== 'attendance' && proofType !== 'cost') {
+    return { status: 400, body: { error: 'Unbekannter Nachweistyp.' } };
   }
 
   const proofError = validateProofFile(file);
@@ -235,15 +345,18 @@ export async function handleUploadProof(
     }
 
     const now = new Date().toISOString();
-    await FirestoreAdmin.patchDocument(`subsidies/${check.payload.s}`, {
-      proofState: 'hochgeladen',
-      proofFile: {
-        name: file.name,
-        mimeType: file.mimeType,
-        dataUrl: file.dataUrl,
-        uploadedAt: now,
-      },
-    });
+    const uploadedFile = {
+      name: file.name,
+      mimeType: file.mimeType,
+      dataUrl: file.dataUrl,
+      uploadedAt: now,
+    };
+    await FirestoreAdmin.patchDocument(
+      `subsidies/${check.payload.s}`,
+      proofType === 'attendance'
+        ? { proofState: 'hochgeladen', proofFile: uploadedFile }
+        : { costProofState: 'hochgeladen', costProofFile: uploadedFile }
+    );
 
     return { status: 200, body: { ok: true } };
   } catch (err: any) {

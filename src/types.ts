@@ -397,10 +397,19 @@ export interface Subsidy {
   releasedAt?: string;
   /** Woher der Antrag kam - nur zur Anzeige, keine Logik hängt daran. */
   source?: 'public' | 'admin';
+  /** Teilnahmenachweis (z. B. Teilnahmebestätigung, Zertifikat, Foto). */
   proofState: SubsidyProofState;
   /** Pflicht, wenn der Nachweis anderweitig abgelegt ist */
   proofNote?: string;
   proofFile?: SubsidyProofFile;
+  /**
+   * Kostennachweis (Rechnung) - § 9 der Richtlinie: der Zuschuss darf die
+   * tatsächlichen Kosten nie übersteigen, daher unabhängig vom
+   * Teilnahmenachweis verfolgt.
+   */
+  costProofState: SubsidyProofState;
+  costProofNote?: string;
+  costProofFile?: SubsidyProofFile;
   note?: string;
   /** Haushaltsjahr - das Budget verfällt zum 01.01. */
   year: number;

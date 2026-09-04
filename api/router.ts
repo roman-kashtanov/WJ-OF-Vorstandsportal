@@ -7,6 +7,7 @@ import {
   handleSubmitSubsidy,
   handleGetProofStatus,
   handleUploadProof,
+  handleResendProofLink,
 } from './subsidy';
 
 export interface ApiResponse {
@@ -102,8 +103,13 @@ export async function handleApiRequest(
   }
 
   if (method === 'POST' && route === 'subsidy/proof') {
-    const { token, file } = payload || {};
-    const result = await handleUploadProof(token || '', file);
+    const { token, file, proofType } = payload || {};
+    const result = await handleUploadProof(token || '', file, proofType);
+    return { status: result.status, body: result.body };
+  }
+
+  if (method === 'POST' && route === 'subsidy/resend-proof-link') {
+    const result = await handleResendProofLink(payload || {}, origin || '/');
     return { status: result.status, body: result.body };
   }
 
