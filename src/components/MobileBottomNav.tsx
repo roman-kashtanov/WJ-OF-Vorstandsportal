@@ -14,7 +14,6 @@ interface MobileBottomNavProps {
   onSelectTab: (tab: ActiveTab) => void;
   pendingVotesCount: number;
   openInvoicesCount: number;
-  upcomingMeetingsCount: number;
   onOpenSettings: () => void;
 }
 
@@ -23,7 +22,6 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   onSelectTab,
   pendingVotesCount,
   openInvoicesCount,
-  upcomingMeetingsCount,
   onOpenSettings,
 }) => {
   const navItems: {
@@ -58,7 +56,6 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       id: 'meetings',
       label: 'Termine',
       icon: <Calendar className="w-5 h-5" strokeWidth={1.75} />,
-      badge: upcomingMeetingsCount > 0 ? upcomingMeetingsCount : undefined,
     },
     {
       id: 'settings',

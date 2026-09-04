@@ -50,14 +50,14 @@ export function useMeetings({ members, setSystemBanner, setActiveTab }: UseMeeti
    *  frueher mehrfach unabhaengig (und fehlerhaft, weil nur nach dem nie
    *  aktualisierten `isUpcoming`-Flag statt nach dem echten Datum
    *  filternd) berechnete Varianten in App.tsx/DashboardView.tsx. */
-  const upcomingMeetingsSorted = useMemo(() => {
+  const nextMeeting = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
-    return meetings
-      .filter((m) => !m.cancelled && m.date >= today)
-      .sort((a, b) => a.date.localeCompare(b.date));
+    return (
+      meetings
+        .filter((m) => !m.cancelled && m.date >= today)
+        .sort((a, b) => a.date.localeCompare(b.date))[0] || null
+    );
   }, [meetings]);
-  const nextMeeting = upcomingMeetingsSorted[0] || null;
-  const upcomingMeetingsCount = upcomingMeetingsSorted.length;
 
   const handleCreateMeeting = (data: Omit<Meeting, 'id'>) => {
     const newMeeting: Meeting = {
@@ -307,7 +307,6 @@ export function useMeetings({ members, setSystemBanner, setActiveTab }: UseMeeti
     meetings,
     setMeetings,
     nextMeeting,
-    upcomingMeetingsCount,
     meetingSeries,
     setMeetingSeries,
     defaultTeamsUrl,

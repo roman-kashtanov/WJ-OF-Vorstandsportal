@@ -296,7 +296,6 @@ export default function App() {
     meetings,
     setMeetings,
     nextMeeting,
-    upcomingMeetingsCount,
     meetingSeries,
     setMeetingSeries,
     defaultTeamsUrl,
@@ -591,8 +590,6 @@ export default function App() {
         onSelectTab={setActiveTab}
         pendingVotesCount={pendingVotesCount}
         openInvoicesCount={openInvoicesCount}
-        upcomingMeeting={nextMeeting}
-        onOpenQuickAgenda={() => setIsQuickAgendaOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onLogout={handleLogout}
         notifications={notifications}
@@ -1093,7 +1090,6 @@ export default function App() {
         onSelectTab={setActiveTab}
         pendingVotesCount={pendingVotesCount}
         openInvoicesCount={openInvoicesCount}
-        upcomingMeetingsCount={upcomingMeetingsCount}
         onOpenSettings={() => {
           setSettingsInitialTab('members');
           setIsSettingsOpen(true);
