@@ -16,7 +16,10 @@ import {
   getOutlookCalendarUrl
 } from '../utils/calendar';
 import { prepareFileForStorage, formatBytes } from '../utils/fileStorage';
-import { scanMeetingProtocol, ScannedResolutionCandidate } from '../utils/meetingScan';
+import {
+  parseResolutionsFromProtocolText,
+  ScannedResolutionCandidate,
+} from '../utils/protocolResolutionParser';
 import { DropzoneFileInput } from './DropzoneFileInput';
 import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
 import { ProtocolScanResultsModal } from './ProtocolScanResultsModal';
@@ -87,7 +90,7 @@ export const MeetingsView: React.FC<MeetingsViewProps> = ({
   const [fileBusy, setFileBusy] = useState<'protocolFile' | 'agendaFile' | null>(null);
   const [fileError, setFileError] = useState<{ field: 'protocolFile' | 'agendaFile'; message: string } | null>(null);
   const [previewFile, setPreviewFile] = useState<PreviewableFile | null>(null);
-  const [isScanning, setIsScanning] = useState<boolean>(false);
+  const [protocolText, setProtocolText] = useState<string>('');
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanCandidates, setScanCandidates] = useState<ScannedResolutionCandidate[] | null>(null);
 
@@ -131,20 +134,16 @@ export const MeetingsView: React.FC<MeetingsViewProps> = ({
     }
   };
 
-  const handleScanProtocol = async () => {
-    if (!activeMeeting?.protocolFile?.dataUrl) return;
-    setIsScanning(true);
+  const handleScanProtocol = () => {
     setScanError(null);
-    const result = await scanMeetingProtocol({
-      meetingId: activeMeeting.id,
-      fileDataUrl: activeMeeting.protocolFile.dataUrl,
-    });
-    setIsScanning(false);
-    if (result.ok === false) {
-      setScanError(result.error);
+    const found = parseResolutionsFromProtocolText(protocolText);
+    if (found.length === 0) {
+      setScanError(
+        'Im eingefügten Text wurde kein Beschluss im erwarteten Format erkannt. Bitte prüfen, ob jeder Beschluss mit einer "BESCHLUSS"-Zeile beginnt und "Titel:"/"Text:" enthält.'
+      );
       return;
     }
-    setScanCandidates(result.candidates);
+    setScanCandidates(found);
   };
 
   // Get current member attendee status for active meeting
@@ -463,39 +462,23 @@ export const MeetingsView: React.FC<MeetingsViewProps> = ({
                       <p className="text-[11px] text-slate-400">{hint}</p>
 
                       {file ? (
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
-                            <button
-                              type="button"
-                              onClick={() => setPreviewFile(file)}
-                              className="truncate text-left text-[#003594] font-semibold text-xs hover:underline cursor-pointer flex items-center gap-1"
-                            >
-                              <Eye className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
-                              <span className="truncate">{file.name}</span>
-                              <span className="text-slate-400 font-normal shrink-0">({file.size})</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onUpdateMeetingFile(activeMeeting.id, field, undefined)}
-                              className="p-1 text-slate-400 hover:text-rose-600 shrink-0 cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
-                            </button>
-                          </div>
-                          {field === 'protocolFile' && (
-                            <button
-                              type="button"
-                              onClick={handleScanProtocol}
-                              disabled={isScanning}
-                              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#003594]/5 hover:bg-[#003594]/10 disabled:opacity-50 text-[#003594] font-bold text-[11px] border border-[#003594]/20 transition-all cursor-pointer"
-                            >
-                              <Sparkles className="w-3.5 h-3.5" strokeWidth={1.75} />
-                              <span>{isScanning ? 'Protokoll wird analysiert…' : 'Beschlüsse erkennen'}</span>
-                            </button>
-                          )}
-                          {field === 'protocolFile' && scanError && (
-                            <p className="text-[11px] font-semibold text-rose-700">{scanError}</p>
-                          )}
+                        <div className="flex items-center justify-between gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+                          <button
+                            type="button"
+                            onClick={() => setPreviewFile(file)}
+                            className="truncate text-left text-[#003594] font-semibold text-xs hover:underline cursor-pointer flex items-center gap-1"
+                          >
+                            <Eye className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
+                            <span className="truncate">{file.name}</span>
+                            <span className="text-slate-400 font-normal shrink-0">({file.size})</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onUpdateMeetingFile(activeMeeting.id, field, undefined)}
+                            className="p-1 text-slate-400 hover:text-rose-600 shrink-0 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                          </button>
                         </div>
                       ) : (
                         <DropzoneFileInput
@@ -515,6 +498,43 @@ export const MeetingsView: React.FC<MeetingsViewProps> = ({
                     </div>
                   );
                 })}
+              </div>
+
+              {/* Beschlüsse aus Protokolltext erkennen (textbasiert, ohne KI) */}
+              <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2.5">
+                <div className="flex items-center gap-2 text-slate-700">
+                  <Sparkles className="w-3.5 h-3.5 text-[#003594]" />
+                  <h4 className="text-[11px] uppercase font-bold tracking-wider">
+                    Beschlüsse aus Protokolltext erkennen
+                  </h4>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Den von Copilot erzeugten Protokolltext hier einfügen. Jeder Beschluss darin
+                  muss mit einer Zeile <code className="font-mono">BESCHLUSS</code> beginnen und
+                  darunter <code className="font-mono">Titel:</code> sowie{' '}
+                  <code className="font-mono">Text:</code> enthalten (optional{' '}
+                  <code className="font-mono">Betrag:</code> und{' '}
+                  <code className="font-mono">Kategorie:</code>).
+                </p>
+                <textarea
+                  value={protocolText}
+                  onChange={(e) => setProtocolText(e.target.value)}
+                  rows={5}
+                  placeholder={
+                    'BESCHLUSS 1\nTitel: Freigabe Budget Sommerfest 2026\nText: Der Vorstand beschließt die Bereitstellung eines Budgets von 2.500 € für die Durchführung des Sommerfests.\nBetrag: 2500\nKategorie: Veranstaltungen & Projekte'
+                  }
+                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#003594] resize-y"
+                />
+                <button
+                  type="button"
+                  onClick={handleScanProtocol}
+                  disabled={!protocolText.trim()}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#003594]/5 hover:bg-[#003594]/10 disabled:opacity-50 text-[#003594] font-bold text-[11px] border border-[#003594]/20 transition-all cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5" strokeWidth={1.75} />
+                  <span>Beschlüsse erkennen</span>
+                </button>
+                {scanError && <p className="text-[11px] font-semibold text-rose-700">{scanError}</p>}
               </div>
 
               {/* Attendee RSVP (Teilnehmerzusagen) */}

@@ -978,7 +978,7 @@ gemeldeten Fotos) komprimiert jetzt auf 290 KB roh / 386 KB
 Base64-Zeichenkette - zwei solche Dateien bleiben bei ≈772 KB, sicher
 unter der 1-MiB-Grenze.
 
-## Termine: Wiederkehrende Serien, Protokoll-/Agenda-Upload, KI-Beschlusserkennung (v3.8.0)
+## Termine: Wiederkehrende Serien, Protokoll-/Agenda-Upload, Beschlusserkennung (v3.8.0/v3.9.0)
 
 Bisher musste jede Vorstandssitzung einzeln angelegt werden - kein
 Wiederholungsmuster, kein Datei-Anhang fuers Protokoll, keine separate
@@ -1027,31 +1027,57 @@ Felder `protocolFile`/`agendaFile` an `Meeting` (das alte, ungenutzte
 AgendaItem[]`), die unveraendert bleibt - explizite Nutzervorgabe, da die
 TOP-Liste u. a. fuers Dashboard genutzt wird.
 
-**3. KI-Beschlusserkennung** (`api/protocolScan.ts`, neu): neuer
-Endpunkt `POST meeting/scan-protocol` - prueft per
-`FirestoreAdmin.getDocument`, dass die `meetingId` existiert
-(Missbrauchsschutz, gleiches Muster wie bei den anderen internen
-Endpunkten), ruft dann die Anthropic Messages API mit dem Protokoll als
-`document`-Content-Block auf (natives PDF-Verstaendnis, keine separate
-Text-Extraktion noetig) und bittet um AUSSCHLIESSLICH ein JSON-Array
-erkannter Beschluss-Kandidaten (`title`, `motionText`,
-`requestedBudget?`, `category?`). Neue Server-Config
-`ANTHROPIC_API_KEY`/`ANTHROPIC_MODEL` (`api/config.ts`,
-`.env.example`).
+**3. Beschlusserkennung aus Protokolltext** (v3.9.0, ersetzt eine
+zunaechst gebaute, dann verworfene v3.8.0-Version mit Anthropic-API-
+Anbindung, siehe unten): rein textbasiert, **komplett clientseitig,
+kein Server-Aufruf, kein API-Key, keine laufenden Kosten**
+(`src/utils/protocolResolutionParser.ts`, neu). Statt eine KI ein PDF
+lesen zu lassen, bekommt Teams Copilot vom Vorstand ein festes
+Ausgabeformat vorgegeben, das jeder Beschluss im generierten
+Protokolltext einhalten muss:
+
+```
+BESCHLUSS 1
+Titel: Freigabe Budget Sommerfest 2026
+Text: Der Vorstand beschließt die Bereitstellung eines Budgets von
+2.500 € für die Durchführung des Sommerfests.
+Betrag: 2500
+Kategorie: Veranstaltungen & Projekte
+```
+
+(`Betrag`/`Kategorie` optional; `Kategorie` muss - Gross-/Kleinschreibung
+egal - exakt einer der sieben `ResolutionCategory`-Werte sein, sonst
+bleibt sie leer und wird im Review-Modal von Hand nachgetragen.)
+`parseResolutionsFromProtocolText()` splittet den eingefuegten Text an
+jeder `BESCHLUSS`-Kopfzeile und liest je Block `Titel:`/`Text:`/
+`Betrag:`/`Kategorie:` per Regex aus - ein Block ohne Titel oder Text
+wird übersprungen. In `MeetingsView.tsx` gibt es dafuer ein eigenes
+Textfeld "Beschluesse aus Protokolltext erkennen" (unabhaengig vom
+Datei-Upload des Protokolls, der weiterhin nur der Archivierung dient)
+mit Format-Hinweis und Live-Beispiel als Platzhaltertext.
 
 **Wichtigste Leitplanke der ganzen Funktion** (Nutzerentscheidung nach
-Rueckfrage, "dringend empfohlen"): die KI legt **nie selbst** einen
-Beschluss an. `ProtocolScanResultsModal.tsx` (neu) zeigt jeden
-erkannten Kandidaten einzeln mit Checkbox (Standard: angehakt) und
-editierbaren Feldern; erst der Button "X Beschluesse anlegen" ruft fuer
-die angehakten Eintraege die **bestehende** `handleCreateResolution`
+Rueckfrage, "dringend empfohlen", gilt unveraendert fuer die
+textbasierte Version): die Erkennung legt **nie selbst** einen
+Beschluss an. `ProtocolScanResultsModal.tsx` zeigt jeden erkannten
+Kandidaten einzeln mit Checkbox (Standard: angehakt) und editierbaren
+Feldern; erst der Button "X Beschluesse anlegen" ruft fuer die
+angehakten Eintraege die **bestehende** `handleCreateResolution`
 (`useResolutions.ts`) auf - dadurch laufen Benachrichtigung,
 Revisionshistorie und der Abstimmungs-E-Mail-Versand automatisch mit,
-ohne die Logik zu duplizieren. Der Button "Beschluesse erkennen" in
-`MeetingsView.tsx` ist nur aktiv, wenn ein `protocolFile` vorliegt.
+ohne die Logik zu duplizieren.
 
-Lokal (kein `ANTHROPIC_API_KEY`/`FIREBASE_SERVICE_ACCOUNT` gesetzt)
-ausschliesslich bis zur erwarteten, klaren Fehlermeldung pruefbar - wie
-bei allen serverseitigen Flows dieser Sitzung. Der eigentliche KI-Aufruf
-selbst kann daher nur nach dem Setzen echter Secrets auf Netlify final
-verifiziert werden.
+Live getestet: zwei Beschluss-Bloecke im obigen Format korrekt in
+Titel/Text/Betrag/Kategorie zerlegt, ein dritter, nicht im Format
+gehaltener Absatz ("Verschiedenes: ...") korrekt ignoriert.
+
+**Verworfene v3.8.0-Version (zur Referenz, nicht mehr im Code):**
+zunaechst ueber `api/protocolScan.ts` gebaut - ein Endpunkt
+`POST meeting/scan-protocol`, der die Anthropic Messages API mit dem
+hochgeladenen Protokoll als `document`-Content-Block aufrief (natives
+PDF-Verstaendnis). Auf Nutzerwunsch noch VOR dem ersten Produktiveinsatz
+verworfen ("kann man es ohne KI bauen, mit Script-Erkennung auf
+Textbasis") - keine laufenden API-Kosten, keine Abhaengigkeit von einem
+externen KI-Anbieter, funktioniert offline/lokal ohne Secrets. Endpunkt,
+Server-Config (`ANTHROPIC_API_KEY`/`ANTHROPIC_MODEL`) und
+`.env.example`-Eintraege wieder entfernt.

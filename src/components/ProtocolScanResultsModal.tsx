@@ -1,19 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { BoardMember, Resolution, ResolutionCategory } from '../types';
-import { ScannedResolutionCandidate } from '../utils/meetingScan';
+import {
+  ScannedResolutionCandidate,
+  RESOLUTION_CATEGORIES,
+} from '../utils/protocolResolutionParser';
 import { isVotingMember } from '../utils/formatters';
 import { Sparkles, X, Vote } from 'lucide-react';
-
-const RESOLUTION_CATEGORIES: ResolutionCategory[] = [
-  'Finanzen & Budget',
-  'Veranstaltungen & Projekte',
-  'Marketing & PR',
-  'Satzung & Verband',
-  'Kooperationen & Sponsoring',
-  'Mitglieder & Ehrungen',
-  'Sonstiges',
-];
 
 interface DraftCandidate {
   checked: boolean;
@@ -37,10 +30,11 @@ interface Props {
 }
 
 /**
- * Zeigt die vom Server (api/protocolScan.ts) erkannten Beschluss-
- * Vorschlaege aus einem Sitzungsprotokoll. Legt NIE selbst etwas an -
- * jeder Kandidat wird einzeln bestaetigt/bearbeitet/abgehakt, erst der
- * Button unten ruft fuer die angehakten Eintraege die ganz normale
+ * Zeigt die per Text-Muster erkannten Beschluss-Vorschlaege aus einem
+ * eingefuegten Sitzungsprotokoll-Text (src/utils/protocolResolutionParser.ts,
+ * rein clientseitig, kein KI-Aufruf). Legt NIE selbst etwas an - jeder
+ * Kandidat wird einzeln bestaetigt/bearbeitet/abgehakt, erst der Button
+ * unten ruft fuer die angehakten Eintraege die ganz normale
  * handleCreateResolution() auf (Notification/Revisionshistorie/
  * Abstimmungs-Mail laufen dadurch automatisch mit, wie bei jedem von
  * Hand angelegten Beschluss).

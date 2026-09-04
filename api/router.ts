@@ -15,7 +15,6 @@ import {
   handleGetInvoiceAttachmentStatus,
   handleSubmitInvoiceAttachment,
 } from './invoice';
-import { handleScanProtocol } from './protocolScan';
 
 export interface ApiResponse {
   status: number;
@@ -138,11 +137,6 @@ export async function handleApiRequest(
 
   if (method === 'POST' && route === 'invoice/attachment') {
     const result = await handleSubmitInvoiceAttachment(payload || {});
-    return { status: result.status, body: result.body };
-  }
-
-  if (method === 'POST' && route === 'meeting/scan-protocol') {
-    const result = await handleScanProtocol(payload || {});
     return { status: result.status, body: result.body };
   }
 
