@@ -1,13 +1,14 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { 
-  BoardMember, 
-  Resolution, 
-  VoteType, 
-  Invoice, 
+import {
+  BoardMember,
+  Resolution,
+  VoteType,
+  Invoice,
   ResolutionStatus,
   ResolutionAttachment,
   BookkeepingStatus,
-  SecuritySettings
+  SecuritySettings,
+  AuditLogEntry
 } from '../types';
 import { 
   formatCurrency, 
@@ -52,19 +53,22 @@ import {
   ArchiveRestore,
   Trash2,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  History as HistoryIcon
 } from 'lucide-react';
 import { FirebaseSync } from '../utils/firebaseSync';
 import { verifyDeleteCode } from '../utils/security';
 import { downloadAttachment, getAttachmentType, formatFileSize } from '../utils/fileHelpers';
 import { prepareFileForStorage, formatBytes } from '../utils/fileStorage';
 import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
+import { RevisionHistory } from './RevisionHistory';
 
 interface ResolutionsViewProps {
   currentMember: BoardMember;
   members: BoardMember[];
   resolutions: Resolution[];
   invoices: Invoice[];
+  auditLog: AuditLogEntry[];
   onVote: (resolutionId: string, vote: VoteType, note?: string) => void;
   onAddComment: (resolutionId: string, content: string) => void;
   onOpenNewResolution: () => void;
@@ -102,6 +106,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
   members,
   resolutions,
   invoices,
+  auditLog,
   onVote,
   onAddComment,
   onOpenNewResolution,
@@ -1404,6 +1409,19 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                     })}
                   </div>
                 )}
+              </div>
+
+              {/* Revisionshistorie */}
+              <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs">
+                <div className="flex items-center space-x-2 mb-3">
+                  <HistoryIcon className="w-4 h-4 text-slate-500" />
+                  <h4 className="text-xs uppercase font-bold text-slate-700 tracking-wider">
+                    Historie
+                  </h4>
+                </div>
+                <RevisionHistory
+                  entries={auditLog.filter((a) => a.entityType === 'resolution' && a.entityId === activeResolution.id)}
+                />
               </div>
 
               {/* Kommentare */}

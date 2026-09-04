@@ -1,5 +1,6 @@
 import { FirestoreAdmin } from './firestoreAdmin';
 import { verifyVoteToken } from './voteToken';
+import { writeNotification, writeAuditLogEntry } from './notify';
 
 /**
  * Verbucht eine Stimme, die ueber einen Einmal-Link aus einer E-Mail kommt -
@@ -105,6 +106,22 @@ export async function handleVoteLink(token: string, appUrl: string): Promise<Vot
       memberId,
       vote,
       usedAt: new Date().toISOString(),
+    });
+
+    const resolutionLabel = resolution.number || resolution.title || resolutionId;
+    await writeNotification({
+      title: `📧 Stimme per E-Mail: ${resolutionLabel}`,
+      message: `${memberName} hat außerhalb der App per E-Mail-Link abgestimmt: ${VOTE_LABEL[vote]}.`,
+      type: 'vote',
+      targetTab: 'resolutions',
+      targetId: resolutionId,
+    });
+    await writeAuditLogEntry({
+      entityType: 'resolution',
+      entityId: resolutionId,
+      entityLabel: resolutionLabel,
+      action: `${memberName} stimmte per E-Mail-Link: ${VOTE_LABEL[vote]}`,
+      actorName: 'E-Mail-Stimme',
     });
 
     return {

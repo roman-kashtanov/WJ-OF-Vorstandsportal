@@ -368,6 +368,7 @@ export default function App() {
     notificationSettings,
     addInAppAndPushNotification,
     handleAddEmailLog,
+    addAuditLogEntry,
     setSystemBanner,
     setActiveTab,
     selectedResolutionId,
@@ -674,6 +675,7 @@ export default function App() {
             members={members}
             resolutions={resolutions}
             invoices={invoices}
+            auditLog={auditLog}
             onVote={handleVote}
             onAddComment={handleAddComment}
             onOpenNewResolution={() => setIsNewResolutionOpen(true)}

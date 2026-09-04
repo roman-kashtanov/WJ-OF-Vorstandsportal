@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   ActiveTab,
+  AuditLogEntry,
   BoardMember,
   BookkeepingStatus,
   EmailNotificationLog,
@@ -29,6 +30,8 @@ import { sendResolutionVoteMails } from '../utils/emailService';
 
 type SystemBanner = { type: 'success' | 'info' | 'error'; title: string; message: string } | null;
 
+const VOTE_LABEL: Record<VoteType, string> = { yes: 'Ja', no: 'Nein', abstain: 'Enthaltung' };
+
 interface UseResolutionsParams {
   members: BoardMember[];
   currentMember: BoardMember;
@@ -42,6 +45,7 @@ interface UseResolutionsParams {
     recipientMemberIds?: string[];
   }) => void;
   handleAddEmailLog: (log: Omit<EmailNotificationLog, 'id' | 'sentAt'>) => void;
+  addAuditLogEntry: (entry: Omit<AuditLogEntry, 'id' | 'timestamp'>) => void;
   setSystemBanner: (banner: SystemBanner) => void;
   setActiveTab: (tab: ActiveTab) => void;
   selectedResolutionId: string | null;
@@ -54,6 +58,7 @@ export function useResolutions({
   notificationSettings,
   addInAppAndPushNotification,
   handleAddEmailLog,
+  addAuditLogEntry,
   setSystemBanner,
   setActiveTab,
   selectedResolutionId,
@@ -128,6 +133,24 @@ export function useResolutions({
         // Sync updated resolution to Firebase Cloud
         FirebaseSync.saveResolution(updatedRes).catch(() => {});
 
+        addAuditLogEntry({
+          entityType: 'resolution',
+          entityId: res.id,
+          entityLabel: res.number,
+          action: `${member.name} stimmte: ${VOTE_LABEL[voteType]}`,
+          actorName: member.name,
+          actorId: member.id,
+        });
+        if (newStatus !== res.status && (newStatus === 'angenommen' || newStatus === 'abgelehnt')) {
+          addAuditLogEntry({
+            entityType: 'resolution',
+            entityId: res.id,
+            entityLabel: res.number,
+            action: `Status auf "${newStatus === 'angenommen' ? 'Angenommen' : 'Abgelehnt'}" gewechselt`,
+            actorName: 'System',
+          });
+        }
+
         return updatedRes;
       })
     );
@@ -162,6 +185,14 @@ export function useResolutions({
           archivedBy: archive ? `${currentMember.name} (${currentMember.role})` : undefined,
         };
         FirebaseSync.saveResolution(updated).catch(() => {});
+        addAuditLogEntry({
+          entityType: 'resolution',
+          entityId: res.id,
+          entityLabel: res.number,
+          action: archive ? 'Archiviert' : 'Aus dem Archiv geholt',
+          actorName: currentMember.name,
+          actorId: currentMember.id,
+        });
         return updated;
       })
     );
@@ -215,6 +246,14 @@ export function useResolutions({
           comments: [...res.comments, newComment],
         };
         FirebaseSync.saveResolution(updatedRes).catch(() => {});
+        addAuditLogEntry({
+          entityType: 'resolution',
+          entityId: res.id,
+          entityLabel: res.number,
+          action: 'Kommentar hinzugefügt',
+          actorName: currentMember.name,
+          actorId: currentMember.id,
+        });
         return updatedRes;
       })
     );
@@ -230,6 +269,14 @@ export function useResolutions({
           attachments: [...currentAttachments, attachment],
         };
         FirebaseSync.saveResolution(updatedRes).catch(() => {});
+        addAuditLogEntry({
+          entityType: 'resolution',
+          entityId: res.id,
+          entityLabel: res.number,
+          action: `Anhang hinzugefügt: ${attachment.name}`,
+          actorName: currentMember.name,
+          actorId: currentMember.id,
+        });
         return updatedRes;
       })
     );
@@ -265,6 +312,15 @@ export function useResolutions({
     FirebaseSync.saveResolution(newRes).catch(() => {});
     setSelectedResolutionId(newRes.id);
     setActiveTab('resolutions');
+
+    addAuditLogEntry({
+      entityType: 'resolution',
+      entityId: newRes.id,
+      entityLabel: newRes.number,
+      action: 'Beschluss erstellt',
+      actorName: currentMember.name,
+      actorId: currentMember.id,
+    });
 
     // Trigger in-app and push notification
     if (notificationSettings.notifyOnNewResolution) {
@@ -334,6 +390,14 @@ export function useResolutions({
           bookkeepingStatus: status,
         };
         FirebaseSync.saveResolution(updatedRes).catch(() => {});
+        addAuditLogEntry({
+          entityType: 'resolution',
+          entityId: res.id,
+          entityLabel: res.number,
+          action: `Buchhaltungsstatus geändert`,
+          actorName: currentMember.name,
+          actorId: currentMember.id,
+        });
         return updatedRes;
       })
     );
