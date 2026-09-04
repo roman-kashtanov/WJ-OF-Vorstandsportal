@@ -1,7 +1,7 @@
 {
   "name": "wjof-vorstandsportal",
   "private": true,
-  "version": "3.7.2",
+  "version": "3.7.3",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",

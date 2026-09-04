@@ -5,7 +5,7 @@ import { createSubsidyProofToken, verifySubsidyProofToken } from './subsidyProof
 import { sendEmail } from './email';
 import { SUBSIDY_CATALOGUE, SubsidyCatalogueEntry } from '../src/data/subsidyCatalogue';
 import { isValidIban } from '../src/utils/sepa';
-import { dataUrlBytes } from '../src/utils/fileStorage';
+import { dataUrlBytes, formatBytes, MAX_STORED_BYTES } from '../src/utils/fileStorage';
 import { writeNotification, writeAuditLogEntry } from './notify';
 
 /**
@@ -32,9 +32,13 @@ function validateProofFile(file?: ProofFileInput): string | null {
     return 'Der Nachweis konnte nicht gelesen werden.';
   }
   // Serverseitige Nachkontrolle - der Browser komprimiert bereits vorher,
-  // aber eine von Hand gebaute Anfrage koennte das umgehen.
-  if (dataUrlBytes(file.dataUrl) > 800 * 1024) {
-    return 'Die Datei ist zu groß (maximal 800 KB nach Komprimierung).';
+  // aber eine von Hand gebaute Anfrage koennte das umgehen. Derselbe Wert
+  // wie beim clientseitigen Komprimieren (MAX_STORED_BYTES) - ein Zuschuss
+  // kann zwei solche Dateien gleichzeitig tragen (Teilnahme- + Kosten-
+  // nachweis), die Grenze ist also bewusst so bemessen, dass zwei Dateien
+  // zusammen unter der 1-MiB-Firestore-Grenze bleiben.
+  if (dataUrlBytes(file.dataUrl) > MAX_STORED_BYTES) {
+    return `Die Datei ist zu groß (maximal ${formatBytes(MAX_STORED_BYTES)} nach Komprimierung).`;
   }
   return null;
 }

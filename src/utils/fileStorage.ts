@@ -9,10 +9,24 @@
  *
  * Bilder werden deshalb vor dem Speichern verkleinert. Ein Kassenbon oder eine
  * Rechnung bleibt dabei gut lesbar, landet aber bei rund 100–300 KB.
+ *
+ * Wichtig: ein Zuschuss-Dokument kann ZWEI eingebettete Dateien gleichzeitig
+ * tragen (Teilnahmenachweis UND Kostennachweis, siehe Subsidy in types.ts) -
+ * die Grenze pro Datei muss also so bemessen sein, dass auch ZWEI Dateien
+ * zusammen sicher unter 1 MiB bleiben, nicht nur eine einzelne. Genau das
+ * hat live einen Fehler verursacht: 700 KB roh × 4/3 (Base64) ≈ 933 KB pro
+ * Datei - zwei davon zusammen (≈1,87 MB) haben die 1-MiB-Grenze gesprengt,
+ * sobald zum bereits vorhandenen Teilnahmenachweis noch der Kostennachweis
+ * dazukam.
  */
 
-/** Obergrenze der gespeicherten Rohdaten. Mit Base64 bleibt genug Luft unter 1 MiB. */
-export const MAX_STORED_BYTES = 700 * 1024;
+/**
+ * Obergrenze der gespeicherten Rohdaten je Datei. 300 KB roh × 4/3 (Base64)
+ * ≈ 400 KB je Datei - zwei Dateien im selben Dokument (Zuschuss:
+ * Teilnahme- + Kostennachweis) bleiben damit bei ≈800 KB, mit ausreichend
+ * Puffer unter der 1-MiB-Grenze für alle übrigen Felder.
+ */
+export const MAX_STORED_BYTES = 300 * 1024;
 
 /**
  * Längste Bildkante nach dem Verkleinern.

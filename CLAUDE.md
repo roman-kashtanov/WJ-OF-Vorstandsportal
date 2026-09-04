@@ -936,3 +936,44 @@ Dienstkonto lokal, wie bei allen `/api/subsidy/*`-Handlern in dieser
 Sitzung) - die Logik selbst ist eine einfache, isolierte
 Zusatzbedingung direkt neben dem bereits bestehenden, identisch
 aufgebauten Sperr-Check.
+
+## Live-Fehler behoben: Firestore-1-MiB-Grenze bei zwei Nachweisen (v3.7.3)
+
+Echter Produktionsfehler, vom Nutzer per Screenshot gemeldet: beim
+Hochladen des Kostennachweises über `/nachweis` schlug Firestore fehl
+mit "Document ... exceeds the maximum allowed size of 1,048,576 bytes",
+obwohl die v3.7.1-Komprimierung (siehe oben) einwandfrei funktionierte.
+
+**Ursache:** `MAX_STORED_BYTES` (700 KB roh, `src/utils/fileStorage.ts`)
+war urspruenglich fuer den Fall kalibriert, dass ein Dokument
+HOECHSTENS EINE grosse eingebettete Datei enthaelt (700 KB roh × 4/3
+Base64-Aufblaehung ≈ 933 KB Zeichenkette im Dokument, sicher unter 1
+MiB). Seit dieser Sitzung traegt ein Zuschuss-Dokument aber ZWEI
+unabhaengige eingebettete Dateien gleichzeitig (`proofFile` UND
+`costProofFile`, Teilnahme-/Kostennachweis) - das wurde beim Einbauen
+des zweiten Nachweistyps nicht mit der Speichergrenze abgeglichen.
+Zwei Dateien à ≈933 KB ≈ 1,87 MB haben die 1-MiB-Grenze gesprengt,
+sobald zum bereits vorhandenen Teilnahmenachweis der Kostennachweis
+dazukam.
+
+**Fix:** `MAX_STORED_BYTES` von 700 KB auf 300 KB roh gesenkt (≈400 KB
+Base64 je Datei, zwei Dateien zusammen ≈800 KB - mit ≈22 % Puffer unter
+1 MiB fuer alle uebrigen Felder). Die serverseitigen Sicherheitsnetze
+in `api/subsidy.ts` (`validateProofFile`) und `api/invoice.ts`
+(`validateFile`) hatten bisher einen eigenen, unabhaengigen 800-KB-Wert
+- jetzt importieren beide `MAX_STORED_BYTES` direkt aus
+`src/utils/fileStorage.ts`, damit Client-Ziel und Server-Pruefung nie
+wieder auseinanderlaufen koennen.
+
+**Bekannte, verwandte Restrisiko (nicht Teil dieses Fixes):**
+`Resolution.attachments` ist ein unbegrenzt wachsendes Array - haengt
+jemand ueber die Zeit mehrere grosse Dateien an denselben Beschluss,
+addieren sich deren Groessen im selben Dokument genauso auf. Strukturell
+dasselbe Muster, aber langsamer/seltener ausgeloest (mehrere einzelne
+Anhaenge über Zeit statt zwei Dateien in einem Formular) - bei Bedarf
+separat angehen.
+
+Live getestet: ein 9-MB-PNG (Groessenordnung des im Screenshot
+gemeldeten Fotos) komprimiert jetzt auf 290 KB roh / 386 KB
+Base64-Zeichenkette - zwei solche Dateien bleiben bei ≈772 KB, sicher
+unter der 1-MiB-Grenze.

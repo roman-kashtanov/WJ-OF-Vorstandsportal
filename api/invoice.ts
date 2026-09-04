@@ -5,7 +5,7 @@ import {
   verifyInvoiceAttachmentToken,
 } from './invoiceAttachmentToken';
 import { sendEmail } from './email';
-import { dataUrlBytes } from '../src/utils/fileStorage';
+import { dataUrlBytes, formatBytes, MAX_STORED_BYTES } from '../src/utils/fileStorage';
 import { writeNotification, writeAuditLogEntry } from './notify';
 
 /**
@@ -33,8 +33,11 @@ function validateFile(file?: ProofFileInput): string | null {
   if (!file.dataUrl || !file.dataUrl.startsWith('data:')) {
     return 'Die Datei konnte nicht gelesen werden.';
   }
-  if (dataUrlBytes(file.dataUrl) > 800 * 1024) {
-    return 'Die Datei ist zu groß (maximal 800 KB nach Komprimierung).';
+  // Derselbe Wert wie beim clientseitigen Komprimieren (MAX_STORED_BYTES,
+  // src/utils/fileStorage.ts) - Sicherheitsnetz gegen von Hand gebaute
+  // Anfragen ohne Client-Komprimierung.
+  if (dataUrlBytes(file.dataUrl) > MAX_STORED_BYTES) {
+    return `Die Datei ist zu groß (maximal ${formatBytes(MAX_STORED_BYTES)} nach Komprimierung).`;
   }
   return null;
 }
