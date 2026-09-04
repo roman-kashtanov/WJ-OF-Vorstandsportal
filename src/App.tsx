@@ -308,6 +308,7 @@ export default function App() {
     handleCreateMeeting,
     handleUpdateAttendeeStatus,
     handleUpdateMeetingTeamsLink,
+    handleUpdateMeetingFile,
     handleSaveDefaultTeamsUrl,
     handleCreateMeetingSeries,
     handleUpdateMeetingSeries,
@@ -739,6 +740,7 @@ export default function App() {
               setActiveTab('resolutions');
             }}
             onUpdateMeetingTeamsLink={handleUpdateMeetingTeamsLink}
+            onUpdateMeetingFile={handleUpdateMeetingFile}
             onOpenTeamsSettings={() => setIsTeamsSettingsOpen(true)}
             defaultTeamsUrl={defaultTeamsUrl}
           />

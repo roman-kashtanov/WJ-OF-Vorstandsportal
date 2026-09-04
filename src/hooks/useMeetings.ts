@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActiveTab, BoardMember, Meeting, MeetingSeries } from '../types';
+import { ActiveTab, BoardMember, Meeting, MeetingAttachment, MeetingSeries } from '../types';
 import { AppStorage } from '../utils/storage';
 import { FirebaseSync } from '../utils/firebaseSync';
 import { generateOccurrenceDates } from '../utils/recurrence';
@@ -207,6 +207,29 @@ export function useMeetings({ members, setSystemBanner, setActiveTab }: UseMeeti
     });
   };
 
+  const handleUpdateMeetingFile = (
+    meetingId: string,
+    field: 'protocolFile' | 'agendaFile',
+    file: MeetingAttachment | undefined
+  ) => {
+    setMeetings((prev) =>
+      prev.map((m) => {
+        if (m.id !== meetingId) return m;
+        const updatedMeeting = { ...m, [field]: file };
+        // cleanData() (firebaseSync.ts) macht einen JSON-Rundgang, der
+        // `undefined`-Felder verschluckt - beim Entfernen eines Anhangs
+        // wuerde ein merge:true-Schreibvorgang das Feld sonst einfach
+        // NICHT mitschicken, statt es zu leeren, und der alte Anhang
+        // bliebe in Firestore stehen. `null` wird dagegen korrekt
+        // uebertragen und ueberschreibt das Feld wirklich.
+        FirebaseSync.saveMeeting({ ...updatedMeeting, [field]: file ?? null } as Meeting).catch(
+          () => {}
+        );
+        return updatedMeeting;
+      })
+    );
+  };
+
   const handleUpdateMeetingTeamsLink = (meetingId: string, newUrl: string) => {
     setMeetings((prev) =>
       prev.map((m) => {
@@ -262,6 +285,7 @@ export function useMeetings({ members, setSystemBanner, setActiveTab }: UseMeeti
     handleCreateMeeting,
     handleUpdateAttendeeStatus,
     handleUpdateMeetingTeamsLink,
+    handleUpdateMeetingFile,
     handleSaveDefaultTeamsUrl,
     handleCreateMeetingSeries,
     handleUpdateMeetingSeries,

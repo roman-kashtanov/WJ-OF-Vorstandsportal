@@ -1,39 +1,46 @@
 import React, { useState } from 'react';
-import { 
-  BoardMember, 
-  Meeting, 
-  Resolution, 
-  AgendaItem 
+import {
+  BoardMember,
+  Meeting,
+  Resolution,
+  AgendaItem,
+  MeetingAttachment
 } from '../types';
-import { 
-  formatDate, 
-  formatDateTime 
+import {
+  formatDate,
+  formatDateTime
 } from '../utils/formatters';
-import { 
-  downloadMeetingICS, 
-  getGoogleCalendarUrl, 
-  getOutlookCalendarUrl 
+import {
+  downloadMeetingICS,
+  getGoogleCalendarUrl,
+  getOutlookCalendarUrl
 } from '../utils/calendar';
-import { 
-  Calendar as CalendarIcon, 
-  Video, 
-  Plus, 
-  ExternalLink, 
-  Copy, 
-  Check, 
-  Clock, 
-  MapPin, 
-  Users, 
-  FileText, 
-  CheckCircle2, 
-  XCircle, 
-  HelpCircle, 
-  ChevronRight, 
+import { prepareFileForStorage, formatBytes } from '../utils/fileStorage';
+import { DropzoneFileInput } from './DropzoneFileInput';
+import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
+import {
+  Calendar as CalendarIcon,
+  Video,
+  Plus,
+  ExternalLink,
+  Copy,
+  Check,
+  Clock,
+  MapPin,
+  Users,
+  FileText,
+  CheckCircle2,
+  XCircle,
+  HelpCircle,
+  ChevronRight,
   Sparkles,
   Layers,
   ArrowUpRight,
   Share2,
-  Download
+  Download,
+  UploadCloud,
+  Trash2,
+  Eye
 } from 'lucide-react';
 
 interface MeetingsViewProps {
@@ -45,6 +52,11 @@ interface MeetingsViewProps {
   onUpdateAttendeeStatus: (meetingId: string, memberId: string, status: 'accepted' | 'declined' | 'tentative') => void;
   onSelectResolution: (resId: string) => void;
   onUpdateMeetingTeamsLink: (meetingId: string, newUrl: string) => void;
+  onUpdateMeetingFile: (
+    meetingId: string,
+    field: 'protocolFile' | 'agendaFile',
+    file: MeetingAttachment | undefined
+  ) => void;
   onOpenTeamsSettings?: () => void;
   defaultTeamsUrl?: string;
 }
@@ -58,6 +70,7 @@ export const MeetingsView: React.FC<MeetingsViewProps> = ({
   onUpdateAttendeeStatus,
   onSelectResolution,
   onUpdateMeetingTeamsLink,
+  onUpdateMeetingFile,
   onOpenTeamsSettings,
   defaultTeamsUrl,
 }) => {
@@ -65,6 +78,9 @@ export const MeetingsView: React.FC<MeetingsViewProps> = ({
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [isEditingTeamsLink, setIsEditingTeamsLink] = useState<boolean>(false);
   const [editedTeamsLink, setEditedTeamsLink] = useState<string>('');
+  const [fileBusy, setFileBusy] = useState<'protocolFile' | 'agendaFile' | null>(null);
+  const [fileError, setFileError] = useState<{ field: 'protocolFile' | 'agendaFile'; message: string } | null>(null);
+  const [previewFile, setPreviewFile] = useState<PreviewableFile | null>(null);
 
   const activeMeeting = meetings.find((m) => m.id === selectedMeetingId) || meetings[0];
 
@@ -78,6 +94,32 @@ export const MeetingsView: React.FC<MeetingsViewProps> = ({
     if (!activeMeeting || !editedTeamsLink.trim()) return;
     onUpdateMeetingTeamsLink(activeMeeting.id, editedTeamsLink.trim());
     setIsEditingTeamsLink(false);
+  };
+
+  const handleUploadMeetingFile = async (
+    field: 'protocolFile' | 'agendaFile',
+    file: File
+  ) => {
+    if (!activeMeeting) return;
+    setFileError(null);
+    setFileBusy(field);
+    try {
+      const result = await prepareFileForStorage(file);
+      if (result.ok === false) {
+        setFileError({ field, message: result.error });
+        return;
+      }
+      onUpdateMeetingFile(activeMeeting.id, field, {
+        id: `att_${Date.now()}`,
+        name: file.name,
+        size: formatBytes(result.file.bytes),
+        mimeType: result.file.mimeType,
+        dataUrl: result.file.dataUrl,
+        uploadedAt: new Date().toISOString(),
+      });
+    } finally {
+      setFileBusy(null);
+    }
   };
 
   // Get current member attendee status for active meeting
@@ -378,6 +420,62 @@ export const MeetingsView: React.FC<MeetingsViewProps> = ({
                 </div>
               </div>
 
+              {/* Protokoll & Agenda-Datei */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {(
+                  [
+                    { field: 'agendaFile' as const, label: 'Agenda-Datei', hint: 'Zusätzlich zur Tagesordnung unten - z. B. eine fertige Word/PDF-Agenda.' },
+                    { field: 'protocolFile' as const, label: 'Sitzungsprotokoll', hint: 'Nach der Sitzung hier ablegen.' },
+                  ]
+                ).map(({ field, label, hint }) => {
+                  const file = activeMeeting[field];
+                  return (
+                    <div key={field} className="bg-white border border-slate-200 rounded-xl p-3.5 space-y-2">
+                      <div className="flex items-center gap-2 text-slate-700">
+                        <FileText className="w-3.5 h-3.5 text-[#003594]" />
+                        <h4 className="text-[11px] uppercase font-bold tracking-wider">{label}</h4>
+                      </div>
+                      <p className="text-[11px] text-slate-400">{hint}</p>
+
+                      {file ? (
+                        <div className="flex items-center justify-between gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+                          <button
+                            type="button"
+                            onClick={() => setPreviewFile(file)}
+                            className="truncate text-left text-[#003594] font-semibold text-xs hover:underline cursor-pointer flex items-center gap-1"
+                          >
+                            <Eye className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
+                            <span className="truncate">{file.name}</span>
+                            <span className="text-slate-400 font-normal shrink-0">({file.size})</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onUpdateMeetingFile(activeMeeting.id, field, undefined)}
+                            className="p-1 text-slate-400 hover:text-rose-600 shrink-0 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                          </button>
+                        </div>
+                      ) : (
+                        <DropzoneFileInput
+                          accept="image/*,.pdf,.doc,.docx"
+                          disabled={fileBusy === field}
+                          onFile={(f) => handleUploadMeetingFile(field, f)}
+                        >
+                          <UploadCloud className="w-4 h-4 mx-auto text-slate-400 mb-1" strokeWidth={1.75} />
+                          <span className="text-[11px] text-slate-500">
+                            {fileBusy === field ? 'Wird verarbeitet…' : 'Datei auswählen oder hierher ziehen'}
+                          </span>
+                        </DropzoneFileInput>
+                      )}
+                      {fileError?.field === field && (
+                        <p className="text-[11px] font-semibold text-rose-700">{fileError.message}</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
               {/* Attendee RSVP (Teilnehmerzusagen) */}
               <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
                 <div className="flex items-center justify-between">
@@ -505,6 +603,8 @@ export const MeetingsView: React.FC<MeetingsViewProps> = ({
         </div>
       </div>
       )}
+
+      <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
     </div>
   );
 };
