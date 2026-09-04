@@ -1238,3 +1238,64 @@ gebracht): Zuschuss-Status-Wechsel, Benachrichtigung und die
 Ueberweisungsdatei-Karte erscheinen korrekt; Benachrichtigung feuert im
 lokalen Dev-Modus zweimal (bekannte, bereits dokumentierte React-
 StrictMode-Eigenheit, nicht in Produktion).
+
+## Vier weitere Live-Fixes: strengerer Login, Einstellungen-Sperre, Beschluss-Mehrheit, Zuschuss-Reiter (v3.12.0)
+
+Direktes Folge-Feedback nach v3.11.0, vier unabhaengige Aenderungen:
+
+**1. Login noch strenger eingeschraenkt.** Der v3.11.0-Fix (autoritative
+Firestore-Pruefung statt lokalem State) reichte dem Nutzer nicht - er
+wollte ausdruecklich, dass sich NUR vom Admin bereits vollstaendig
+angelegte Personen ueberhaupt anmelden koennen, keine automatische
+Profilerstellung mehr fuer freigegebene, aber noch unbekannte
+E-Mail-Adressen. `AuthModal.tsx::handleGoogleUser`: die automatische
+Anlage ist jetzt auf den einzigen legitimen Fall beschraenkt - eine
+komplett LEERE Mitgliederliste (echter Erst-Login, der den Vorstand
+einmalig einrichtet). Ist bereits mindestens ein Mitglied vorhanden,
+wird der Zugang mit klarer Fehlermeldung verweigert ("Ein Administrator
+muss diese Person zuerst unter Einstellungen -> Vorstand vollstaendig
+anlegen"), statt automatisch (und ohne Admin-Rechte) ein Profil
+anzulegen.
+
+**2. Gesamter Einstellungen-Bereich per Code gesperrt.** Der Nutzer
+erwartete beim Oeffnen der Einstellungen einen Code und war ueberrascht,
+dass keiner kam - dort wird u.a. die Vorstandsliste verwaltet. Neue
+Sperre in `SettingsModal.tsx` (gleicher Löschcode wie beim endgueltigen
+Loeschen archivierter Beschluesse und beim Historie-Tab, siehe
+`verifyDeleteCode`) fuer den KOMPLETTEN Bereich, nicht nur einzelne
+Tabs - zeigt einen Code-Eingabe-Bildschirm anstelle der Tab-Leiste und
+des gesamten Inhalts, setzt sich beim Schliessen zurueck. Die
+bestehende, eigene Historie-Sperre bleibt zusaetzlich als redundante
+zweite Schicht bestehen. Live getestet.
+
+**3. Beschluss blieb trotz erreichter Mehrheit auf "In Abstimmung"
+stehen.** Zwei echte Bugs gefunden: (a) Der Mehrheits-Vergleich in
+`useResolutions.ts::handleVoteForMember` nutzte `members.length` (ALLE
+Mitglieder inkl. nicht stimmberechtigter Festangestellter) statt
+`stats.eligibleCount` (nur die tatsaechlich Stimmberechtigten) - bei
+Vereinen mit nicht-stimmberechtigten Mitgliedern (Festangestellte)
+konnte eine Ja-Mehrheit der Stimmberechtigten dadurch rechnerisch nie
+ueber 50% der GESAMTEN Mitgliederzahl kommen und der Beschluss blieb
+fuer immer offen. (b) Gravierender: `api/vote.ts` (Abstimmung per
+E-Mail-Link, ohne Login) schrieb bisher NUR das Stimmfeld, berechnete
+den Beschluss-Status nie neu - ein ausschliesslich per E-Mail-Link
+abgestimmter Beschluss wurde dadurch NIE automatisch abgeschlossen,
+egal wie viele Stimmen eingingen. Fix: beide Stellen nutzen jetzt
+`stats.eligibleCount` als Nenner; `api/vote.ts` importiert
+`calculateVoteStats` direkt aus `src/utils/formatters.ts`
+(plattformuebergreifender Import wie bei `api/protocolScan.ts` und
+`MAX_STORED_BYTES`) und berechnet/schreibt den Status inline mit, inkl.
+derselben "Beschluss angenommen"-Benachrichtigung wie der Client-Pfad.
+Live per manueller Abstimmung nachgestellt und die Korrektur bestaetigt.
+
+**4. Zuschuesse als Laufbahnsystem mit Reitern.** Der Nutzer wollte
+sichtbare Reiter statt der bisher hinter "Filter" versteckten
+Status-Auswahl, um auf einen Blick zu sehen, was offen/geprueft/im
+Beschluss/zur Zahlung freigegeben/erledigt ist. Neue `SUBSIDY_STAGES`
+(`utils/subsidies.ts`) fasst die sieben granularen Status zu fuenf
+Phasen zusammen, `SubsidiesView.tsx` zeigt sie als Reiter-Leiste mit
+Live-Zaehlern; die automatischen Uebergaenge selbst (siehe v3.11.0,
+Punkt 3 dort) blieben unveraendert - die Reiter sind reine
+Navigation/Uebersicht. Zusaetzlich ein dedizierter "Als geprueft
+markieren"-Button bei offenen Antraegen statt nur der generischen
+Status-Auswahlliste. Live getestet (Reiter-Zaehler, Filterung, Button).
