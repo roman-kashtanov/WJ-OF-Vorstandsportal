@@ -1157,3 +1157,20 @@ Serie liegenden Termin (2028) korrekt im sichtbaren Bereich (bestaetigt
 indirekt, dass der separat behobene Fixed-Modal-Layout-Fehler bereits
 griff), Absagen/Zuruecknehmen funktioniert und wirkt sich sofort auf die
 "naechste Sitzung"-Auswahl aus, `msteams://`-Link wird korrekt erzeugt.
+
+## Oberen Sitzungs-Banner und Termine-Badge entfernt (v3.10.1)
+
+Direktes Nutzer-Feedback nach v3.10.0: der blaue "Naechste
+Vorstandssitzung"-Banner ganz oben (`Header.tsx`) wird komplett entfernt
+(nicht nur, wie in v3.10.0 angenommen, der pulsierende Punkt) - "braucht
+man nicht". Ausserdem die rote Zaehler-Badge bei "Termine" in der
+unteren Mobil-Navigation (`MobileBottomNav.tsx`) entfernt: zeigte die
+Anzahl kuenftiger Sitzungen an, wirkte durch die vielen
+Test-Serientermine dieser Sitzung verzerrt ("23 Stueck") und war als
+Benachrichtigung ohnehin unerwuenscht ("macht nur die Leiste unnoetig
+schwer"). Nicht mehr benoetigte Props (`upcomingMeeting`/
+`onOpenQuickAgenda` in `Header.tsx`, `upcomingMeetingsCount` in
+`MobileBottomNav.tsx`/`useMeetings.ts`/`App.tsx`) mit entfernt statt nur
+das Rendering zu unterdruecken. Die zentrale `nextMeeting`-Berechnung in
+`useMeetings.ts` (siehe v3.10.0) bleibt unveraendert bestehen und wird
+weiterhin fuer Dashboard und `QuickAgendaModal` verwendet.
