@@ -1036,6 +1036,7 @@ export default function App() {
         isOpen={isNewMeetingOpen}
         onClose={() => setIsNewMeetingOpen(false)}
         onSubmit={handleCreateMeeting}
+        onSubmitSeries={handleCreateMeetingSeries}
         members={members}
         resolutions={resolutions}
         defaultTeamsUrl={defaultTeamsUrl}
