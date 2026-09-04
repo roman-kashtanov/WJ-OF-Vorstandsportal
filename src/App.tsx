@@ -404,6 +404,7 @@ export default function App() {
     setResolutions,
     addInAppAndPushNotification,
     handleAddEmailLog,
+    addAuditLogEntry,
     notificationSettings,
     setSystemBanner,
     setActiveTab,
@@ -1002,6 +1003,7 @@ export default function App() {
         currentMember={currentMember}
         resolutions={resolutions}
         folders={folders}
+        auditLog={auditLog}
         onUpdateStatus={handleUpdateInvoiceStatus}
         onToggleBookkeepingRecorded={handleToggleBookkeepingRecorded}
         onUpdateBookkeepingStatus={handleUpdateInvoiceBookkeepingStatus}

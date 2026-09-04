@@ -1,13 +1,15 @@
 import React from 'react';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import {
-  BoardMember, 
-  Invoice, 
-  Resolution, 
+  BoardMember,
+  Invoice,
+  Resolution,
   InvoiceStatus,
   BookkeepingStatus,
-  InvoiceFolder
+  InvoiceFolder,
+  AuditLogEntry
 } from '../types';
+import { RevisionHistory } from './RevisionHistory';
 import { 
   formatCurrency, 
   formatDate, 
@@ -30,7 +32,8 @@ import {
   FolderCheck,
   Folder,
   Clock,
-  MinusCircle
+  MinusCircle,
+  History as HistoryIcon
 } from 'lucide-react';
 
 interface InvoiceDetailModalProps {
@@ -39,6 +42,7 @@ interface InvoiceDetailModalProps {
   currentMember: BoardMember;
   resolutions: Resolution[];
   folders?: InvoiceFolder[];
+  auditLog: AuditLogEntry[];
   onUpdateStatus: (invoiceId: string, status: InvoiceStatus) => void;
   onToggleBookkeepingRecorded?: (invoiceId: string, isRecorded: boolean) => void;
   onUpdateBookkeepingStatus?: (invoiceId: string, status: BookkeepingStatus) => void;
@@ -51,6 +55,7 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
   currentMember,
   resolutions,
   folders = [],
+  auditLog,
   onUpdateStatus,
   onToggleBookkeepingRecorded,
   onUpdateBookkeepingStatus,
@@ -317,6 +322,19 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Revisionshistorie */}
+          <div className="pt-2 border-t border-slate-200">
+            <div className="flex items-center space-x-2 mb-2">
+              <HistoryIcon className="w-4 h-4 text-slate-500" />
+              <h4 className="text-xs uppercase font-bold text-slate-700 tracking-wider">
+                Historie
+              </h4>
+            </div>
+            <RevisionHistory
+              entries={auditLog.filter((a) => a.entityType === 'invoice' && a.entityId === invoice.id)}
+            />
           </div>
         </div>
 

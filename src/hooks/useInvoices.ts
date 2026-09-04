@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   ActiveTab,
+  AuditLogEntry,
   BoardMember,
   BookkeepingStatus,
   EmailNotificationLog,
@@ -41,6 +42,7 @@ interface UseInvoicesParams {
     recipientMemberIds?: string[];
   }) => void;
   handleAddEmailLog: (log: Omit<EmailNotificationLog, 'id' | 'sentAt'>) => void;
+  addAuditLogEntry: (entry: Omit<AuditLogEntry, 'id' | 'timestamp'>) => void;
   notificationSettings: NotificationSettings;
   setSystemBanner: (banner: SystemBanner) => void;
   setActiveTab: (tab: ActiveTab) => void;
@@ -51,6 +53,7 @@ export function useInvoices({
   setResolutions,
   addInAppAndPushNotification,
   handleAddEmailLog,
+  addAuditLogEntry,
   notificationSettings,
   setSystemBanner,
   setActiveTab,
@@ -123,6 +126,15 @@ export function useInvoices({
       targetId: newInvoice.id,
     });
 
+    addAuditLogEntry({
+      entityType: 'invoice',
+      entityId: newInvoice.id,
+      entityLabel: newInvoice.invoiceNumber,
+      action: 'Beleg erfasst',
+      actorName: newInvoice.submittedBy.name,
+      actorId: newInvoice.submittedBy.id,
+    });
+
     setActiveTab('invoices');
   };
 
@@ -144,6 +156,14 @@ export function useInvoices({
           bookkeepingRecordedBy: isBearbeitet ? `${currentMember.name} (${currentMember.role})` : undefined,
         };
         FirebaseSync.saveInvoice(updatedInv).catch(() => {});
+        addAuditLogEntry({
+          entityType: 'invoice',
+          entityId: inv.id,
+          entityLabel: inv.invoiceNumber,
+          action: 'Buchhaltungsstatus geändert',
+          actorName: currentMember.name,
+          actorId: currentMember.id,
+        });
         return updatedInv;
       })
     );
@@ -212,6 +232,14 @@ export function useInvoices({
           paidAt: newStatus === 'ausgezahlt' ? new Date().toISOString() : inv.paidAt,
         };
         FirebaseSync.saveInvoice(updatedInv).catch(() => {});
+        addAuditLogEntry({
+          entityType: 'invoice',
+          entityId: inv.id,
+          entityLabel: inv.invoiceNumber,
+          action: `Status auf "${newStatus}" gesetzt`,
+          actorName: currentMember.name,
+          actorId: currentMember.id,
+        });
         return updatedInv;
       })
     );
