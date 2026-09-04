@@ -45,6 +45,7 @@ import { useMeetings } from './hooks/useMeetings';
 import { useNotifications } from './hooks/useNotifications';
 import { useResolutions } from './hooks/useResolutions';
 import { useInvoices } from './hooks/useInvoices';
+import { useAuditLog } from './hooks/useAuditLog';
 import { CheckCircle2, AlertCircle, Mail, Sparkles, X, Bell, Settings, Video } from 'lucide-react';
 
 /** Stimme als Wort - fuer Rueckfragen und Meldungen. */
@@ -223,6 +224,30 @@ export default function App() {
       if (remoteCatalogue) setCatalogueSettings(remoteCatalogue);
     });
 
+    // Benachrichtigungen und Revisionshistorie fuer oeffentliche/externe
+    // Vorgaenge (siehe api/*.ts) - anders als applyRemote() oben nur neue
+    // IDs vorne einfuegen statt die ganze Liste zu ersetzen: beides sind
+    // anwachsende Ereignis-Feeds, kein zweiseitig editierbarer Datensatz,
+    // und lokale isRead-Aenderungen an Benachrichtigungen sollen erhalten
+    // bleiben.
+    const unsubNotifications = FirebaseSync.subscribeNotifications((remote) => {
+      setNotifications((prev) => {
+        const known = new Set(prev.map((n) => n.id));
+        const fresh = remote.filter((n) => !known.has(n.id));
+        if (fresh.length === 0) return prev;
+        return [...fresh, ...prev].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      });
+    });
+
+    const unsubAuditLog = FirebaseSync.subscribeAuditLog((remote) => {
+      setAuditLog((prev) => {
+        const known = new Set(prev.map((a) => a.id));
+        const fresh = remote.filter((a) => !known.has(a.id));
+        if (fresh.length === 0) return prev;
+        return [...fresh, ...prev].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      });
+    });
+
     return () => {
       unsubStatus();
       unsubVersion();
@@ -237,6 +262,8 @@ export default function App() {
       unsubSec();
       unsubMeetingConfig();
       unsubCatalogue();
+      unsubNotifications();
+      unsubAuditLog();
     };
   }, []);
 
@@ -284,6 +311,12 @@ export default function App() {
       if (cfg) setVersionConfig(cfg);
     });
   };
+
+  // --- Revisionshistorie: siehe src/hooks/useAuditLog.ts - vor allen
+  // Domain-Hooks aufgerufen (keine Abhaengigkeiten), damit addAuditLogEntry
+  // als Parameter in Resolutions/Invoices/Subsidies hereingereicht werden
+  // kann, analog zu addInAppAndPushNotification aus useNotifications. -----
+  const { auditLog, setAuditLog, addAuditLogEntry } = useAuditLog();
 
   // --- Benachrichtigungen/E-Mail-Protokoll: siehe
   // src/hooks/useNotifications.ts (dritter extrahierter Bereich der

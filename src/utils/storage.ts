@@ -10,7 +10,8 @@ import {
   InvoiceRequest,
   InAppNotification,
   NotificationSettings,
-  EmailServerConfig
+  EmailServerConfig,
+  AuditLogEntry
 } from '../types';
 import { INITIAL_BOARD_MEMBERS, INITIAL_RESOLUTIONS, INITIAL_INVOICES, INITIAL_INVOICE_FOLDERS, INITIAL_MEETINGS, INITIAL_SECURITY_SETTINGS } from '../data/initialData';
 import { normalizeSecuritySettings } from './security';
@@ -65,6 +66,7 @@ const STORAGE_KEYS = {
   SUBSIDY_PEOPLE: 'wj_offenbach_subsidy_people_v1',
   CLUB_ACCOUNT: 'wj_offenbach_club_account_v1',
   SUBSIDY_CATALOGUE: 'wj_offenbach_subsidy_catalogue_v1',
+  AUDIT_LOG: 'wj_offenbach_audit_log_v1',
 };
 
 
@@ -349,6 +351,23 @@ export const AppStorage = {
       localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(notifications));
     } catch (e) {
       console.error('Error saving notifications', e);
+    }
+  },
+
+  getAuditLog(): AuditLogEntry[] {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.AUDIT_LOG);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  saveAuditLog(entries: AuditLogEntry[]) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.AUDIT_LOG, JSON.stringify(entries));
+    } catch (e) {
+      console.error('Error saving audit log', e);
     }
   },
 

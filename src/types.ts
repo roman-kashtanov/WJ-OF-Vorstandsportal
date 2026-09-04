@@ -267,7 +267,7 @@ export interface InvoiceRequest {
   status: 'offen' | 'erledigt';
 }
 
-export type NotificationType = 'resolution' | 'vote' | 'invoice' | 'meeting' | 'system';
+export type NotificationType = 'resolution' | 'vote' | 'invoice' | 'meeting' | 'system' | 'subsidy';
 
 export interface InAppNotification {
   id: string;
@@ -280,6 +280,26 @@ export interface InAppNotification {
   targetId?: string;
   actionUrl?: string;
   iconType?: 'vote' | 'invoice' | 'meeting' | 'mail' | 'shield' | 'check' | 'bell';
+}
+
+/**
+ * Revisionshistorie: kurze, lesbare Ereignisse ("Status auf 'Geprüft'
+ * gesetzt", "Anna stimmte: Ja") statt vollständiger Feld-Diffs - je ein
+ * Eintrag pro wichtiger Änderung an einem Beschluss/einer Rechnung/einem
+ * Zuschuss. Wird sowohl direkt an der jeweiligen Ansicht angezeigt
+ * (RevisionHistory.tsx) als auch gesammelt in den Einstellungen unter
+ * "Historie" (dort speziell für Beschlüsse, Löschcode-gesperrt).
+ */
+export interface AuditLogEntry {
+  id: string;
+  entityType: 'resolution' | 'invoice' | 'subsidy';
+  entityId: string;
+  /** Bezeichnung des Datensatzes zum Zeitpunkt des Eintrags, fürs Anzeigen ohne Nachschlagen */
+  entityLabel: string;
+  action: string;
+  actorName: string;
+  actorId?: string;
+  timestamp: string;
 }
 
 export interface NotificationSettings {

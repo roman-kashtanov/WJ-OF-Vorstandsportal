@@ -21,7 +21,8 @@ import {
   NotificationSettings,
   EmailServerConfig,
   AppVersionConfig,
-  InvoiceFolder
+  InvoiceFolder,
+  AuditLogEntry
 } from '../types';
 import { SubsidyCatalogueSettings } from '../data/subsidyCatalogue';
 
@@ -903,6 +904,61 @@ export const FirebaseSync = {
       console.warn('Failed to save versionConfig to Firebase:', err.message);
       updateStatus({ isSyncing: false, error: err.message });
       return { success: false, error: err.message };
+    }
+  },
+
+  // ---------------------------------------------------------------------------
+  // Benachrichtigungen fuer oeffentliche/externe Vorgaenge (Zuschuss-Antrag,
+  // Nachweis-Upload, Beleg-Nachreichung per Link, E-Mail-Stimmabgabe) - werden
+  // serverseitig per FirestoreAdmin geschrieben (siehe api/*.ts), hier nur
+  // das clientseitige Live-Abonnement. 1:1 nach dem Muster von
+  // subscribeSubsidies - bewusst ohne query()/orderBy(), wie im Rest der App.
+  // ---------------------------------------------------------------------------
+  subscribeNotifications(callback: (list: InAppNotification[]) => void) {
+    try {
+      return onSnapshot(
+        collection(db, 'notifications'),
+        (snap) => {
+          const list = snap.docs.map((d) => d.data() as InAppNotification);
+          list.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+          callback(list);
+        },
+        (err) => console.warn('Benachrichtigungs-Sync:', err.message)
+      );
+    } catch {
+      return () => {};
+    }
+  },
+
+  // ---------------------------------------------------------------------------
+  // Revisionshistorie (kurze, lesbare Ereignisse je Beschluss/Rechnung/
+  // Zuschuss). Wird sowohl clientseitig (useAuditLog.ts, eingeloggte
+  // Vorstandsmitglieder) als auch serverseitig (FirestoreAdmin bei
+  // oeffentlichen Vorgaengen) geschrieben.
+  // ---------------------------------------------------------------------------
+  subscribeAuditLog(callback: (list: AuditLogEntry[]) => void) {
+    try {
+      return onSnapshot(
+        collection(db, 'auditLog'),
+        (snap) => {
+          const list = snap.docs.map((d) => d.data() as AuditLogEntry);
+          list.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+          callback(list);
+        },
+        (err) => console.warn('Revisionshistorie-Sync:', err.message)
+      );
+    } catch {
+      return () => {};
+    }
+  },
+
+  async saveAuditLogEntry(entry: AuditLogEntry) {
+    try {
+      await setDoc(doc(db, 'auditLog', entry.id), cleanData(entry));
+      return { success: true };
+    } catch (err: any) {
+      console.warn('Revisionshistorie-Eintrag konnte nicht gespeichert werden:', err?.message);
+      return { success: false, error: err?.message };
     }
   }
 };
