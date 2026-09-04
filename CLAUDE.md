@@ -882,3 +882,27 @@ zum erwarteten 500 lokal); `/beleg`-Formular inkl. Drag&Drop. Die
 tatsächliche Zustellung von Benachrichtigungen/E-Mails ließ sich wie
 bisher nur bis zum erwarteten Fehler ohne echtes Firestore-Dienstkonto
 pruefen.
+
+## Bildkomprimierung bei allen öffentlichen Upload-Links robuster (v3.7.1)
+
+`compressImage()` (`src/utils/fileStorage.ts`, genutzt von JEDEM
+Datei-Upload in der App - Zuschuss-Antrag, Nachweis-Nachreichung,
+Beleg-Nachreichung, aber auch den authentifizierten Admin-Formularen)
+gab bisher nach je **einem** Versuch mit reduzierter Qualität und
+**einem** Versuch mit verkleinerter Auflösung auf und zeigte einen
+Fehler ("Bitte einen Ausschnitt oder ein einfacheres Foto verwenden"),
+wenn ein sehr großes/detailreiches Foto (z. B. ein modernes 12-48-MP-
+Handyfoto) danach immer noch über `MAX_STORED_BYTES` (700 KB) lag.
+
+Jetzt eine echte Schleife (`renderAtSize()` + bis zu 20 Iterationen):
+erst Qualität in kleinen Schritten senken (0.92 → 0.4, schont die
+Schärfe am meisten), ist die Untergrenze erreicht und es passt immer
+noch nicht, die Bildkante verkleinern (bis minimal 800 px) und mit
+Qualität 0.75 von vorn - bis es passt oder beide Grenzen erreicht sind
+(dann bleibt die bisherige Fehlermeldung als letzter Rückfall). Live
+getestet: ein 23,7-MB-Zufallsrausch-Bild (härter als jedes reale Foto,
+JPEG-Kompression greift bei echtem Rauschen kaum) wurde zuverlässig auf
+genau 700 KB in ~2 s komprimiert; ein realistisches 12-MP-Handyfoto
+(1,4 MB) in ~150 ms auf 578 KB. `MAX_STORED_BYTES` (700 KB, mit Blick
+auf Firestores 1-MiB-Dokumentgrenze samt Base64-Overhead) bewusst
+unverändert gelassen - nur die Komprimierung selbst ist gründlicher.

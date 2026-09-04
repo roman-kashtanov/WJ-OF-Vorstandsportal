@@ -59,14 +59,20 @@ function loadImage(dataUrl: string): Promise<HTMLImageElement> {
   });
 }
 
-async function compressImage(file: File): Promise<PreparedFile> {
-  const original = await readAsDataUrl(file);
-  const img = await loadImage(original);
+/**
+ * Längste Bildkante, unter die notfalls weiter verkleinert wird, wenn
+ * Qualität allein nicht reicht. Darunter leidet auch Kleingedrucktes zu
+ * stark - ist das erreicht und die Datei passt immer noch nicht,
+ * verlangt prepareFileForStorage() einen Ausschnitt/ein einfacheres Foto.
+ */
+const MIN_EDGE = 800;
+const MIN_QUALITY = 0.4;
 
-  const scale = Math.min(1, MAX_EDGE / Math.max(img.width, img.height));
+function renderAtSize(img: HTMLImageElement, edge: number, quality: number): string {
+  const scale = Math.min(1, edge / Math.max(img.width, img.height));
   const canvas = document.createElement('canvas');
-  canvas.width = Math.round(img.width * scale);
-  canvas.height = Math.round(img.height * scale);
+  canvas.width = Math.max(1, Math.round(img.width * scale));
+  canvas.height = Math.max(1, Math.round(img.height * scale));
 
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Bildbearbeitung im Browser nicht verfügbar.');
@@ -75,28 +81,33 @@ async function compressImage(file: File): Promise<PreparedFile> {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-  // Hoch ansetzen und nur so weit senken, wie es die Größengrenze verlangt.
-  // In kleinen Schritten, damit nicht unnötig Qualität verschenkt wird.
-  let quality = 0.92;
-  let out = canvas.toDataURL('image/jpeg', quality);
-  while (dataUrlBytes(out) > MAX_STORED_BYTES && quality > 0.45) {
-    quality -= 0.06;
-    out = canvas.toDataURL('image/jpeg', quality);
-  }
+  return canvas.toDataURL('image/jpeg', quality);
+}
 
-  // Reicht das nicht, lieber die Auflösung senken als die Qualität weiter:
-  // Artefakte zerstören feine Schrift stärker als eine etwas kleinere Kante.
-  if (dataUrlBytes(out) > MAX_STORED_BYTES) {
-    const smaller = document.createElement('canvas');
-    smaller.width = Math.round(canvas.width * 0.7);
-    smaller.height = Math.round(canvas.height * 0.7);
-    const sctx = smaller.getContext('2d');
-    if (sctx) {
-      sctx.fillStyle = '#ffffff';
-      sctx.fillRect(0, 0, smaller.width, smaller.height);
-      sctx.drawImage(canvas, 0, 0, smaller.width, smaller.height);
-      out = smaller.toDataURL('image/jpeg', 0.85);
+async function compressImage(file: File): Promise<PreparedFile> {
+  const original = await readAsDataUrl(file);
+  const img = await loadImage(original);
+
+  // Iterativ nachjustieren, bis es passt, statt nach einem Versuch je
+  // Qualität und Auflösung aufzugeben: erst Qualität in kleinen Schritten
+  // senken (schont die Schärfe am meisten), reicht das an ihrer Untergrenze
+  // nicht, die Kante verkleinern und mit brauchbarer Qualität von vorn -
+  // so kommen auch sehr hochauflösende/detailreiche Handyfotos unter die
+  // Grenze, ohne dass die Person den Upload manuell wiederholen muss.
+  let edge = MAX_EDGE;
+  let quality = 0.92;
+  let out = renderAtSize(img, edge, quality);
+
+  for (let i = 0; i < 20 && dataUrlBytes(out) > MAX_STORED_BYTES; i++) {
+    if (quality > MIN_QUALITY) {
+      quality = Math.max(MIN_QUALITY, quality - 0.08);
+    } else if (edge > MIN_EDGE) {
+      edge = Math.max(MIN_EDGE, Math.round(edge * 0.85));
+      quality = 0.75;
+    } else {
+      break;
     }
+    out = renderAtSize(img, edge, quality);
   }
 
   return {
