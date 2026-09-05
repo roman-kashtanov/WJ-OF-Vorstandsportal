@@ -229,12 +229,31 @@ export function useSubsidies({
    * Nachweis-Zusammenfassung als PDF an den zugehoerigen Beschluss - das
    * Original-Nachweisfoto haengt dort bereits separat (aus dem Buendeln).
    */
-  const handleMarkSubsidiesPaid = (ids: string[]) => {
+  const PAYOUT_FORMAT_LABEL: Record<'sepa-xml' | 'girocode-pdf', string> = {
+    'sepa-xml': 'SEPA-Datei (XML)',
+    'girocode-pdf': 'QR-Code-PDF (GiroCode)',
+  };
+
+  const handleMarkSubsidiesPaid = (ids: string[], format: 'sepa-xml' | 'girocode-pdf') => {
     ids.forEach((id) => {
       handleUpdateSubsidyStatus(id, 'bezahlt');
 
       const subsidy = subsidies.find((s) => s.id === id);
-      if (!subsidy?.resolutionId) return;
+      if (!subsidy) return;
+
+      // Sichtbar in der "Historie anzeigen" je Zuschuss - beantwortet "welche
+      // Zahlungsdatei wurde wann in welchem Format erzeugt", ohne dafuer eine
+      // eigene Firestore-Sammlung zu brauchen.
+      addAuditLogEntry({
+        entityType: 'subsidy',
+        entityId: id,
+        entityLabel: `${subsidy.personName} – ${subsidy.eventName}`,
+        action: `Zahlungsdatei erzeugt (${PAYOUT_FORMAT_LABEL[format]}) und als bezahlt markiert`,
+        actorName: currentMember.name,
+        actorId: currentMember.id,
+      });
+
+      if (!subsidy.resolutionId) return;
       const resolution = resolutions.find((r) => r.id === subsidy.resolutionId);
       if (!resolution) return;
       const person = subsidyPeople.find((p) => p.id === subsidy.personId);

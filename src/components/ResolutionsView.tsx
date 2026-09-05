@@ -9,9 +9,11 @@ import {
   BookkeepingStatus,
   SecuritySettings,
   AuditLogEntry,
-  Subsidy
+  Subsidy,
+  SubsidyPerson
 } from '../types';
 import { STATUS_LABEL as SUBSIDY_STATUS_LABEL } from '../utils/subsidies';
+import { generateResolutionBundlePdf } from '../utils/resolutionBundlePdf';
 import { 
   formatCurrency, 
   formatDate, 
@@ -61,7 +63,7 @@ import {
 } from 'lucide-react';
 import { FirebaseSync } from '../utils/firebaseSync';
 import { verifyDeleteCode } from '../utils/security';
-import { downloadAttachment, getAttachmentType, formatFileSize } from '../utils/fileHelpers';
+import { downloadAttachment, getAttachmentType, formatFileSize, downloadBlob } from '../utils/fileHelpers';
 import { prepareFileForStorage, formatBytes } from '../utils/fileStorage';
 import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
 import { RevisionHistoryModal } from './RevisionHistoryModal';
@@ -74,6 +76,8 @@ interface ResolutionsViewProps {
   invoices: Invoice[];
   /** Fuer Sammelbeschluesse: die daran haengenden Zuschuesse (Subsidy.resolutionId). */
   subsidies?: Subsidy[];
+  /** Fuer den Buchhaltungs-Export: IBAN/Kontodaten zu den Zuschuss-Personen. */
+  subsidyPeople?: SubsidyPerson[];
   auditLog: AuditLogEntry[];
   onVote: (resolutionId: string, vote: VoteType, note?: string) => void;
   onAddComment: (resolutionId: string, content: string) => void;
@@ -113,6 +117,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
   resolutions,
   invoices,
   subsidies = [],
+  subsidyPeople = [],
   auditLog,
   onVote,
   onAddComment,
@@ -130,6 +135,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
   securitySettings,
 }) => {
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
+  const [isExportingBundle, setIsExportingBundle] = useState(false);
   const [isRequestInvoiceLinkOpen, setIsRequestInvoiceLinkOpen] = useState(false);
   const [requestInvoiceLinkResolutionId, setRequestInvoiceLinkResolutionId] = useState<string | null>(null);
   const [historyModalResolutionId, setHistoryModalResolutionId] = useState<string | null>(null);
@@ -898,6 +904,29 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                       title="Beschluss drucken"
                     >
                       <Printer className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setIsExportingBundle(true);
+                        try {
+                          const { blob, fileName } = await generateResolutionBundlePdf({
+                            resolution: activeResolution,
+                            totalMembersCount: members.length,
+                            linkedInvoices,
+                            linkedSubsidies,
+                            subsidyPeople,
+                          });
+                          downloadBlob(blob, fileName);
+                        } finally {
+                          setIsExportingBundle(false);
+                        }
+                      }}
+                      disabled={isExportingBundle}
+                      className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 transition-colors cursor-pointer"
+                      title="Beschluss inkl. aller Belege als eine PDF für die Buchhaltung exportieren"
+                    >
+                      <FileSpreadsheet className="w-4 h-4" />
                     </button>
                     <span className={`text-xs font-bold px-3 py-1.5 rounded-lg ${
                       activeResolution.status === 'angenommen'

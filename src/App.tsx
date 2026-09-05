@@ -764,6 +764,7 @@ export default function App() {
             resolutions={resolutions}
             invoices={invoices}
             subsidies={subsidies}
+            subsidyPeople={subsidyPeople}
             auditLog={auditLog}
             onVote={handleVote}
             onAddComment={handleAddComment}
