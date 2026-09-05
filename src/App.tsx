@@ -1177,7 +1177,6 @@ export default function App() {
         }}
         resolution={emailVoteResolution}
         members={members}
-        onVote={handleVoteForMember}
         onLogEmailSent={(member, subject) => {
           handleAddEmailLog({
             type: 'resolution_vote',

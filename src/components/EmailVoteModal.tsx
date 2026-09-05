@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
-import { BoardMember, Resolution, VoteType, EmailServerConfig } from '../types';
+import { BoardMember, Resolution, EmailServerConfig } from '../types';
 import { EmailService, sendResolutionVoteMails } from '../utils/emailService';
 import { isVotingMember } from '../utils/formatters';
 import {
@@ -11,14 +11,11 @@ import {
   ExternalLink,
   X,
   CheckCircle2,
-  XCircle,
-  MinusCircle,
   Smartphone,
   Monitor,
   Sparkles,
   Info,
   ShieldCheck,
-  Zap,
   Users,
   Loader2,
   Eye,
@@ -32,7 +29,6 @@ interface EmailVoteModalProps {
   onClose: () => void;
   resolution: Resolution | null;
   members: BoardMember[];
-  onVote: (resolutionId: string, member: BoardMember, vote: VoteType, note?: string) => void;
   onLogEmailSent: (recipient: BoardMember, subject: string) => void;
   emailServerConfig?: EmailServerConfig;
 }
@@ -42,7 +38,6 @@ export const EmailVoteModal: React.FC<EmailVoteModalProps> = ({
   onClose,
   resolution,
   members,
-  onVote,
   onLogEmailSent,
   emailServerConfig,
 }) => {
@@ -170,12 +165,6 @@ export const EmailVoteModal: React.FC<EmailVoteModalProps> = ({
       setIsSending(false);
       setTimeout(() => setSentFeedback(null), 6000);
     }
-  };
-
-  const handleTestVoteInModal = (vote: VoteType) => {
-    onVote(resolution.id, previewMember, vote, `1-Klick Stimmabgabe per E-Mail für ${previewMember.name}`);
-    setSentFeedback(`⚡ Test-Stimme für ${previewMember.name} erfolgreich als '${vote === 'yes' ? 'JA' : vote === 'no' ? 'NEIN' : 'ENTHALTUNG'}' erfasst!`);
-    setTimeout(() => setSentFeedback(null), 4000);
   };
 
   return (
@@ -385,56 +374,6 @@ export const EmailVoteModal: React.FC<EmailVoteModalProps> = ({
                 >
                   {copiedType === 'html' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                   <span>{copiedType === 'html' ? 'Kopiert!' : 'HTML kopieren'}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 3. Live 1-Click Vote Tester */}
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-xs space-y-2">
-              <div className="flex items-center space-x-1.5 text-amber-900 font-bold">
-                <Zap className="w-4 h-4 text-amber-600" />
-                <span>1-Klick-Abstimmung direkt testen:</span>
-              </div>
-              <p className="text-[11px] text-amber-800">
-                Wähle ein Vorstandsmitglied und teste, wie der Klick in der E-Mail sofort die Stimme registriert:
-              </p>
-              
-              <select
-                value={selectedMemberId}
-                onChange={(e) => setSelectedMemberId(e.target.value)}
-                className="w-full text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-amber-300 bg-white text-slate-800"
-              >
-                {members.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    Als: {m.name} ({m.role})
-                  </option>
-                ))}
-              </select>
-
-              <div className="grid grid-cols-3 gap-1.5 pt-1">
-                <button
-                  type="button"
-                  onClick={() => handleTestVoteInModal('yes')}
-                  className="py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[11px] flex items-center justify-center space-x-1 cursor-pointer"
-                >
-                  <CheckCircle2 className="w-3 h-3" />
-                  <span>Ja</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleTestVoteInModal('no')}
-                  className="py-1.5 px-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-[11px] flex items-center justify-center space-x-1 cursor-pointer"
-                >
-                  <XCircle className="w-3 h-3" />
-                  <span>Nein</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleTestVoteInModal('abstain')}
-                  className="py-1.5 px-2 bg-slate-600 hover:bg-slate-700 text-white font-bold rounded-lg text-[11px] flex items-center justify-center space-x-1 cursor-pointer"
-                >
-                  <MinusCircle className="w-3 h-3" />
-                  <span>Enth.</span>
                 </button>
               </div>
             </div>
