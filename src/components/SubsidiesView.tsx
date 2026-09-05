@@ -836,10 +836,19 @@ export const SubsidiesView: React.FC<Props> = ({
                         // Stand vor der Zahlungsfreigabe, sonst passt der Beschluss nicht
                         // mehr zum tatsaechlichen Zuschuss-Stand.
                         const isLockedDown = !!s.resolutionId && isAccepted;
+                        // Noch gar kein Beschluss zugeordnet -> "Im Beschluss"/"Zur Zahlung
+                        // freigegeben"/"Bezahlt" waeren nicht berechtigt, das passiert erst
+                        // automatisch, sobald tatsaechlich gebuendelt wird ("Beschluss
+                        // erstellen" aus dem Geprueft-Reiter). "Abgelehnt" bleibt erlaubt,
+                        // da das die einzige Moeglichkeit ist, einen Antrag direkt
+                        // abzulehnen, ohne ihn erst in einen Beschluss zu buendeln.
+                        const isNoResolutionYet = !s.resolutionId;
                         const lockedStatuses: SubsidyStatus[] = isLocked
                           ? ['zur_zahlung_freigegeben', 'bezahlt']
                           : isLockedDown
                           ? ['beantragt', 'bestaetigt', 'im_beschluss', 'nicht_stattgefunden', 'abgelehnt']
+                          : isNoResolutionYet
+                          ? ['im_beschluss', 'zur_zahlung_freigegeben', 'bezahlt']
                           : [];
                         return (
                           <div className="space-y-1.5">
@@ -878,6 +887,15 @@ export const SubsidiesView: React.FC<Props> = ({
                                 Stand kann nur noch zwischen „Zur Zahlung freigegeben" und
                                 „Bezahlt" wechseln, nicht mehr darunter (kein Zurückdrehen auf
                                 „Offen"/„Geprüft"/„Im Beschluss").
+                              </p>
+                            )}
+
+                            {isNoResolutionYet && (
+                              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                                „Im Beschluss", „Zur Zahlung freigegeben" und „Bezahlt" sind
+                                gesperrt: Dieser Zuschuss hängt noch an keinem Beschluss. Das
+                                passiert automatisch, sobald er über „Beschluss erstellen" im
+                                Reiter „Geprüft" gebündelt wird.
                               </p>
                             )}
 

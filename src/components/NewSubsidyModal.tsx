@@ -68,6 +68,14 @@ export const NewSubsidyModal: React.FC<Props> = ({
     'nicht_stattgefunden',
     'abgelehnt',
   ];
+  // Noch kein Beschluss zugeordnet -> "Im Beschluss"/"Zur Zahlung freigegeben"/
+  // "Bezahlt" waeren nicht berechtigt (gleiche Regel wie in SubsidiesView.tsx).
+  const isNoResolutionYet = !!editing && !editing.resolutionId;
+  const NO_RESOLUTION_LOCKED_STATUSES: SubsidyStatus[] = [
+    'im_beschluss',
+    'zur_zahlung_freigegeben',
+    'bezahlt',
+  ];
   const [proofState, setProofState] = useState<SubsidyProofState>(editing?.proofState || 'offen');
   const [proofNote, setProofNote] = useState(editing?.proofNote || '');
   const [proofFile, setProofFile] = useState(editing?.proofFile);
@@ -375,7 +383,8 @@ export const NewSubsidyModal: React.FC<Props> = ({
                     value={s}
                     disabled={
                       (isPaymentLocked && (s === 'zur_zahlung_freigegeben' || s === 'bezahlt')) ||
-                      (isDowngradeLocked && DOWNGRADE_LOCKED_STATUSES.includes(s))
+                      (isDowngradeLocked && DOWNGRADE_LOCKED_STATUSES.includes(s)) ||
+                      (isNoResolutionYet && NO_RESOLUTION_LOCKED_STATUSES.includes(s))
                     }
                   >
                     {STATUS_LABEL[s]}
@@ -399,6 +408,13 @@ export const NewSubsidyModal: React.FC<Props> = ({
               <p className="text-[10px] text-amber-700 px-1 mt-1">
                 Beschluss {linkedResolution?.number} ist bereits angenommen - der Stand kann nur
                 noch zwischen „Zur Zahlung freigegeben" und „Bezahlt" wechseln, nicht mehr darunter.
+              </p>
+            )}
+            {isNoResolutionYet && (
+              <p className="text-[10px] text-amber-700 px-1 mt-1">
+                „Im Beschluss", „Zur Zahlung freigegeben" und „Bezahlt" sind gesperrt: Dieser
+                Zuschuss hängt an keinem Beschluss. Das passiert automatisch beim Bündeln über
+                „Beschluss erstellen" im Reiter „Geprüft".
               </p>
             )}
           </div>
