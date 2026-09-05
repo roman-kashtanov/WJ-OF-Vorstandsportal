@@ -56,7 +56,18 @@ export const NewSubsidyModal: React.FC<Props> = ({
   const linkedResolution = editing?.resolutionId
     ? resolutions.find((r) => r.id === editing.resolutionId)
     : undefined;
-  const isPaymentLocked = !!editing?.resolutionId && linkedResolution?.status !== 'angenommen';
+  const isAcceptedResolution = linkedResolution?.status === 'angenommen';
+  const isPaymentLocked = !!editing?.resolutionId && !isAcceptedResolution;
+  // Beschluss bereits angenommen -> nicht mehr auf einen Stand vor der
+  // Zahlungsfreigabe zurueckdrehen (gleiche Regel wie in SubsidiesView.tsx).
+  const isDowngradeLocked = !!editing?.resolutionId && isAcceptedResolution;
+  const DOWNGRADE_LOCKED_STATUSES: SubsidyStatus[] = [
+    'beantragt',
+    'bestaetigt',
+    'im_beschluss',
+    'nicht_stattgefunden',
+    'abgelehnt',
+  ];
   const [proofState, setProofState] = useState<SubsidyProofState>(editing?.proofState || 'offen');
   const [proofNote, setProofNote] = useState(editing?.proofNote || '');
   const [proofFile, setProofFile] = useState(editing?.proofFile);
@@ -359,7 +370,14 @@ export const NewSubsidyModal: React.FC<Props> = ({
               {(Object.keys(STATUS_LABEL) as SubsidyStatus[])
                 .filter((s) => !!editing || !PIPELINE_MANAGED_STATUSES.includes(s) || s === status)
                 .map((s) => (
-                  <option key={s} value={s} disabled={isPaymentLocked && (s === 'zur_zahlung_freigegeben' || s === 'bezahlt')}>
+                  <option
+                    key={s}
+                    value={s}
+                    disabled={
+                      (isPaymentLocked && (s === 'zur_zahlung_freigegeben' || s === 'bezahlt')) ||
+                      (isDowngradeLocked && DOWNGRADE_LOCKED_STATUSES.includes(s))
+                    }
+                  >
                     {STATUS_LABEL[s]}
                   </option>
                 ))}
@@ -375,6 +393,12 @@ export const NewSubsidyModal: React.FC<Props> = ({
                 „Zur Zahlung freigegeben" und „Bezahlt" sind gesperrt: Beschluss{' '}
                 {linkedResolution?.number || '?'} ist noch nicht angenommen. Zuordnung in der
                 Zuschuss-Liste über „Status manuell ändern" korrigieren, falls falsch verknüpft.
+              </p>
+            )}
+            {isDowngradeLocked && (
+              <p className="text-[10px] text-amber-700 px-1 mt-1">
+                Beschluss {linkedResolution?.number} ist bereits angenommen - der Stand kann nur
+                noch zwischen „Zur Zahlung freigegeben" und „Bezahlt" wechseln, nicht mehr darunter.
               </p>
             )}
           </div>

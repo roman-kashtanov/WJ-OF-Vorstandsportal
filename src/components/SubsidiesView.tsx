@@ -829,9 +829,17 @@ export const SubsidiesView: React.FC<Props> = ({
                     {manualOverrideId === s.id ? (
                       (() => {
                         const linkedResolution = s.resolutionId ? resolutionById[s.resolutionId] : undefined;
-                        const isLocked = !!s.resolutionId && linkedResolution?.status !== 'angenommen';
+                        const isAccepted = linkedResolution?.status === 'angenommen';
+                        // Kein Beschluss dahinter -> zur Zahlung freigeben waere unbelegt.
+                        const isLocked = !!s.resolutionId && !isAccepted;
+                        // Beschluss bereits angenommen -> nicht mehr "zurueckdrehen" auf einen
+                        // Stand vor der Zahlungsfreigabe, sonst passt der Beschluss nicht
+                        // mehr zum tatsaechlichen Zuschuss-Stand.
+                        const isLockedDown = !!s.resolutionId && isAccepted;
                         const lockedStatuses: SubsidyStatus[] = isLocked
                           ? ['zur_zahlung_freigegeben', 'bezahlt']
+                          : isLockedDown
+                          ? ['beantragt', 'bestaetigt', 'im_beschluss', 'nicht_stattgefunden', 'abgelehnt']
                           : [];
                         return (
                           <div className="space-y-1.5">
@@ -863,6 +871,15 @@ export const SubsidiesView: React.FC<Props> = ({
                                 Fertig
                               </button>
                             </div>
+
+                            {isLockedDown && (
+                              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                                Beschluss {linkedResolution?.number} ist bereits angenommen - der
+                                Stand kann nur noch zwischen „Zur Zahlung freigegeben" und
+                                „Bezahlt" wechseln, nicht mehr darunter (kein Zurückdrehen auf
+                                „Offen"/„Geprüft"/„Im Beschluss").
+                              </p>
+                            )}
 
                             {isLocked && (
                               <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 space-y-1.5">
