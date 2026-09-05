@@ -120,9 +120,13 @@ export function buildSepaCreditTransfer(
     })
     .join('\n');
 
+  // Anders als beim Kreditor (CdtrAgt, seit 2016 optional) ist DbtrAgt im
+  // Schema pflicht (minOccurs=1) - ohne dieses Element gilt die Datei als
+  // ungueltig. Deshalb hier IMMER ein Element schreiben, notfalls mit dem
+  // Standard-Platzhalter NOTPROVIDED statt es ganz wegzulassen.
   const dbtrAgt = debtor.bic
     ? `<DbtrAgt><FinInstnId><BICFI>${escapeXml(debtor.bic.toUpperCase())}</BICFI></FinInstnId></DbtrAgt>`
-    : '';
+    : `<DbtrAgt><FinInstnId><Othr><Id>NOTPROVIDED</Id></Othr></FinInstnId></DbtrAgt>`;
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09 pain.001.001.09.xsd">
