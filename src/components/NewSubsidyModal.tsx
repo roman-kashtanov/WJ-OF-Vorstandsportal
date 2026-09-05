@@ -6,6 +6,7 @@ import {
   SubsidyCategory,
   SubsidyStatus,
   SubsidyProofState,
+  Resolution,
 } from '../types';
 import { SubsidyCatalogueEntry, SubsidyLimits, CATEGORY_LABEL } from '../data/subsidyCatalogue';
 import { checkSubsidy, STATUS_LABEL, PIPELINE_MANAGED_STATUSES, personBudget } from '../utils/subsidies';
@@ -24,6 +25,8 @@ interface Props {
   year: number;
   catalogue: SubsidyCatalogueEntry[];
   limits: SubsidyLimits;
+  /** Fuer die Sperre "Zur Zahlung freigegeben"/"Bezahlt" ohne angenommenen Beschluss. */
+  resolutions: Resolution[];
   onSubmit: (subsidy: Subsidy) => void;
   onManagePeople: () => void;
 }
@@ -37,6 +40,7 @@ export const NewSubsidyModal: React.FC<Props> = ({
   year,
   catalogue,
   limits,
+  resolutions,
   onSubmit,
   onManagePeople,
 }) => {
@@ -49,6 +53,10 @@ export const NewSubsidyModal: React.FC<Props> = ({
     editing?.actualCost !== undefined ? String(editing.actualCost) : ''
   );
   const [status, setStatus] = useState<SubsidyStatus>(editing?.status || 'beantragt');
+  const linkedResolution = editing?.resolutionId
+    ? resolutions.find((r) => r.id === editing.resolutionId)
+    : undefined;
+  const isPaymentLocked = !!editing?.resolutionId && linkedResolution?.status !== 'angenommen';
   const [proofState, setProofState] = useState<SubsidyProofState>(editing?.proofState || 'offen');
   const [proofNote, setProofNote] = useState(editing?.proofNote || '');
   const [proofFile, setProofFile] = useState(editing?.proofFile);
@@ -345,13 +353,13 @@ export const NewSubsidyModal: React.FC<Props> = ({
             >
               {/* Beim Neu-Anlegen bleiben die von der Automatik verwalteten Stati
                   gesperrt (kein Beschluss soll uebersprungen werden). Beim
-                  Bearbeiten einer bestehenden - z.B. alten, vor der Automatik
-                  angelegten - Buchung soll der Vorstand aber frei korrigieren
-                  koennen. */}
+                  Bearbeiten haengt die Sperre gezielt daran, ob ein
+                  verknuepfter Beschluss existiert und angenommen ist - siehe
+                  isPaymentLocked, gleiche Regel wie in SubsidiesView.tsx. */}
               {(Object.keys(STATUS_LABEL) as SubsidyStatus[])
                 .filter((s) => !!editing || !PIPELINE_MANAGED_STATUSES.includes(s) || s === status)
                 .map((s) => (
-                  <option key={s} value={s}>
+                  <option key={s} value={s} disabled={isPaymentLocked && (s === 'zur_zahlung_freigegeben' || s === 'bezahlt')}>
                     {STATUS_LABEL[s]}
                   </option>
                 ))}
@@ -360,6 +368,13 @@ export const NewSubsidyModal: React.FC<Props> = ({
               <p className="text-[10px] text-slate-400 px-1 mt-1">
                 Dieser Stand wird normalerweise automatisch über den Beschluss gesetzt, nicht
                 manuell.
+              </p>
+            )}
+            {isPaymentLocked && (
+              <p className="text-[10px] text-amber-700 px-1 mt-1">
+                „Zur Zahlung freigegeben" und „Bezahlt" sind gesperrt: Beschluss{' '}
+                {linkedResolution?.number || '?'} ist noch nicht angenommen. Zuordnung in der
+                Zuschuss-Liste über „Status manuell ändern" korrigieren, falls falsch verknüpft.
               </p>
             )}
           </div>

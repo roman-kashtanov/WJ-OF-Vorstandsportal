@@ -81,6 +81,15 @@ export interface SepaResult {
  * @param executionDate Ausführungstag (JJJJ-MM-TT). Banken weisen ein Datum in
  *        der Vergangenheit ab; ohne Angabe wird der morgige Tag verwendet.
  */
+/**
+ * Schema pain.001.001.09 (nicht .03) - so exportiert es auch das
+ * Online-Banking-Portal der Sparkasse Offenbach selbst (Nutzer hat ein
+ * Beispiel bereitgestellt). Wichtigste Unterschiede zur alten .03-Version
+ * hier im Code: das BIC-Element heisst <BICFI> statt <BIC>, und
+ * <ReqdExctnDt> braucht ein verschachteltes <Dt>-Element statt das Datum
+ * direkt als Text zu tragen - ohne diese zwei Aenderungen lehnte die
+ * Banking-App die Datei beim Einspielen ab.
+ */
 export function buildSepaCreditTransfer(
   debtor: SepaDebtor,
   payments: SepaPayment[],
@@ -99,7 +108,7 @@ export function buildSepaCreditTransfer(
   const transactions = payments
     .map((p) => {
       const cdtrAgt = p.bic
-        ? `\n          <CdtrAgt><FinInstnId><BIC>${escapeXml(p.bic.toUpperCase())}</BIC></FinInstnId></CdtrAgt>`
+        ? `\n          <CdtrAgt><FinInstnId><BICFI>${escapeXml(p.bic.toUpperCase())}</BICFI></FinInstnId></CdtrAgt>`
         : '';
       return `        <CdtTrfTxInf>
           <PmtId><EndToEndId>${escapeXml(sanitizeSepaText(p.endToEndId).slice(0, 35))}</EndToEndId></PmtId>
@@ -112,11 +121,11 @@ export function buildSepaCreditTransfer(
     .join('\n');
 
   const dbtrAgt = debtor.bic
-    ? `<DbtrAgt><FinInstnId><BIC>${escapeXml(debtor.bic.toUpperCase())}</BIC></FinInstnId></DbtrAgt>`
-    : `<DbtrAgt><FinInstnId><Othr><Id>NOTPROVIDED</Id></Othr></FinInstnId></DbtrAgt>`;
+    ? `<DbtrAgt><FinInstnId><BICFI>${escapeXml(debtor.bic.toUpperCase())}</BICFI></FinInstnId></DbtrAgt>`
+    : '';
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.03" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09 pain.001.001.09.xsd">
   <CstmrCdtTrfInitn>
     <GrpHdr>
       <MsgId>${msgId}</MsgId>
@@ -132,7 +141,7 @@ export function buildSepaCreditTransfer(
       <NbOfTxs>${payments.length}</NbOfTxs>
       <CtrlSum>${money(sum)}</CtrlSum>
       <PmtTpInf><SvcLvl><Cd>SEPA</Cd></SvcLvl></PmtTpInf>
-      <ReqdExctnDt>${exec}</ReqdExctnDt>
+      <ReqdExctnDt><Dt>${exec}</Dt></ReqdExctnDt>
       <Dbtr><Nm>${escapeXml(sanitizeSepaText(debtor.name).slice(0, 70))}</Nm></Dbtr>
       <DbtrAcct><Id><IBAN>${escapeXml(debtor.iban.replace(/\s+/g, '').toUpperCase())}</IBAN></Id></DbtrAcct>
       ${dbtrAgt}

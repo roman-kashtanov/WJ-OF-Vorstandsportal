@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Subsidy, SubsidyPerson, SubsidyStatus, SubsidyPersonType, AuditLogEntry } from '../types';
+import { Subsidy, SubsidyPerson, SubsidyStatus, SubsidyPersonType, AuditLogEntry, Resolution } from '../types';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import {
   STATUS_LABEL,
@@ -42,11 +42,14 @@ interface Props {
   year: number;
   limits: SubsidyLimits;
   auditLog: AuditLogEntry[];
+  /** Fuer die Absicherung der manuellen Status-Aenderung: ist der verknuepfte Beschluss angenommen? */
+  resolutions: Resolution[];
   onChangeYear: (year: number) => void;
   onOpenNew: () => void;
   onEdit: (subsidy: Subsidy) => void;
   onDelete: (id: string) => void;
   onUpdateStatus: (id: string, status: SubsidyStatus) => void;
+  onReassignResolution: (id: string, resolutionId: string | null) => void;
   onManagePeople: () => void;
   onManageCatalogue: () => void;
   onOpenPayout: () => void;
@@ -70,11 +73,13 @@ export const SubsidiesView: React.FC<Props> = ({
   year,
   limits,
   auditLog,
+  resolutions,
   onChangeYear,
   onOpenNew,
   onEdit,
   onDelete,
   onUpdateStatus,
+  onReassignResolution,
   onManagePeople,
   onManageCatalogue,
   onOpenPayout,
@@ -88,6 +93,12 @@ export const SubsidiesView: React.FC<Props> = ({
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [manualOverrideId, setManualOverrideId] = useState<string | null>(null);
+  const [reassignId, setReassignId] = useState<string | null>(null);
+  const [reassignChoice, setReassignChoice] = useState<string>('');
+  const resolutionById = useMemo(
+    () => Object.fromEntries(resolutions.map((r) => [r.id, r])),
+    [resolutions]
+  );
   const [previewFile, setPreviewFile] = useState<PreviewableFile | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [resendState, setResendState] = useState<Record<string, 'busy' | 'done' | 'error'>>({});
@@ -816,30 +827,106 @@ export const SubsidiesView: React.FC<Props> = ({
                       Bearbeiten/Entfernen. */}
                   <div className="pt-1">
                     {manualOverrideId === s.id ? (
-                      <div className="flex items-center gap-2">
-                        <select
-                          value={s.status}
-                          onChange={(e) => onUpdateStatus(s.id, e.target.value as SubsidyStatus)}
-                          className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#003594]"
-                        >
-                          {/* Hier bewusst KEIN Filter auf PIPELINE_MANAGED_STATUSES:
-                              das ist der Ausnahme-Pfad fuer Korrekturen/Altfaelle,
-                              da muessen auch die von der Automatik verwalteten
-                              Stati (im_beschluss, zur_zahlung_freigegeben) waehlbar sein. */}
-                          {(Object.keys(STATUS_LABEL) as SubsidyStatus[]).map((st) => (
-                            <option key={st} value={st}>
-                              {STATUS_LABEL[st]}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => setManualOverrideId(null)}
-                          className="text-[11px] font-semibold text-slate-400 hover:text-slate-700 cursor-pointer"
-                        >
-                          Fertig
-                        </button>
-                      </div>
+                      (() => {
+                        const linkedResolution = s.resolutionId ? resolutionById[s.resolutionId] : undefined;
+                        const isLocked = !!s.resolutionId && linkedResolution?.status !== 'angenommen';
+                        const lockedStatuses: SubsidyStatus[] = isLocked
+                          ? ['zur_zahlung_freigegeben', 'bezahlt']
+                          : [];
+                        return (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={s.status}
+                                onChange={(e) => onUpdateStatus(s.id, e.target.value as SubsidyStatus)}
+                                className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#003594]"
+                              >
+                                {/* Hier bewusst KEIN pauschaler Filter auf
+                                    PIPELINE_MANAGED_STATUSES: das ist der
+                                    Ausnahme-Pfad fuer Korrekturen/Altfaelle.
+                                    Gesperrt wird gezielt nur, wenn ein
+                                    verknuepfter Beschluss existiert, der noch
+                                    nicht angenommen ist - sonst koennte man
+                                    eine Auszahlung ohne echten Beschluss
+                                    dahinter freigeben. */}
+                                {(Object.keys(STATUS_LABEL) as SubsidyStatus[]).map((st) => (
+                                  <option key={st} value={st} disabled={lockedStatuses.includes(st)}>
+                                    {STATUS_LABEL[st]}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => setManualOverrideId(null)}
+                                className="text-[11px] font-semibold text-slate-400 hover:text-slate-700 cursor-pointer"
+                              >
+                                Fertig
+                              </button>
+                            </div>
+
+                            {isLocked && (
+                              <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 space-y-1.5">
+                                <p>
+                                  „Zur Zahlung freigegeben" und „Bezahlt" sind gesperrt: Beschluss{' '}
+                                  {linkedResolution?.number || '?'} ist noch nicht angenommen (Status:{' '}
+                                  {linkedResolution?.status === 'in_abstimmung'
+                                    ? 'in Abstimmung'
+                                    : linkedResolution?.status === 'abgelehnt'
+                                    ? 'abgelehnt'
+                                    : linkedResolution?.status || 'unbekannt'}
+                                  ). Ohne angenommenen Beschluss darf nicht zur Zahlung freigegeben werden.
+                                </p>
+                                {reassignId === s.id ? (
+                                  <div className="flex items-center gap-1.5 pt-0.5">
+                                    <select
+                                      value={reassignChoice}
+                                      onChange={(e) => setReassignChoice(e.target.value)}
+                                      className="flex-1 min-w-0 px-2 py-1 bg-white border border-amber-300 rounded-lg text-[11px] font-semibold cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#003594]"
+                                    >
+                                      <option value="">Keine Zuordnung</option>
+                                      {resolutions
+                                        .filter((r) => r.status === 'angenommen')
+                                        .map((r) => (
+                                          <option key={r.id} value={r.id}>
+                                            {r.number} – {r.title}
+                                          </option>
+                                        ))}
+                                    </select>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        onReassignResolution(s.id, reassignChoice || null);
+                                        setReassignId(null);
+                                      }}
+                                      className="px-2 py-1 rounded-lg bg-[#003594] hover:bg-[#00266B] text-white text-[11px] font-bold cursor-pointer shrink-0"
+                                    >
+                                      Übernehmen
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setReassignId(null)}
+                                      className="text-[11px] font-semibold text-slate-400 hover:text-slate-700 cursor-pointer shrink-0"
+                                    >
+                                      Abbrechen
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setReassignChoice('');
+                                      setReassignId(s.id);
+                                    }}
+                                    className="font-bold underline decoration-dotted cursor-pointer"
+                                  >
+                                    Anderem (angenommenem) Beschluss zuordnen
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()
                     ) : (
                       <button
                         type="button"

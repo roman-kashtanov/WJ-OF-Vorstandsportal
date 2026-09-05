@@ -172,6 +172,40 @@ export function useSubsidies({
   };
 
   /**
+   * Haengt einen Zuschuss manuell an einen anderen (oder gar keinen) Beschluss -
+   * die Ausnahme, wenn eine Buendelung schiefgelaufen ist oder ein Zuschuss
+   * nachtraeglich einem tatsaechlich angenommenen Beschluss zugeordnet werden
+   * muss, um "Zur Zahlung freigegeben" ueberhaupt waehlen zu koennen (siehe
+   * die Sperre in SubsidiesView.tsx).
+   */
+  const handleReassignSubsidyResolution = (id: string, resolutionId: string | null) => {
+    const target = subsidies.find((x) => x.id === id);
+    if (!target) return;
+
+    const updated: Subsidy = { ...target, resolutionId: resolutionId || undefined };
+    setSubsidies((prev) => prev.map((x) => (x.id === id ? updated : x)));
+
+    addAuditLogEntry({
+      entityType: 'subsidy',
+      entityId: target.id,
+      entityLabel: `${target.personName} – ${target.eventName}`,
+      action: resolutionId
+        ? `Manuell einem anderen Beschluss zugeordnet`
+        : `Beschluss-Verknüpfung manuell entfernt`,
+      actorName: currentMember.name,
+      actorId: currentMember.id,
+    });
+
+    FirebaseSync.saveSubsidy(updated).then((res) => {
+      if (!res?.success) {
+        reportSaveFailures([
+          { label: `${target.personName} – ${target.eventName}`, error: res?.error },
+        ]);
+      }
+    });
+  };
+
+  /**
    * Buendelt mehrere geprueften Zuschuesse zu einem neuen Vorstandsbeschluss
    * und markiert sie als "im_beschluss". Erst wenn dieser Beschluss
    * angenommen wird, greift die Kaskade weiter unten und gibt sie zur
@@ -523,6 +557,7 @@ export function useSubsidies({
     handleSaveSubsidy,
     handleDeleteSubsidy,
     handleUpdateSubsidyStatus,
+    handleReassignSubsidyResolution,
     handleBundleSubsidies,
     handleMarkSubsidiesPaid,
     handleSaveSubsidyPerson,

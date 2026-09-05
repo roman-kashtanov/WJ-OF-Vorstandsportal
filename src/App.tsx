@@ -611,6 +611,7 @@ export default function App() {
     handleSaveSubsidy,
     handleDeleteSubsidy,
     handleUpdateSubsidyStatus,
+    handleReassignSubsidyResolution,
     handleBundleSubsidies,
     handleMarkSubsidiesPaid,
     handleSaveSubsidyPerson,
@@ -829,6 +830,7 @@ export default function App() {
             year={subsidyYear}
             limits={catalogueSettings.limits}
             auditLog={auditLog}
+            resolutions={resolutions}
             onChangeYear={setSubsidyYear}
             onOpenNew={() => {
               setEditingSubsidy(null);
@@ -840,6 +842,7 @@ export default function App() {
             }}
             onDelete={handleDeleteSubsidy}
             onUpdateStatus={handleUpdateSubsidyStatus}
+            onReassignResolution={handleReassignSubsidyResolution}
             onManagePeople={() => setIsSubsidyPeopleOpen(true)}
             onManageCatalogue={() => setIsSubsidyCatalogueOpen(true)}
             onOpenPayout={() => setIsPayoutOpen(true)}
@@ -965,6 +968,7 @@ export default function App() {
           year={subsidyYear}
           catalogue={catalogueSettings.entries}
           limits={catalogueSettings.limits}
+          resolutions={resolutions}
           onSubmit={handleSaveSubsidy}
           onManagePeople={() => setIsSubsidyPeopleOpen(true)}
         />
