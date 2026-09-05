@@ -10,11 +10,12 @@ import {
   Subsidy,
   SubsidyPerson,
   SubsidyStatus,
+  SubsidyKind,
 } from '../types';
 import { FirebaseSync } from '../utils/firebaseSync';
 import { SubsidyStorage } from '../utils/storage';
 import { generateSubsidyReceiptPdf } from '../utils/subsidyReceipt';
-import { normalizeNameKey, STATUS_LABEL } from '../utils/subsidies';
+import { normalizeNameKey, STATUS_LABEL, subsidyKind, KIND_TEXTS } from '../utils/subsidies';
 import { formatCurrency } from '../utils/formatters';
 import { SubsidyCatalogueSettings, DEFAULT_SUBSIDY_CATALOGUE_SETTINGS } from '../data/subsidyCatalogue';
 import { parseSubsidyBackupCsv } from '../utils/subsidyBackupCsv';
@@ -182,7 +183,21 @@ export function useSubsidies({
     const target = subsidies.find((x) => x.id === id);
     if (!target) return;
 
-    const updated: Subsidy = { ...target, resolutionId: resolutionId || undefined };
+    const now = new Date().toISOString();
+
+    // Wird ein noch nicht gebuendelter Vorgang einem bestehenden Beschluss
+    // zugeordnet, rueckt er damit in die Beschlussphase - genau wie beim
+    // Buendeln ueber "Beschluss erstellen". Ist der Beschluss bereits
+    // angenommen, gibt ihn die Kaskade weiter unten sofort zur Zahlung frei.
+    const entersResolutionPhase =
+      !!resolutionId && (target.status === 'beantragt' || target.status === 'bestaetigt');
+
+    const updated: Subsidy = {
+      ...target,
+      resolutionId: resolutionId || undefined,
+      status: entersResolutionPhase ? 'im_beschluss' : target.status,
+      bundledAt: entersResolutionPhase ? target.bundledAt || now : target.bundledAt,
+    };
     setSubsidies((prev) => prev.map((x) => (x.id === id ? updated : x)));
 
     addAuditLogEntry({
@@ -190,8 +205,10 @@ export function useSubsidies({
       entityId: target.id,
       entityLabel: `${target.personName} – ${target.eventName}`,
       action: resolutionId
-        ? `Manuell einem anderen Beschluss zugeordnet`
-        : `Beschluss-Verknüpfung manuell entfernt`,
+        ? entersResolutionPhase
+          ? 'Einem bestehenden Beschluss zugeordnet'
+          : 'Manuell einem anderen Beschluss zugeordnet'
+        : 'Beschluss-Verknüpfung manuell entfernt',
       actorName: currentMember.name,
       actorId: currentMember.id,
     });
@@ -340,12 +357,19 @@ export function useSubsidies({
     // synchron mit diesem Aufruf ausgefuehrt (insbesondere im Dev-Modus mit
     // StrictMode), Code direkt danach saehe eine noch leere Map. Diese
     // Berechnung hier ist rein lesend, hat also keine solche Race Condition.
-    const releasedByResolution = new Map<string, { count: number; total: number }>();
+    const releasedByResolution = new Map<
+      string,
+      { count: number; total: number; kind: SubsidyKind }
+    >();
     for (const s of subsidies) {
       if (s.status !== 'im_beschluss' || !s.resolutionId) continue;
       const res = resolutions.find((r) => r.id === s.resolutionId);
       if (res?.status !== 'angenommen') continue;
-      const entry = releasedByResolution.get(res.id) || { count: 0, total: 0 };
+      const entry = releasedByResolution.get(res.id) || {
+        count: 0,
+        total: 0,
+        kind: subsidyKind(s),
+      };
       entry.count += 1;
       entry.total += s.amount || 0;
       releasedByResolution.set(res.id, entry);
@@ -392,17 +416,20 @@ export function useSubsidies({
     }
 
     if (notificationSettings.notifyOnQuorumReached) {
-      releasedByResolution.forEach(({ count, total }, resolutionId) => {
+      releasedByResolution.forEach(({ count, total, kind }, resolutionId) => {
         const res = resolutions.find((r) => r.id === resolutionId);
+        const texts = KIND_TEXTS[kind];
         const subject =
-          count === 1 ? `1 Zuschuss (${formatCurrency(total)})` : `${count} Zuschüsse (${formatCurrency(total)})`;
+          count === 1
+            ? `1 ${texts.singular} (${formatCurrency(total)})`
+            : `${count} ${texts.plural} (${formatCurrency(total)})`;
         addInAppAndPushNotification({
-          title: '💶 Zuschüsse zur Auszahlung bereit',
+          title: `💶 ${texts.plural} zur Auszahlung bereit`,
           message: `${subject} aus "${res?.title || 'einem Sammelbeschluss'}" ${
             count === 1 ? 'kann' : 'können'
           } jetzt überwiesen werden.`,
           type: 'subsidy',
-          targetTab: 'subsidies',
+          targetTab: kind === 'auslage' ? 'expenses' : 'subsidies',
         });
       });
     }

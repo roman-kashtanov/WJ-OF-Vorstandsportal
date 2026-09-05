@@ -6,6 +6,7 @@ import {
   Receipt, 
   Calendar, 
   HandCoins,
+  Wallet,
   Sliders
 } from 'lucide-react';
 
@@ -51,6 +52,11 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       id: 'subsidies',
       label: 'Zuschüsse',
       icon: <HandCoins className="w-5 h-5" strokeWidth={1.75} />,
+    },
+    {
+      id: 'expenses',
+      label: 'Auslagen',
+      icon: <Wallet className="w-5 h-5" strokeWidth={1.75} />,
     },
     {
       id: 'meetings',
@@ -123,7 +129,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
               </div>
 
               {/* Label */}
-              <span className={`text-[10px] tracking-tight mt-0.5 leading-tight ${
+              <span className={`text-[9px] tracking-tight mt-0.5 leading-tight max-w-full truncate px-0.5 ${
                 isActive ? 'font-bold text-[#003594]' : 'font-medium'
               }`}>
                 {item.label}

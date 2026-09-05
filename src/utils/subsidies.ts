@@ -1,5 +1,48 @@
-import { Subsidy, SubsidyCategory, SubsidyPerson, SubsidyStatus } from '../types';
+import { Subsidy, SubsidyCategory, SubsidyKind, SubsidyPerson, SubsidyStatus } from '../types';
 import { SubsidyLimits } from '../data/subsidyCatalogue';
+
+/** Alte Datensaetze ohne `kind` sind immer Zuschuesse (siehe types.ts). */
+export function subsidyKind(s: Pick<Subsidy, 'kind'>): SubsidyKind {
+  return s.kind === 'auslage' ? 'auslage' : 'zuschuss';
+}
+
+export function ofKind(list: Subsidy[], kind: SubsidyKind): Subsidy[] {
+  return list.filter((s) => subsidyKind(s) === kind);
+}
+
+/**
+ * Alle Texte, die sich zwischen den beiden Vorgangsarten unterscheiden -
+ * gebuendelt an einer Stelle, damit die gemeinsame Oberflaeche
+ * (SubsidiesView, Buendeln, Auszahlung) nur EINMAL existiert und nicht je
+ * Art kopiert werden muss.
+ */
+export interface KindTexts {
+  singular: string;
+  plural: string;
+  /** Ueberschrift des Reiters */
+  tabLabel: string;
+  /** Verwendungszweck-Praefix auf der Ueberweisung */
+  paymentPrefix: string;
+  /** Dateiname-Baustein fuer SEPA/QR-Dateien */
+  fileLabel: string;
+}
+
+export const KIND_TEXTS: Record<SubsidyKind, KindTexts> = {
+  zuschuss: {
+    singular: 'Zuschuss',
+    plural: 'Zuschüsse',
+    tabLabel: 'Zuschüsse',
+    paymentPrefix: 'Zuschuss',
+    fileLabel: 'Zuschuesse',
+  },
+  auslage: {
+    singular: 'Auslage',
+    plural: 'Auslagen',
+    tabLabel: 'Auslagen',
+    paymentPrefix: 'Auslagenerstattung',
+    fileLabel: 'Auslagen',
+  },
+};
 
 /** `null` heißt "kein Limit" (siehe SubsidyLimits) - fürs Rechnen als Infinity behandeln. */
 function resolveCategoryLimit(limits: SubsidyLimits, category: SubsidyCategory): number {
@@ -59,9 +102,15 @@ export const PERSON_TYPE_LABEL: Record<SubsidyPerson['type'], string> = {
   interessent: 'Interessent',
 };
 
-/** Zählt dieser Zuschuss gegen das Budget? */
+/**
+ * Zählt dieser Vorgang gegen das Jahresbudget der Zuschuss-Richtlinie?
+ *
+ * Auslagenerstattungen zaehlen NICHT mit: sie sind kein Zuschuss nach der
+ * Richtlinie, sondern die Rueckzahlung von etwas bereits Bezahltem und
+ * haengen an einem eigenen Beschluss mit eigenem Budget.
+ */
 export function countsTowardsBudget(s: Subsidy): boolean {
-  return s.status !== 'abgelehnt';
+  return s.status !== 'abgelehnt' && subsidyKind(s) === 'zuschuss';
 }
 
 /**
@@ -240,8 +289,10 @@ export function normalizeNameKey(name: string): string {
 
 /** Verwendungszweck für die Überweisung. */
 export function paymentReference(subsidies: Subsidy[]): string {
+  if (subsidies.length === 0) return '';
+  const texts = KIND_TEXTS[subsidyKind(subsidies[0])];
   if (subsidies.length === 1) {
-    return `Zuschuss ${subsidies[0].eventName}`;
+    return `${texts.paymentPrefix} ${subsidies[0].eventName}`;
   }
-  return `Zuschuesse ${subsidies.length} Veranstaltungen ${subsidies[0].year}`;
+  return `${texts.fileLabel} ${subsidies.length} Positionen ${subsidies[0].year}`;
 }

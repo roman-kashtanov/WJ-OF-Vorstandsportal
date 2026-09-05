@@ -6,7 +6,8 @@ import {
   InvoiceCategory, 
   InvoiceStatus,
   BookkeepingStatus,
-  InvoiceFolder
+  InvoiceFolder,
+  Subsidy
 } from '../types';
 import { 
   formatCurrency, 
@@ -33,7 +34,8 @@ import {
   FileCheck,
   ChevronRight,
   ChevronDown,
-  Sparkles
+  Sparkles,
+  Wallet
 } from 'lucide-react';
 
 interface InvoicesViewProps {
@@ -42,6 +44,9 @@ interface InvoicesViewProps {
   invoices: Invoice[];
   resolutions: Resolution[];
   folders?: InvoiceFolder[];
+  /** Auslagenerstattungen - deren Belege sollen hier auffindbar sein. */
+  expenses?: Subsidy[];
+  onNavigateToExpenses?: () => void;
   onOpenNewInvoice: () => void;
   onSelectInvoice: (invoiceId: string) => void;
   onUpdateInvoiceStatus: (invoiceId: string, newStatus: InvoiceStatus) => void;
@@ -58,6 +63,8 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
   members,
   invoices,
   resolutions,
+  expenses = [],
+  onNavigateToExpenses,
   folders = [],
   onOpenNewInvoice,
   onSelectInvoice,
@@ -652,6 +659,51 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Belege aus Auslagenerstattungen - bearbeitet werden sie im eigenen
+          Reiter "Auslagen", hier stehen sie nur, damit man jede Rechnung des
+          Vereins an einer Stelle wiederfindet. */}
+      {expenses.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <Wallet className="w-4 h-4 text-[#003594]" strokeWidth={1.75} />
+              <h3 className="text-xs uppercase font-bold text-slate-700 tracking-wider">
+                Belege aus Auslagen ({expenses.length})
+              </h3>
+            </div>
+            {onNavigateToExpenses && (
+              <button
+                type="button"
+                onClick={onNavigateToExpenses}
+                className="text-[11px] font-bold text-[#003594] hover:underline cursor-pointer"
+              >
+                Zu den Auslagen
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            {expenses.map((e) => (
+              <div
+                key={e.id}
+                className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs"
+              >
+                <div className="min-w-0">
+                  <div className="font-bold text-slate-900 truncate">{e.eventName}</div>
+                  <div className="text-[11px] text-slate-500 truncate">
+                    {e.personName}
+                    {e.eventDate ? ` · ${formatDate(e.eventDate)}` : ''}
+                  </div>
+                </div>
+                <span className="font-bold text-slate-900 shrink-0">
+                  {formatCurrency(e.amount)}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

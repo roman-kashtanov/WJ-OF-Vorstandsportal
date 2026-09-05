@@ -13,7 +13,9 @@ import { formatCurrency } from './formatters';
  */
 export async function generateGiroCodePaymentsPdf(
   debtor: SepaDebtor,
-  payments: SepaPayment[]
+  payments: SepaPayment[],
+  /** Was ueberwiesen wird, z.B. "Zuschuesse" oder "Auslagen" - steht im Dateinamen. */
+  label = 'Zahlungen'
 ): Promise<{ blob: Blob; fileName: string }> {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const marginX = 20;
@@ -74,7 +76,11 @@ export async function generateGiroCodePaymentsPdf(
     );
   }
 
-  const fileName = `Ueberweisungen-QR-${new Date().toISOString().slice(0, 10)}.pdf`;
+  // Wie bei der SEPA-Datei: Zweck, Anzahl und Gesamtsumme im Dateinamen.
+  const sum = payments.reduce((acc, p) => acc + p.amount, 0);
+  const fileName = `WJOF_${label}_QR_${new Date().toISOString().slice(0, 10)}_${
+    payments.length
+  }-Ueberweisungen_${sum.toFixed(2).replace('.', '-')}-EUR.pdf`;
   const blob = doc.output('blob');
   return { blob, fileName };
 }

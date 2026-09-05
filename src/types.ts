@@ -300,7 +300,7 @@ export interface MeetingSeries {
   createdAt: string;
 }
 
-export type ActiveTab = 'dashboard' | 'resolutions' | 'invoices' | 'meetings' | 'subsidies' | 'email-center' | 'storage-guide';
+export type ActiveTab = 'dashboard' | 'resolutions' | 'invoices' | 'meetings' | 'subsidies' | 'expenses' | 'email-center' | 'storage-guide';
 
 export interface EmailNotificationLog {
   id: string;
@@ -414,6 +414,21 @@ export interface AppVersionConfig {
 
 export type SubsidyCategory = 'academy' | 'training' | 'konferenz' | 'sonstiges';
 
+/**
+ * Zwei Vorgangsarten mit identischem Freigabe-Ablauf (eingereicht -> geprüft
+ * -> im Beschluss -> zur Zahlung freigegeben -> bezahlt), aber getrennten
+ * Reitern und leicht unterschiedlichen Regeln:
+ *
+ * - `zuschuss`: Zuschuss nach der Richtlinie (Katalog, Jahresbudget, Grenzen).
+ * - `auslage`:  Auslagenerstattung für etwas, das jemand vorgestreckt hat.
+ *               Kein Budget/Katalog, dafür ist der Beleg beim Einreichen
+ *               Pflicht - ohne Rechnung gibt es nichts zu erstatten.
+ *
+ * Alte Datensätze aus der Zeit vor den Auslagen haben kein Feld und gelten
+ * deshalb überall als `zuschuss` (siehe subsidyKind() in utils/subsidies.ts).
+ */
+export type SubsidyKind = 'zuschuss' | 'auslage';
+
 /** § 2 und § 3 der Richtlinie: Interessenten nur per Einzelfallbeschluss. */
 export type SubsidyPersonType = 'mitglied' | 'foerdermitglied' | 'interessent';
 
@@ -461,6 +476,8 @@ export interface SubsidyProofFile {
 
 export interface Subsidy {
   id: string;
+  /** Fehlt bei Datensätzen von vor der Auslagen-Einführung = 'zuschuss'. */
+  kind?: SubsidyKind;
   personId: string;
   /** Mitgeführt, damit Listen ohne Nachschlagen lesbar bleiben */
   personName: string;

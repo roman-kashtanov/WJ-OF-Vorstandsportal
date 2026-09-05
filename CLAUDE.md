@@ -1359,3 +1359,60 @@ ungenutzten `credentialsSentAt`-Zeitstempel auf `BoardMember` fuer die
 Anzeige "Zuletzt gesendet am ...". Lokal nur bis zur erwarteten
 Fehlermeldung pruefbar (kein SMTP lokal konfiguriert, wie bei allen
 E-Mail-Flows dieser App).
+
+---
+
+## v3.15.0 - Auslagenerstattung als eigener Bereich, Handlungsbedarf-Kacheln, SEPA-Pruefung
+
+**1. Auslagenerstattung (neuer Reiter "Auslagen").** Zweiter Vorgangstyp
+mit exakt demselben Freigabe-Ablauf wie Zuschuesse (eingereicht →
+geprueft → im Beschluss → zur Zahlung freigegeben → bezahlt), aber
+getrennten Reitern. Umgesetzt **nicht** als kopiertes Modul, sondern als
+Unterscheidungsmerkmal `Subsidy.kind: 'zuschuss' | 'auslage'` auf dem
+bestehenden Datensatz (alte Dokumente ohne Feld gelten als `zuschuss`,
+siehe `subsidyKind()` in `utils/subsidies.ts`). Damit gelten alle
+Sperr-, Kaskaden- und Auszahlungslogiken automatisch fuer beide Arten -
+eine Kopie waere zwangslaeufig auseinandergelaufen.
+`SubsidiesView`/`NewSubsidyModal`/`BundleSubsidiesModal`/
+`SubsidyPayoutModal` bekommen eine `kind`-Prop und filtern/beschriften
+sich darueber (`KIND_TEXTS`).
+
+Unterschiede zum Zuschuss: kein Richtlinien-Katalog und **keine
+Budgetanrechnung** (`countsTowardsBudget()` zaehlt nur Zuschuesse, das
+Budget-Panel ist im Auslagen-Reiter ausgeblendet), Veranstaltung
+optional/frei benannt, und **der Beleg ist beim Einreichen Pflicht** -
+ohne Rechnung gibt es nichts zu erstatten und nichts zu pruefen.
+Oeffentliches Formular unter **`/auslage`** (`ExpenseSubmissionPage.tsx`,
+gleicher Zugangscode wie `/antrag`), serverseitig
+`handleSubmitExpense()` in `api/subsidy.ts` → Route
+`subsidy/submit-expense`. Der Beleg wird als `costProofFile` abgelegt,
+`proofState` steht auf `anderweitig` (einen separaten Teilnahmenachweis
+gibt es hier nicht). Benachrichtigung + E-Mail an den Schatzmeister wie
+beim Zuschuss.
+
+Neu fuer beide Arten: **"Bestehendem Beschluss zuordnen"** direkt an
+einem geprueften Vorgang (bisher nur im versteckten Ausnahme-Pfad). Die
+Zuordnung setzt den Stand auf `im_beschluss`; ist der Beschluss bereits
+angenommen, gibt ihn die vorhandene Kaskade sofort zur Zahlung frei.
+Auslagen-Belege erscheinen zusaetzlich lesend in der Rechnungsuebersicht
+("Belege aus Auslagen"), damit jede Rechnung des Vereins an einer Stelle
+auffindbar bleibt.
+
+**2. Handlungsbedarf-Kacheln in der Uebersicht.** `DashboardView` zeigt
+oben Zahlen-Kacheln fuer Beschluesse in Abstimmung, Zuschuesse/Auslagen
+"zu pruefen" und "zur Zahlung" - jede springt in den passenden Reiter.
+Kacheln mit Zaehler 0 werden ausgeblendet.
+
+**3. SEPA-Datei gegen das echte Schema geprueft.** Die von der Sparkasse
+abgelehnte Datei wurde mit `xmllint` gegen das offizielle
+`pain.001.001.09.xsd` validiert - Ursache war eindeutig das fehlende
+Pflichtelement `DbtrAgt` (Fix in v3.14.6), die bankeigene Beispieldatei
+validiert einwandfrei. Das Schema liegt jetzt unter
+`schemas/pain.001.001.09.xsd` im Repo, dazu **`npm run check:sepa`**
+(`scripts/check-sepa.mjs`): erzeugt beide Varianten (mit/ohne
+Vereins-BIC) und validiert sie. Bei kuenftigen Aenderungen an
+`utils/sepa.ts` immer laufen lassen - genau dieser Fehler ist zweimal
+erst beim Nutzer aufgefallen. Dateinamen enthalten jetzt Zweck, Anzahl
+der Einzelueberweisungen und Gesamtsumme
+(`WJOF_Auslagen_2026-09-08_2-Ueberweisungen_150-50-EUR.xml`), ebenso die
+QR-Code-PDF.

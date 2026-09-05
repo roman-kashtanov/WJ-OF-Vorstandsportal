@@ -12,6 +12,7 @@ import {
   Sliders,
   CalendarDays,
   HandCoins,
+  Wallet,
   Cloud
 } from 'lucide-react';
 import { NotificationCenter } from './NotificationCenter';
@@ -99,6 +100,11 @@ export const Header: React.FC<HeaderProps> = ({
       id: 'subsidies',
       label: 'Zuschüsse',
       icon: <HandCoins className="w-4 h-4" strokeWidth={1.75} />,
+    },
+    {
+      id: 'expenses',
+      label: 'Auslagen',
+      icon: <Wallet className="w-4 h-4" strokeWidth={1.75} />,
     },
     {
       id: 'meetings',

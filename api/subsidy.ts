@@ -473,3 +473,164 @@ export async function handleUploadProof(
     };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Auslagenerstattung (/auslage) - gleicher Ablauf wie beim Zuschuss, aber:
+// kein Richtlinien-Katalog, keine Budgetgrenzen, dafuer ist der Beleg
+// PFLICHT. Ohne Rechnung gibt es nichts zu erstatten, deshalb wird hier
+// serverseitig darauf bestanden statt nur erinnert.
+// ---------------------------------------------------------------------------
+
+export interface SubmitExpenseInput {
+  accessCode: string;
+  personName: string;
+  personEmail: string;
+  iban: string;
+  bic?: string;
+  accountHolder?: string;
+  /** Frei benannt - eine Auslage haengt nicht am Veranstaltungskatalog. */
+  purpose: string;
+  /** Optional: leer heisst "ohne Veranstaltung". */
+  eventName?: string;
+  expenseDate: string;
+  amount: number;
+  comment?: string;
+  receiptFile?: ProofFileInput;
+}
+
+export async function handleSubmitExpense(
+  input: SubmitExpenseInput,
+  appUrl: string
+): Promise<{ status: number; body: any }> {
+  if (!FirestoreAdmin.isConfigured()) {
+    return {
+      status: 500,
+      body: { error: 'Der Server ist nicht eingerichtet (FIREBASE_SERVICE_ACCOUNT fehlt).' },
+    };
+  }
+
+  const codeOk = await verifySubsidyFormCode(input?.accessCode || '');
+  if (!codeOk) {
+    return { status: 401, body: { error: 'Zugangscode ist falsch oder abgelaufen.' } };
+  }
+
+  const personName = (input?.personName || '').trim();
+  const personEmail = (input?.personEmail || '').trim();
+  const iban = (input?.iban || '').trim();
+  const purpose = (input?.purpose || '').trim();
+  const eventName = (input?.eventName || '').trim();
+  const expenseDate = (input?.expenseDate || '').trim();
+  const amount = Number(input?.amount);
+
+  if (!personName) return { status: 400, body: { error: 'Bitte einen Namen angeben.' } };
+  if (!personEmail || !EMAIL_PATTERN.test(personEmail)) {
+    return { status: 400, body: { error: 'Bitte eine gültige E-Mail-Adresse angeben.' } };
+  }
+  if (!iban || !isValidIban(iban)) {
+    return { status: 400, body: { error: 'Diese IBAN ist ungültig.' } };
+  }
+  if (!purpose) {
+    return { status: 400, body: { error: 'Bitte angeben, wofür die Auslage entstanden ist.' } };
+  }
+  if (!expenseDate) {
+    return { status: 400, body: { error: 'Bitte das Datum des Belegs angeben.' } };
+  }
+  if (!amount || amount <= 0) {
+    return { status: 400, body: { error: 'Bitte den Betrag des Belegs angeben.' } };
+  }
+
+  // Der Beleg ist bei einer Erstattung Pflicht - anders als beim Zuschuss
+  // kann er nicht nachgereicht werden, sonst waere nichts zu pruefen.
+  if (!input.receiptFile) {
+    return { status: 400, body: { error: 'Bitte die Rechnung bzw. den Beleg hochladen.' } };
+  }
+  const receiptError = validateProofFile(input.receiptFile);
+  if (receiptError) return { status: 400, body: { error: receiptError } };
+
+  try {
+    const personId = newId('pub');
+    const now = new Date().toISOString();
+
+    await FirestoreAdmin.patchDocument(`subsidyPeople/${personId}`, {
+      id: personId,
+      name: personName,
+      type: 'interessent',
+      email: personEmail,
+      iban,
+      bic: input.bic || undefined,
+      accountHolder: input.accountHolder || undefined,
+      isActive: true,
+      note: 'Über das Auslagen-Formular angelegt',
+      createdAt: now,
+    });
+
+    const expenseId = newId('exp');
+    const label = eventName ? `${purpose} (${eventName})` : purpose;
+
+    await FirestoreAdmin.patchDocument(`subsidies/${expenseId}`, {
+      id: expenseId,
+      kind: 'auslage',
+      personId,
+      personName,
+      category: 'sonstiges',
+      eventName: label,
+      eventDate: expenseDate,
+      amount,
+      actualCost: amount,
+      status: 'beantragt',
+      source: 'public',
+      appliedAt: now,
+      // Der Beleg IST der Kostennachweis; einen davon getrennten
+      // Teilnahmenachweis gibt es bei einer Auslage nicht.
+      proofState: 'anderweitig',
+      proofNote: 'Bei einer Auslagenerstattung nicht erforderlich',
+      costProofState: 'hochgeladen',
+      costProofFile: {
+        name: input.receiptFile.name,
+        mimeType: input.receiptFile.mimeType,
+        dataUrl: input.receiptFile.dataUrl,
+        uploadedAt: now,
+      },
+      note: input.comment || undefined,
+      year: new Date().getFullYear(),
+      createdAt: now,
+    });
+
+    const settings = await FirestoreAdmin.getDocument('settings/security').catch(() => null);
+    const adminEmail = settings?.adminEmail;
+    if (adminEmail) {
+      await sendEmail({
+        to: [adminEmail],
+        subject: `Neue Auslagenerstattung: ${personName} – ${label}`,
+        html: `<p>${personName} hat eine Auslagenerstattung über <strong>${amount.toFixed(
+          2
+        )} €</strong> eingereicht: "${label}".</p><p>Der Beleg liegt bereits bei. Bitte im Vorstandsportal unter Auslagen prüfen.</p>`,
+        text: `${personName} hat eine Auslagenerstattung über ${amount.toFixed(
+          2
+        )} € eingereicht: "${label}". Bitte im Portal unter Auslagen prüfen.`,
+      }).catch(() => {});
+    }
+
+    await writeNotification({
+      title: `🧾 Neue Auslagenerstattung: ${label}`,
+      message: `${personName} bittet um Erstattung von ${amount.toFixed(2)} €.`,
+      type: 'subsidy',
+      targetTab: 'expenses',
+      targetId: expenseId,
+    });
+    await writeAuditLogEntry({
+      entityType: 'subsidy',
+      entityId: expenseId,
+      entityLabel: `${personName} – ${label}`,
+      action: 'Auslagenerstattung über das öffentliche Formular eingereicht',
+      actorName: 'Öffentliches Formular',
+    });
+
+    return { status: 200, body: { ok: true, expenseId } };
+  } catch (err: any) {
+    return {
+      status: 500,
+      body: { error: err?.message || 'Die Auslage konnte nicht gespeichert werden.' },
+    };
+  }
+}

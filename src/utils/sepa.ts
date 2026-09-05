@@ -93,7 +93,9 @@ export interface SepaResult {
 export function buildSepaCreditTransfer(
   debtor: SepaDebtor,
   payments: SepaPayment[],
-  executionDate?: string
+  executionDate?: string,
+  /** Was ueberwiesen wird, z.B. "Zuschuesse" oder "Auslagen" - steht im Dateinamen. */
+  label = 'Zahlungen'
 ): SepaResult {
   const now = new Date();
   const stamp = now.toISOString().replace(/[-:T.]/g, '').slice(0, 14);
@@ -157,7 +159,13 @@ ${transactions}
 
   return {
     xml,
-    fileName: `WJOF_Zuschuesse_${exec}_${payments.length}_Ueberweisungen.xml`,
+    // Dateiname sagt ohne Oeffnen, was drin steckt: Zweck, Anzahl der
+    // Einzelueberweisungen und Gesamtsumme (Nutzerwunsch) - der Punkt im
+    // Betrag wird zum Bindestrich, damit die Endung .xml eindeutig bleibt.
+    fileName: `WJOF_${label}_${exec}_${payments.length}-Ueberweisungen_${money(sum).replace(
+      '.',
+      '-'
+    )}-EUR.xml`,
     count: payments.length,
     sum,
   };

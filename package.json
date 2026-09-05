@@ -1,13 +1,14 @@
 {
   "name": "wjof-vorstandsportal",
   "private": true,
-  "version": "3.14.6",
+  "version": "3.15.0",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "check:sepa": "tsx scripts/check-sepa.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

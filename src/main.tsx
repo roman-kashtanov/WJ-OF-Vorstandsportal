@@ -34,6 +34,14 @@ if (path === '/antrag') {
       </StrictMode>
     );
   });
+} else if (path === '/auslage') {
+  import('./public/ExpenseSubmissionPage').then(({ ExpenseSubmissionPage }) => {
+    root.render(
+      <StrictMode>
+        <ExpenseSubmissionPage />
+      </StrictMode>
+    );
+  });
 } else if (path === '/nachweis') {
   import('./public/SubsidyProofUploadPage').then(({ SubsidyProofUploadPage }) => {
     root.render(

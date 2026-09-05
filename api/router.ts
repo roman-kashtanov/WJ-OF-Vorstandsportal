@@ -5,6 +5,7 @@ import { createVoteToken } from './voteToken';
 import {
   handleVerifySubsidyCode,
   handleSubmitSubsidy,
+  handleSubmitExpense,
   handleGetProofStatus,
   handleUploadProof,
   handleResendProofLink,
@@ -99,6 +100,12 @@ export async function handleApiRequest(
 
   if (method === 'POST' && route === 'subsidy/submit') {
     const result = await handleSubmitSubsidy(payload || {}, origin || '/');
+    return { status: result.status, body: result.body };
+  }
+
+  // Auslagenerstattung ueber das oeffentliche Formular (/auslage)
+  if (method === 'POST' && route === 'subsidy/submit-expense') {
+    const result = await handleSubmitExpense(payload || {}, origin || '');
     return { status: result.status, body: result.body };
   }
 

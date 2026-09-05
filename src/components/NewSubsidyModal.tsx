@@ -6,10 +6,17 @@ import {
   SubsidyCategory,
   SubsidyStatus,
   SubsidyProofState,
+  SubsidyKind,
   Resolution,
 } from '../types';
 import { SubsidyCatalogueEntry, SubsidyLimits, CATEGORY_LABEL } from '../data/subsidyCatalogue';
-import { checkSubsidy, STATUS_LABEL, PIPELINE_MANAGED_STATUSES, personBudget } from '../utils/subsidies';
+import {
+  checkSubsidy,
+  STATUS_LABEL,
+  PIPELINE_MANAGED_STATUSES,
+  personBudget,
+  KIND_TEXTS,
+} from '../utils/subsidies';
 import { formatCurrency } from '../utils/formatters';
 import { prepareFileForStorage, formatBytes } from '../utils/fileStorage';
 import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
@@ -27,6 +34,8 @@ interface Props {
   limits: SubsidyLimits;
   /** Fuer die Sperre "Zur Zahlung freigegeben"/"Bezahlt" ohne angenommenen Beschluss. */
   resolutions: Resolution[];
+  /** Zuschuss oder Auslagenerstattung - steuert Katalog/Budgetpruefung und Texte. */
+  kind: SubsidyKind;
   onSubmit: (subsidy: Subsidy) => void;
   onManagePeople: () => void;
 }
@@ -41,6 +50,7 @@ export const NewSubsidyModal: React.FC<Props> = ({
   catalogue,
   limits,
   resolutions,
+  kind,
   onSubmit,
   onManagePeople,
 }) => {
@@ -93,7 +103,15 @@ export const NewSubsidyModal: React.FC<Props> = ({
   const category: SubsidyCategory = entry?.category || 'sonstiges';
   const numericAmount = parseFloat(amount) || 0;
 
+  const texts = KIND_TEXTS[kind];
+  const isExpense = kind === 'auslage';
+
+  // Die Richtlinien-Pruefung (Jahresgrenzen, Kategoriegrenzen, "Veranstaltung
+  // nur einmal je Mitgliedschaft") gilt ausschliesslich fuer Zuschuesse -
+  // eine Auslagenerstattung ist die Rueckzahlung von bereits Bezahltem und
+  // haengt an einem eigenen Beschluss mit eigenem Budget.
   const warnings = useMemo(() => {
+    if (isExpense) return [];
     if (!personId || !numericAmount) return [];
     return checkSubsidy(
       {
@@ -108,9 +126,9 @@ export const NewSubsidyModal: React.FC<Props> = ({
       limits,
       editing?.id
     );
-  }, [personId, category, numericAmount, eventKey, year, actualCost, subsidies, limits, editing?.id]);
+  }, [isExpense, personId, category, numericAmount, eventKey, year, actualCost, subsidies, limits, editing?.id]);
 
-  const budget = personId ? personBudget(subsidies, personId, year, limits) : null;
+  const budget = !isExpense && personId ? personBudget(subsidies, personId, year, limits) : null;
 
   useBodyScrollLock(isOpen);
   if (!isOpen) return null;
@@ -182,6 +200,7 @@ export const NewSubsidyModal: React.FC<Props> = ({
 
     onSubmit({
       id: editing?.id || `sub_${Date.now()}`,
+      kind,
       personId,
       personName: person?.name || '',
       category,
@@ -218,7 +237,7 @@ export const NewSubsidyModal: React.FC<Props> = ({
               Zuschuss {year}
             </div>
             <h3 className="text-base font-bold">
-              {editing ? 'Zuschuss bearbeiten' : 'Zuschuss erfassen'}
+              {editing ? `${texts.singular} bearbeiten` : `${texts.singular} erfassen`}
             </h3>
           </div>
           <button
@@ -271,26 +290,34 @@ export const NewSubsidyModal: React.FC<Props> = ({
             <label className="font-bold text-slate-900 text-xs sm:text-sm block mb-1.5">
               Wofür *
             </label>
-            <select
-              value={eventKey}
-              onChange={(e) => pickEvent(e.target.value)}
-              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#003594]"
-            >
-              <option value="">— aus der Richtlinie wählen —</option>
-              {catalogue.map((c) => (
-                <option key={c.key} value={c.key}>
-                  {c.label}
-                  {c.amount > 0 ? ` · ${c.amount} €` : ''}
-                </option>
-              ))}
-            </select>
+            {/* Der Richtlinien-Katalog gilt nur fuer Zuschuesse; eine Auslage
+                kann fuer alles Moegliche anfallen und wird frei benannt. */}
+            {!isExpense && (
+              <select
+                value={eventKey}
+                onChange={(e) => pickEvent(e.target.value)}
+                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#003594]"
+              >
+                <option value="">— aus der Richtlinie wählen —</option>
+                {catalogue.map((c) => (
+                  <option key={c.key} value={c.key}>
+                    {c.label}
+                    {c.amount > 0 ? ` · ${c.amount} €` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
 
             <input
               required
               value={eventName}
               onChange={(e) => setEventName(e.target.value)}
-              placeholder="Bezeichnung, z. B. LAKO Hessen (Hanau)"
-              className="mt-2 w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#003594]"
+              placeholder={
+                isExpense
+                  ? 'Wofür, z. B. Getränke Neujahrsempfang'
+                  : 'Bezeichnung, z. B. LAKO Hessen (Hanau)'
+              }
+              className={`${isExpense ? '' : 'mt-2 '}w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#003594]`}
             />
 
             {entry?.hint && (

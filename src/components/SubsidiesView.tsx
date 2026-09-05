@@ -1,5 +1,13 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Subsidy, SubsidyPerson, SubsidyStatus, SubsidyPersonType, AuditLogEntry, Resolution } from '../types';
+import {
+  Subsidy,
+  SubsidyPerson,
+  SubsidyStatus,
+  SubsidyPersonType,
+  SubsidyKind,
+  AuditLogEntry,
+  Resolution,
+} from '../types';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import {
   STATUS_LABEL,
@@ -9,6 +17,8 @@ import {
   budgetOverview,
   isPayable,
   paymentReference,
+  ofKind,
+  KIND_TEXTS,
 } from '../utils/subsidies';
 import { CATEGORY_LABEL, SubsidyLimits } from '../data/subsidyCatalogue';
 import { formatIban, buildSepaCreditTransfer, downloadSepaFile, isValidIban } from '../utils/sepa';
@@ -42,6 +52,8 @@ import {
 
 interface Props {
   subsidies: Subsidy[];
+  /** Welcher Reiter: Zuschuesse oder Auslagenerstattungen. */
+  kind: SubsidyKind;
   people: SubsidyPerson[];
   year: number;
   limits: SubsidyLimits;
@@ -76,6 +88,7 @@ const STATUS_STYLE: Record<SubsidyStatus, string> = {
 
 export const SubsidiesView: React.FC<Props> = ({
   subsidies,
+  kind,
   people,
   year,
   limits,
@@ -108,6 +121,9 @@ export const SubsidiesView: React.FC<Props> = ({
     () => Object.fromEntries(resolutions.map((r) => [r.id, r])),
     [resolutions]
   );
+  const texts = KIND_TEXTS[kind];
+  /** Nur die Vorgaenge dieses Reiters - Zuschuesse und Auslagen sind getrennt. */
+  const scoped = useMemo(() => ofKind(subsidies, kind), [subsidies, kind]);
   const [previewFile, setPreviewFile] = useState<PreviewableFile | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [resendState, setResendState] = useState<Record<string, 'busy' | 'done' | 'error'>>({});
@@ -190,7 +206,10 @@ export const SubsidiesView: React.FC<Props> = ({
     reader.readAsText(file);
   };
 
-  const antragUrl = `${window.location.origin}/antrag`;
+  // Jede Vorgangsart hat ihren eigenen oeffentlichen Link zum Weitergeben
+  // (z.B. in der WhatsApp-Gruppe): /antrag fuer Zuschuesse, /auslage fuer
+  // Erstattungen.
+  const antragUrl = `${window.location.origin}${kind === 'auslage' ? '/auslage' : '/antrag'}`;
   const handleCopyAntragUrl = async () => {
     const ok = await EmailService.copyToClipboard(antragUrl);
     if (ok) {
@@ -225,11 +244,11 @@ export const SubsidiesView: React.FC<Props> = ({
         if (key) counts[key] = (counts[key] || 0) + 1;
       });
     return counts;
-  }, [subsidies, year, stageOf]);
+  }, [scoped, year, stageOf]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    return subsidies
+    return scoped
       .filter((s) => s.year === year)
       .filter((s) => filterPerson === 'all' || s.personId === filterPerson)
       .filter(
@@ -248,12 +267,12 @@ export const SubsidiesView: React.FC<Props> = ({
           (s.note || '').toLowerCase().includes(q)
       )
       .sort((a, b) => (b.appliedAt || '').localeCompare(a.appliedAt || ''));
-  }, [subsidies, year, filterPerson, filterType, activeStage, stageOf, search, personById]);
+  }, [scoped, year, filterPerson, filterType, activeStage, stageOf, search, personById]);
 
   const overview = budgetOverview(subsidies, year, limits);
-  const payable = subsidies.filter((s) => s.year === year && isPayable(s));
-  const bundlable = subsidies.filter((s) => s.year === year && s.status === 'bestaetigt');
-  const notYetHappened = subsidies.filter(
+  const payable = scoped.filter((s) => s.year === year && isPayable(s));
+  const bundlable = scoped.filter((s) => s.year === year && s.status === 'bestaetigt');
+  const notYetHappened = scoped.filter(
     (s) => s.year === year && s.status === 'nicht_stattgefunden'
   );
   const filteredSum = filtered.reduce((sum, s) => sum + s.amount, 0);
@@ -299,7 +318,7 @@ export const SubsidiesView: React.FC<Props> = ({
     const csv = [head, ...rows].map((r) => r.map((c) => `"${c}"`).join(';')).join('\n');
     const link = document.createElement('a');
     link.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
-    link.download = `WJOF_Zuschuesse_${year}.csv`;
+    link.download = `WJOF_${texts.fileLabel}_${year}.csv`;
     link.click();
   };
 
@@ -310,7 +329,7 @@ export const SubsidiesView: React.FC<Props> = ({
         <div className="flex items-center gap-2">
           <HandCoins className="w-5 h-5 text-[#003594]" strokeWidth={1.75} />
           <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-            Zuschüsse
+            {texts.tabLabel}
           </h2>
           <select
             value={year}
@@ -326,15 +345,17 @@ export const SubsidiesView: React.FC<Props> = ({
         </div>
 
         <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={onManageCatalogue}
-            className="p-2 sm:px-3 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
-            title="Veranstaltungen, Beträge und Obergrenzen verwalten"
-          >
-            <ListTree className="w-4 h-4" strokeWidth={1.75} />
-            <span className="hidden sm:inline">Katalog</span>
-          </button>
+          {kind === 'zuschuss' && (
+            <button
+              type="button"
+              onClick={onManageCatalogue}
+              className="p-2 sm:px-3 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
+              title="Veranstaltungen, Beträge und Obergrenzen verwalten"
+            >
+              <ListTree className="w-4 h-4" strokeWidth={1.75} />
+              <span className="hidden sm:inline">Katalog</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={onManagePeople}
@@ -362,7 +383,9 @@ export const SubsidiesView: React.FC<Props> = ({
           <LinkIcon className="w-4 h-4" strokeWidth={1.75} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-bold text-slate-700">Öffentlicher Antragslink</div>
+          <div className="text-[11px] font-bold text-slate-700">
+              {kind === 'auslage' ? 'Öffentlicher Auslagen-Link' : 'Öffentlicher Antragslink'}
+            </div>
           <div className="text-[11px] text-slate-400 truncate font-mono">{antragUrl}</div>
         </div>
         <button
@@ -384,7 +407,10 @@ export const SubsidiesView: React.FC<Props> = ({
         </button>
       </div>
 
-      {/* Budget */}
+      {/* Budget - nur bei Zuschuessen: Auslagenerstattungen zaehlen nicht gegen
+          das Jahresbudget der Zuschuss-Richtlinie, sie haengen an einem eigenen
+          Beschluss. */}
+      {kind === 'zuschuss' && (
       <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs">
         <div className="flex items-baseline justify-between gap-2">
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
@@ -430,6 +456,7 @@ export const SubsidiesView: React.FC<Props> = ({
           </div>
         )}
       </div>
+      )}
 
       {/* Buendeln zu Beschluss */}
       {bundlable.length > 0 && (
@@ -444,7 +471,7 @@ export const SubsidiesView: React.FC<Props> = ({
             </div>
             <div className="min-w-0">
               <div className="font-bold text-slate-900 text-sm">
-                {bundlable.length} {bundlable.length === 1 ? 'Zuschuss' : 'Zuschüsse'} geprüft
+                {bundlable.length} {bundlable.length === 1 ? texts.singular : texts.plural} geprüft
               </div>
               <div className="text-[11px] text-slate-500">
                 {formatCurrency(bundlable.reduce((s, x) => s + x.amount, 0))} · zu Beschluss
@@ -660,7 +687,7 @@ export const SubsidiesView: React.FC<Props> = ({
       <div className="space-y-1.5">
         {filtered.length === 0 && (
           <div className="bg-white p-8 text-center rounded-2xl border border-slate-200 text-slate-500 text-xs">
-            Keine Zuschüsse für diese Auswahl.
+            Keine {texts.plural} für diese Auswahl.
           </div>
         )}
 
@@ -854,6 +881,63 @@ export const SubsidiesView: React.FC<Props> = ({
                     </button>
                   )}
 
+                  {/* Geprüft, aber noch an keinem Beschluss: entweder über
+                      "Beschluss erstellen" bündeln (mehrere auf einmal) oder
+                      hier einzeln einem bereits vorhandenen Beschluss
+                      zuordnen - z.B. wenn die Ausgabe längst beschlossen war. */}
+                  {s.status === 'bestaetigt' && !s.resolutionId && (
+                    <div className="bg-blue-50/60 border border-blue-100 rounded-lg p-2 space-y-1.5">
+                      {reassignId === s.id ? (
+                        <div className="flex items-center gap-1.5">
+                          <select
+                            value={reassignChoice}
+                            onChange={(e) => setReassignChoice(e.target.value)}
+                            className="flex-1 min-w-0 px-2 py-1 bg-white border border-blue-200 rounded-lg text-[11px] font-semibold cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#003594]"
+                          >
+                            <option value="">— Beschluss wählen —</option>
+                            {resolutions
+                              .filter((r) => r.status === 'angenommen' || r.status === 'in_abstimmung')
+                              .map((r) => (
+                                <option key={r.id} value={r.id}>
+                                  {r.number} – {r.title}
+                                </option>
+                              ))}
+                          </select>
+                          <button
+                            type="button"
+                            disabled={!reassignChoice}
+                            onClick={() => {
+                              onReassignResolution(s.id, reassignChoice);
+                              setReassignId(null);
+                            }}
+                            className="px-2 py-1 rounded-lg bg-[#003594] hover:bg-[#00266B] disabled:opacity-40 text-white text-[11px] font-bold cursor-pointer shrink-0"
+                          >
+                            Zuordnen
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setReassignId(null)}
+                            className="text-[11px] font-semibold text-slate-400 hover:text-slate-700 cursor-pointer shrink-0"
+                          >
+                            Abbrechen
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setReassignChoice('');
+                            setReassignId(s.id);
+                          }}
+                          className="w-full py-1.5 rounded-lg bg-white border border-blue-200 text-[#003594] font-bold flex items-center justify-center gap-1.5 transition-colors hover:bg-blue-50 cursor-pointer"
+                        >
+                          <Vote className="w-3.5 h-3.5" strokeWidth={2} />
+                          Bestehendem Beschluss zuordnen
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   {s.status === 'bezahlt' && person?.iban && isValidIban(person.iban) && (
                     <div className="bg-slate-50 border border-slate-200 rounded-lg p-2 space-y-1.5">
                       <div className="text-[11px] font-bold text-slate-600">
@@ -894,7 +978,7 @@ export const SubsidiesView: React.FC<Props> = ({
                     <button
                       type="button"
                       onClick={() => {
-                        if (confirm(`Zuschuss für ${s.personName} entfernen?`)) onDelete(s.id);
+                        if (confirm(`${texts.singular} für ${s.personName} entfernen?`)) onDelete(s.id);
                       }}
                       className="px-2.5 py-1.5 rounded-lg border border-rose-200 text-rose-700 hover:bg-rose-50 font-semibold flex items-center gap-1 transition-colors cursor-pointer ml-auto"
                     >

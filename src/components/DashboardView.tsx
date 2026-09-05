@@ -4,8 +4,10 @@ import {
   Resolution, 
   Invoice, 
   Meeting, 
-  ActiveTab 
+  ActiveTab,
+  Subsidy
 } from '../types';
+import { ofKind } from '../utils/subsidies';
 import { formatDate } from '../utils/formatters';
 import { subscribeToPushServer } from '../utils/pwaNotifications';
 import { BellRing } from 'lucide-react';
@@ -29,6 +31,8 @@ interface DashboardViewProps {
   members: BoardMember[];
   resolutions: Resolution[];
   invoices: Invoice[];
+  /** Zuschuesse UND Auslagen - fuer die Handlungsbedarf-Kacheln. */
+  subsidies: Subsidy[];
   nextMeeting: Meeting | null;
   onNavigate: (tab: ActiveTab) => void;
   onOpenNewResolution: () => void;
@@ -44,6 +48,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   members,
   resolutions,
   invoices,
+  subsidies,
   nextMeeting,
   onNavigate,
   onOpenNewResolution,
@@ -63,6 +68,77 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     const isEligible = !res.eligibleVoterIds || res.eligibleVoterIds.length === 0 || res.eligibleVoterIds.includes(currentMember.id);
     return res.status === 'in_abstimmung' && isEligible && !res.votes[currentMember.id];
   });
+
+  /**
+   * Handlungsbedarf auf einen Blick: was liegt gerade zur Pruefung, was
+   * wartet auf eine Ueberweisung, wo laeuft noch eine Abstimmung. Jede Kachel
+   * springt direkt in den passenden Reiter.
+   */
+  const countOpen = (list: Subsidy[]) =>
+    list.filter((s) => s.status === 'beantragt' || s.status === 'nicht_stattgefunden').length;
+  const countPayable = (list: Subsidy[]) =>
+    list.filter((s) => s.status === 'zur_zahlung_freigegeben').length;
+
+  const zuschuesse = ofKind(subsidies, 'zuschuss');
+  const auslagen = ofKind(subsidies, 'auslage');
+
+  type ActionTile = {
+    key: string;
+    label: string;
+    hint: string;
+    count: number;
+    tab: ActiveTab;
+    tone: 'amber' | 'teal' | 'blue';
+  };
+
+  const actionTiles: ActionTile[] = ([
+    {
+      key: 'res-open',
+      label: 'Beschlüsse in Abstimmung',
+      hint: 'noch nicht vollständig abgestimmt',
+      count: openResolutions.length,
+      tab: 'resolutions',
+      tone: 'blue',
+    },
+    {
+      key: 'sub-open',
+      label: 'Zuschüsse zu prüfen',
+      hint: 'eingereicht, noch nicht geprüft',
+      count: countOpen(zuschuesse),
+      tab: 'subsidies',
+      tone: 'amber',
+    },
+    {
+      key: 'sub-pay',
+      label: 'Zuschüsse zur Zahlung',
+      hint: 'beschlossen, noch nicht überwiesen',
+      count: countPayable(zuschuesse),
+      tab: 'subsidies',
+      tone: 'teal',
+    },
+    {
+      key: 'exp-open',
+      label: 'Auslagen zu prüfen',
+      hint: 'eingereicht, noch nicht geprüft',
+      count: countOpen(auslagen),
+      tab: 'expenses',
+      tone: 'amber',
+    },
+    {
+      key: 'exp-pay',
+      label: 'Auslagen zur Zahlung',
+      hint: 'beschlossen, noch nicht überwiesen',
+      count: countPayable(auslagen),
+      tab: 'expenses',
+      tone: 'teal',
+    },
+  ] as ActionTile[]).filter((t) => t.count > 0);
+
+  const toneClass: Record<'amber' | 'teal' | 'blue', string> = {
+    amber: 'bg-amber-50 border-amber-200 text-amber-900 hover:bg-amber-100',
+    teal: 'bg-teal-50 border-teal-200 text-teal-900 hover:bg-teal-100',
+    blue: 'bg-blue-50 border-blue-200 text-[#003594] hover:bg-blue-100',
+  };
 
   return (
     <div className="space-y-4 max-w-4xl mx-auto">
@@ -89,6 +165,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <span className="px-3 py-1 bg-amber-700 text-white font-bold text-xs rounded-xl shrink-0">
             Abstimmen
           </span>
+        </div>
+      )}
+
+      {/* 1b. HANDLUNGSBEDARF: offene Prüfungen, fällige Überweisungen,
+           laufende Abstimmungen - jede Kachel springt in den Reiter. */}
+      {actionTiles.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {actionTiles.map((tile) => (
+            <button
+              key={tile.key}
+              type="button"
+              onClick={() => onNavigate(tile.tab)}
+              className={`text-left rounded-2xl border p-3 transition-colors cursor-pointer active:scale-99 ${
+                toneClass[tile.tone]
+              }`}
+            >
+              <div className="text-xl font-black leading-none">{tile.count}</div>
+              <div className="text-[11px] font-bold mt-1 leading-tight">{tile.label}</div>
+              <div className="text-[10px] opacity-70 leading-tight mt-0.5">{tile.hint}</div>
+            </button>
+          ))}
         </div>
       )}
 

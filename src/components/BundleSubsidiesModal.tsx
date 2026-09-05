@@ -1,6 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
-import { BoardMember, Resolution, ResolutionAttachment, Subsidy, SubsidyPerson } from '../types';
+import {
+  BoardMember,
+  Resolution,
+  ResolutionAttachment,
+  Subsidy,
+  SubsidyKind,
+  SubsidyPerson,
+} from '../types';
+import { subsidyKind, KIND_TEXTS } from '../utils/subsidies';
 import { formatCurrency } from '../utils/formatters';
 import { isVotingMember } from '../utils/formatters';
 import { getAttachmentType } from '../utils/fileHelpers';
@@ -12,6 +20,8 @@ interface Props {
   subsidies: Subsidy[];
   people: SubsidyPerson[];
   year: number;
+  /** Zuschuesse und Auslagen werden getrennt gebuendelt. */
+  kind: SubsidyKind;
   currentMember: BoardMember;
   members: BoardMember[];
   existingResolutionCount: number;
@@ -27,6 +37,7 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
   subsidies,
   people,
   year,
+  kind,
   currentMember,
   members,
   existingResolutionCount,
@@ -37,9 +48,13 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
     [people]
   );
 
+  const texts = KIND_TEXTS[kind];
   const eligible = useMemo(
-    () => subsidies.filter((s) => s.year === year && s.status === 'bestaetigt'),
-    [subsidies, year]
+    () =>
+      subsidies.filter(
+        (s) => s.year === year && s.status === 'bestaetigt' && subsidyKind(s) === kind
+      ),
+    [subsidies, year, kind]
   );
 
   const [selected, setSelected] = useState<Record<string, boolean>>({});
@@ -91,9 +106,9 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
       chosen.map((s) => s.id),
       {
         number: autoNumber,
-        title: `Zuschüsse ${year} – Sammelfreigabe (${chosen.length})`,
+        title: `${texts.plural} ${year} – Sammelfreigabe (${chosen.length})`,
         description: '',
-        motionText: `Der Vorstand beschließt die Auszahlung folgender geprüfter Zuschüsse:\n\n${lines.join(
+        motionText: `Der Vorstand beschließt die Auszahlung folgender geprüfter ${texts.plural}:\n\n${lines.join(
           '\n'
         )}\n\nGesamtsumme: ${formatCurrency(sum)}`,
         category: 'Finanzen & Budget',
@@ -120,7 +135,7 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
         <div className="px-5 py-4 bg-[#003594] text-white flex items-center justify-between shrink-0">
           <div>
             <div className="text-[11px] font-bold uppercase tracking-wider text-blue-200">
-              Zuschüsse {year}
+              {texts.plural} {year}
             </div>
             <h3 className="text-base font-bold">Zu Beschluss bündeln</h3>
           </div>
@@ -136,15 +151,14 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
           <div className="bg-blue-50/60 border border-blue-100 rounded-xl p-3 text-[11px] text-slate-600 flex items-start gap-2">
             <Landmark className="w-3.5 h-3.5 mt-0.5 shrink-0 text-[#00A3E0]" strokeWidth={2} />
             <span>
-              Aus den ausgewählten, bereits geprüften Zuschüssen wird ein neuer Beschluss
-              erstellt. Erst wenn der Vorstand ihn annimmt, werden diese Zuschüsse zur Zahlung
-              freigegeben.
+              Aus den ausgewählten, bereits geprüften Positionen wird ein neuer Beschluss
+              erstellt. Erst wenn der Vorstand ihn annimmt, werden sie zur Zahlung freigegeben.
             </span>
           </div>
 
           {eligible.length === 0 ? (
             <p className="text-slate-400 py-6 text-center">
-              Keine geprüften Zuschüsse für {year} zum Bündeln.
+              Keine geprüften {texts.plural} für {year} zum Bündeln.
             </p>
           ) : (
             <div className="space-y-1.5">
@@ -193,7 +207,7 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
 
           {missingProof.length > 0 && chosen.length > 0 && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[11px] text-amber-900">
-              {missingProof.length} von {chosen.length} ausgewählten Zuschüssen haben noch keinen
+              {missingProof.length} von {chosen.length} ausgewählten Positionen haben noch keinen
               Nachweis. Sie können trotzdem gebündelt werden, der Nachweis lässt sich später
               nachreichen.
             </div>
@@ -216,7 +230,7 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
               {/* Anzahl bewusst im Knopf: so ist vor dem Klick eindeutig, wie
                   viele Zuschuesse tatsaechlich in den Beschluss wandern. */}
               Beschluss über {chosen.length}{' '}
-              {chosen.length === 1 ? 'Zuschuss' : 'Zuschüsse'} erstellen
+              {chosen.length === 1 ? texts.singular : texts.plural} erstellen
             </button>
           </div>
         )}

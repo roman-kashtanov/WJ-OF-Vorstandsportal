@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
-import { Subsidy, SubsidyPerson } from '../types';
+import { Subsidy, SubsidyKind, SubsidyPerson } from '../types';
 import { formatCurrency } from '../utils/formatters';
-import { paymentReference } from '../utils/subsidies';
+import { paymentReference, subsidyKind, KIND_TEXTS } from '../utils/subsidies';
 import {
   buildSepaCreditTransfer,
   downloadSepaFile,
@@ -20,6 +20,8 @@ interface Props {
   subsidies: Subsidy[];
   people: SubsidyPerson[];
   year: number;
+  /** Zuschuesse und Auslagen werden getrennt ausgezahlt (getrennte Reiter). */
+  kind: SubsidyKind;
   clubAccount: { name: string; iban: string; bic?: string };
   onSaveClubAccount: (account: { name: string; iban: string; bic?: string }) => void;
   onMarkPaid: (ids: string[], format: 'sepa-xml' | 'girocode-pdf') => void;
@@ -31,10 +33,12 @@ export const SubsidyPayoutModal: React.FC<Props> = ({
   subsidies,
   people,
   year,
+  kind,
   clubAccount,
   onSaveClubAccount,
   onMarkPaid,
 }) => {
+  const texts = KIND_TEXTS[kind];
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [account, setAccount] = useState(clubAccount);
   const [executionDate, setExecutionDate] = useState(
@@ -52,7 +56,9 @@ export const SubsidyPayoutModal: React.FC<Props> = ({
 
   /** Auszahlungen je Person zusammenfassen - eine Überweisung pro Empfänger. */
   const groups = useMemo(() => {
-    const payable = subsidies.filter((s) => s.year === year && s.status === 'zur_zahlung_freigegeben');
+    const payable = subsidies.filter(
+      (s) => s.year === year && s.status === 'zur_zahlung_freigegeben' && subsidyKind(s) === kind
+    );
     const byPerson: Record<string, Subsidy[]> = {};
     for (const s of payable) {
       (byPerson[s.personId] ||= []).push(s);
@@ -64,7 +70,7 @@ export const SubsidyPayoutModal: React.FC<Props> = ({
       sum: items.reduce((acc, s) => acc + s.amount, 0),
       hasValidIban: !!personById[personId]?.iban && isValidIban(personById[personId]!.iban!),
     }));
-  }, [subsidies, year, personById]);
+  }, [subsidies, year, personById, kind]);
 
   // Beim ersten Öffnen alles Auszahlbare vorauswählen
   const effectiveSelected = useMemo(() => {
@@ -92,7 +98,12 @@ export const SubsidyPayoutModal: React.FC<Props> = ({
   const generateSepa = () => {
     if (!accountValid || chosen.length === 0) return;
 
-    const result = buildSepaCreditTransfer(account, buildPayments(), executionDate);
+    const result = buildSepaCreditTransfer(
+      account,
+      buildPayments(),
+      executionDate,
+      texts.fileLabel
+    );
     downloadSepaFile(result);
     onSaveClubAccount(account);
     // Datei erzeugen und als erledigt markieren sind EIN Schritt - kein
@@ -107,7 +118,7 @@ export const SubsidyPayoutModal: React.FC<Props> = ({
     setIsGeneratingQr(true);
     try {
       const payments = buildPayments();
-      const { blob, fileName } = await generateGiroCodePaymentsPdf(account, payments);
+      const { blob, fileName } = await generateGiroCodePaymentsPdf(account, payments, texts.fileLabel);
       downloadBlob(blob, fileName);
       onSaveClubAccount(account);
       onMarkPaid(chosen.flatMap((g) => g.items.map((i) => i.id)), 'girocode-pdf');
@@ -127,7 +138,7 @@ export const SubsidyPayoutModal: React.FC<Props> = ({
         <div className="px-5 py-4 bg-[#003594] text-white flex items-center justify-between shrink-0">
           <div>
             <div className="text-[11px] font-bold uppercase tracking-wider text-blue-200">
-              Zuschüsse {year}
+              {texts.plural} {year}
             </div>
             <h3 className="text-base font-bold">Sammelüberweisung</h3>
           </div>

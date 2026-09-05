@@ -6,7 +6,8 @@ import {
   VoteType,
   AppVersionConfig,
   Subsidy,
-  SubsidyPerson
+  SubsidyPerson,
+  SubsidyKind
 } from './types';
 import { AppStorage } from './utils/storage';
 import { PwaNotificationService } from './utils/pwaNotifications';
@@ -39,6 +40,7 @@ import { SubsidyPeopleModal } from './components/SubsidyPeopleModal';
 import { SubsidyCatalogueModal } from './components/SubsidyCatalogueModal';
 import { SubsidyPayoutModal } from './components/SubsidyPayoutModal';
 import { BundleSubsidiesModal } from './components/BundleSubsidiesModal';
+import { subsidyKind } from './utils/subsidies';
 import { useSubsidies } from './hooks/useSubsidies';
 import { useMembers } from './hooks/useMembers';
 import { useMeetings } from './hooks/useMeetings';
@@ -344,6 +346,14 @@ export default function App() {
   }, []);
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
+
+  /**
+   * Zuschuesse und Auslagen teilen sich denselben Ablauf und damit auch
+   * dieselben Dialoge (Erfassen, Buendeln, Auszahlen). Welche Vorgangsart
+   * gemeint ist, ergibt sich aus dem gerade offenen Reiter - waehrend ein
+   * Dialog offen ist, kann der Reiter nicht gewechselt werden.
+   */
+  const currentSubsidyKind: SubsidyKind = activeTab === 'expenses' ? 'auslage' : 'zuschuss';
   
   // Modals state
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -739,6 +749,7 @@ export default function App() {
         
         {activeTab === 'dashboard' && (
           <DashboardView
+            subsidies={subsidies}
             currentMember={currentMember}
             members={members}
             resolutions={resolutions}
@@ -784,6 +795,8 @@ export default function App() {
 
         {activeTab === 'invoices' && (
           <InvoicesView
+            expenses={subsidies.filter((s) => s.kind === 'auslage')}
+            onNavigateToExpenses={() => setActiveTab('expenses')}
             currentMember={currentMember}
             members={members}
             invoices={invoices}
@@ -824,8 +837,10 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'subsidies' && (
+        {(activeTab === 'subsidies' || activeTab === 'expenses') && (
           <SubsidiesView
+            key={currentSubsidyKind}
+            kind={currentSubsidyKind}
             subsidies={subsidies}
             people={subsidyPeople}
             year={subsidyYear}
@@ -972,6 +987,7 @@ export default function App() {
           catalogue={catalogueSettings.entries}
           limits={catalogueSettings.limits}
           resolutions={resolutions}
+          kind={editingSubsidy ? subsidyKind(editingSubsidy) : currentSubsidyKind}
           onSubmit={handleSaveSubsidy}
           onManagePeople={() => setIsSubsidyPeopleOpen(true)}
         />
@@ -1003,6 +1019,7 @@ export default function App() {
         subsidies={subsidies}
         people={subsidyPeople}
         year={subsidyYear}
+        kind={currentSubsidyKind}
         clubAccount={clubAccount}
         onSaveClubAccount={handleSaveClubAccount}
         onMarkPaid={handleMarkSubsidiesPaid}
@@ -1014,6 +1031,7 @@ export default function App() {
         subsidies={subsidies}
         people={subsidyPeople}
         year={subsidyYear}
+        kind={currentSubsidyKind}
         currentMember={currentMember}
         members={members}
         existingResolutionCount={resolutions.length}
