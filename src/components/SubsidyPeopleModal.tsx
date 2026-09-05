@@ -223,7 +223,7 @@ export const SubsidyPeopleModal: React.FC<Props> = ({
                   </div>
                   <div>
                     <label className="block font-semibold text-slate-600 mb-1">
-                      BIC <span className="font-normal text-slate-400">(optional)</span>
+                      BIC <span className="font-normal text-slate-400">(nur falls bekannt)</span>
                     </label>
                     <input
                       value={draft.bic || ''}

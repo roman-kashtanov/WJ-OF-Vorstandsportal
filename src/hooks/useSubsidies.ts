@@ -298,6 +298,27 @@ export function useSubsidies({
   };
 
   /**
+   * Reine Protokoll-Notiz, wenn eine Zahlungsdatei fuer einen bereits
+   * bezahlten Zuschuss erneut heruntergeladen wird (Reiter "Erledigt") -
+   * die eigentliche Datei wird clientseitig aus den aktuellen Daten neu
+   * erzeugt (deterministisch, IBAN/Betrag/Verwendungszweck aendern sich im
+   * Nachhinein nicht), es muss also nichts gespeichert werden ausser dieser
+   * Nachvollziehbarkeits-Notiz.
+   */
+  const handleLogPaymentFileRegenerated = (id: string, format: 'sepa-xml' | 'girocode-pdf') => {
+    const subsidy = subsidies.find((s) => s.id === id);
+    if (!subsidy) return;
+    addAuditLogEntry({
+      entityType: 'subsidy',
+      entityId: id,
+      entityLabel: `${subsidy.personName} – ${subsidy.eventName}`,
+      action: `Zahlungsdatei erneut heruntergeladen (${PAYOUT_FORMAT_LABEL[format]})`,
+      actorName: currentMember.name,
+      actorId: currentMember.id,
+    });
+  };
+
+  /**
    * Reaktive Kaskade: sobald ein Beschluss, an den Zuschuesse gebuendelt
    * sind, angenommen oder abgelehnt wird, folgen die Zuschuesse automatisch.
    *
@@ -560,6 +581,7 @@ export function useSubsidies({
     handleReassignSubsidyResolution,
     handleBundleSubsidies,
     handleMarkSubsidiesPaid,
+    handleLogPaymentFileRegenerated,
     handleSaveSubsidyPerson,
     handleDeleteSubsidyPerson,
     handleSaveClubAccount,

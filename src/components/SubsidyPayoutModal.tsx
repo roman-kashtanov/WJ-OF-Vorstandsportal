@@ -187,8 +187,8 @@ export const SubsidyPayoutModal: React.FC<Props> = ({
                 Die ausgewählten Zuschüsse wurden automatisch als erledigt markiert.
               </p>
               <p className="text-[11px] text-slate-400">
-                Datei nochmal nötig? Beim Zuschuss unter „Status manuell ändern (Ausnahme)" den
-                Stand zurück auf „Zur Zahlung freigegeben" setzen - er erscheint dann hier erneut.
+                Datei nochmal nötig? Im Reiter „Erledigt" beim jeweiligen Zuschuss erneut
+                herunterladen.
               </p>
               <button
                 type="button"
@@ -223,7 +223,7 @@ export const SubsidyPayoutModal: React.FC<Props> = ({
                   <input
                     value={account.bic || ''}
                     onChange={(e) => setAccount({ ...account, bic: e.target.value })}
-                    placeholder="BIC"
+                    placeholder="BIC (nur falls bekannt)"
                     className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-base sm:text-xs focus:outline-none focus:ring-2 focus:ring-[#003594]"
                   />
                 </div>

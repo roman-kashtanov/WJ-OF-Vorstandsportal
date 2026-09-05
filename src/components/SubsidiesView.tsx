@@ -8,9 +8,12 @@ import {
   SUBSIDY_STAGES,
   budgetOverview,
   isPayable,
+  paymentReference,
 } from '../utils/subsidies';
 import { CATEGORY_LABEL, SubsidyLimits } from '../data/subsidyCatalogue';
-import { formatIban } from '../utils/sepa';
+import { formatIban, buildSepaCreditTransfer, downloadSepaFile, isValidIban } from '../utils/sepa';
+import { generateGiroCodePaymentsPdf } from '../utils/giroCodePdf';
+import { downloadBlob } from '../utils/fileHelpers';
 import { EmailService, resendSubsidyProofLink } from '../utils/emailService';
 import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
 import { RevisionHistoryModal } from './RevisionHistoryModal';
@@ -34,6 +37,7 @@ import {
   Send,
   ListTree,
   History as HistoryIcon,
+  QrCode,
 } from 'lucide-react';
 
 interface Props {
@@ -44,6 +48,9 @@ interface Props {
   auditLog: AuditLogEntry[];
   /** Fuer die Absicherung der manuellen Status-Aenderung: ist der verknuepfte Beschluss angenommen? */
   resolutions: Resolution[];
+  /** Fuer den erneuten Download der Zahlungsdatei im Reiter "Erledigt". */
+  clubAccount: { name: string; iban: string; bic?: string };
+  onLogPaymentFileRegenerated: (id: string, format: 'sepa-xml' | 'girocode-pdf') => void;
   onChangeYear: (year: number) => void;
   onOpenNew: () => void;
   onEdit: (subsidy: Subsidy) => void;
@@ -74,6 +81,8 @@ export const SubsidiesView: React.FC<Props> = ({
   limits,
   auditLog,
   resolutions,
+  clubAccount,
+  onLogPaymentFileRegenerated,
   onChangeYear,
   onOpenNew,
   onEdit,
@@ -102,6 +111,7 @@ export const SubsidiesView: React.FC<Props> = ({
   const [previewFile, setPreviewFile] = useState<PreviewableFile | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [resendState, setResendState] = useState<Record<string, 'busy' | 'done' | 'error'>>({});
+  const [regeneratingQrId, setRegeneratingQrId] = useState<string | null>(null);
   const [historySubsidyId, setHistorySubsidyId] = useState<string | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const [importMessage, setImportMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -116,6 +126,51 @@ export const SubsidiesView: React.FC<Props> = ({
     });
     setResendState((prev) => ({ ...prev, [s.id]: result.ok ? 'done' : 'error' }));
     if (result.ok === false) alert(result.error);
+  };
+
+  /**
+   * Zahlungsdatei fuer einen bereits bezahlten Zuschuss erneut erzeugen -
+   * deterministisch aus den aktuellen Daten (IBAN/Betrag/Verwendungszweck
+   * aendern sich im Nachhinein nicht), es wird also nichts gespeichert und
+   * neu heruntergeladen statt eine alte Datei irgendwo vorzuhalten.
+   */
+  const handleRegenerateSepa = (s: Subsidy, person: SubsidyPerson) => {
+    const result = buildSepaCreditTransfer(
+      clubAccount,
+      [
+        {
+          name: person.accountHolder?.trim() || person.name,
+          iban: person.iban!,
+          bic: person.bic || undefined,
+          amount: s.amount,
+          reference: paymentReference([s]),
+          endToEndId: `WJOF-${s.year}-${s.id.slice(-8)}`,
+        },
+      ],
+      s.paidAt?.slice(0, 10)
+    );
+    downloadSepaFile(result);
+    onLogPaymentFileRegenerated(s.id, 'sepa-xml');
+  };
+
+  const handleRegenerateGiroCode = async (s: Subsidy, person: SubsidyPerson) => {
+    setRegeneratingQrId(s.id);
+    try {
+      const { blob, fileName } = await generateGiroCodePaymentsPdf(clubAccount, [
+        {
+          name: person.accountHolder?.trim() || person.name,
+          iban: person.iban!,
+          bic: person.bic || undefined,
+          amount: s.amount,
+          reference: paymentReference([s]),
+          endToEndId: `WJOF-${s.year}-${s.id.slice(-8)}`,
+        },
+      ]);
+      downloadBlob(blob, fileName);
+      onLogPaymentFileRegenerated(s.id, 'girocode-pdf');
+    } finally {
+      setRegeneratingQrId(null);
+    }
   };
 
   const handleImportFile = (files: FileList | null) => {
@@ -797,6 +852,33 @@ export const SubsidiesView: React.FC<Props> = ({
                       <Check className="w-3.5 h-3.5" strokeWidth={2} />
                       Als geprüft markieren
                     </button>
+                  )}
+
+                  {s.status === 'bezahlt' && person?.iban && isValidIban(person.iban) && (
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2 space-y-1.5">
+                      <div className="text-[11px] font-bold text-slate-600">
+                        Überweisungsdatei erneut abrufen
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleRegenerateSepa(s, person)}
+                          className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                        >
+                          <Download className="w-3 h-3" strokeWidth={1.75} />
+                          SEPA-XML
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRegenerateGiroCode(s, person)}
+                          disabled={regeneratingQrId === s.id}
+                          className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-50 font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                        >
+                          <QrCode className="w-3 h-3" strokeWidth={1.75} />
+                          {regeneratingQrId === s.id ? 'Wird erzeugt…' : 'QR-Code-PDF'}
+                        </button>
+                      </div>
+                    </div>
                   )}
 
                   <div className="flex flex-wrap items-center gap-2 pt-1">

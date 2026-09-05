@@ -614,6 +614,7 @@ export default function App() {
     handleReassignSubsidyResolution,
     handleBundleSubsidies,
     handleMarkSubsidiesPaid,
+    handleLogPaymentFileRegenerated,
     handleSaveSubsidyPerson,
     handleDeleteSubsidyPerson,
     handleSaveClubAccount,
@@ -831,6 +832,8 @@ export default function App() {
             limits={catalogueSettings.limits}
             auditLog={auditLog}
             resolutions={resolutions}
+            clubAccount={clubAccount}
+            onLogPaymentFileRegenerated={handleLogPaymentFileRegenerated}
             onChangeYear={setSubsidyYear}
             onOpenNew={() => {
               setEditingSubsidy(null);
