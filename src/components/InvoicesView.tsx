@@ -9,6 +9,7 @@ import {
   InvoiceFolder,
   Subsidy
 } from '../types';
+import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
 import { 
   formatCurrency, 
   formatDate, 
@@ -35,7 +36,8 @@ import {
   ChevronRight,
   ChevronDown,
   Sparkles,
-  Wallet
+  Wallet,
+  Paperclip
 } from 'lucide-react';
 
 interface InvoicesViewProps {
@@ -78,6 +80,8 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
 }) => {
   // Main view scope: 'without_res' (default focus), 'all', or 'with_res'
   const [scopeTab, setScopeTab] = useState<'without_res' | 'all' | 'with_res'>('without_res');
+  /** Beleg einer Auslage in der Vorschau - hier nur lesend. */
+  const [expensePreview, setExpensePreview] = useState<PreviewableFile | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string>('all'); // 'all', 'none', or folder.id
   const [filterYear, setFilterYear] = useState<string>('all');
   const [filterMonth, setFilterMonth] = useState<string>('all');
@@ -686,26 +690,48 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
           </div>
 
           <div className="space-y-1.5">
-            {expenses.map((e) => (
-              <div
+            {expenses.map((e) => {
+              const file = e.costProofFile || e.proofFile;
+              return (
+              <button
                 key={e.id}
-                className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs"
+                type="button"
+                disabled={!file}
+                onClick={() => {
+                  if (!file) return;
+                  const isImage = file.mimeType?.startsWith('image/');
+                  if (!file.dataUrl || isImage) {
+                    setExpensePreview(file);
+                  } else {
+                    window.open(file.dataUrl, '_blank');
+                  }
+                }}
+                className="w-full flex items-center justify-between gap-2 p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-left transition-colors enabled:hover:bg-blue-50/50 enabled:cursor-pointer disabled:opacity-70"
               >
-                <div className="min-w-0">
-                  <div className="font-bold text-slate-900 truncate">{e.eventName}</div>
-                  <div className="text-[11px] text-slate-500 truncate">
-                    {e.personName}
-                    {e.eventDate ? ` · ${formatDate(e.eventDate)}` : ''}
+                <div className="min-w-0 flex items-center gap-2">
+                  {file && (
+                    <Paperclip className="w-3.5 h-3.5 text-[#003594] shrink-0" strokeWidth={1.75} />
+                  )}
+                  <div className="min-w-0">
+                    <div className="font-bold text-slate-900 truncate">{e.eventName}</div>
+                    <div className="text-[11px] text-slate-500 truncate">
+                      {e.personName}
+                      {e.eventDate ? ` · ${formatDate(e.eventDate)}` : ''}
+                      {file ? ` · ${file.name}` : ' · kein Beleg hinterlegt'}
+                    </div>
                   </div>
                 </div>
                 <span className="font-bold text-slate-900 shrink-0">
                   {formatCurrency(e.amount)}
                 </span>
-              </div>
-            ))}
+              </button>
+              );
+            })}
           </div>
         </div>
       )}
+
+      <FilePreviewModal file={expensePreview} onClose={() => setExpensePreview(null)} />
     </div>
   );
 };

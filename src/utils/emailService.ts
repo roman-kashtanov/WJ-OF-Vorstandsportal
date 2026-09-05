@@ -41,11 +41,18 @@ export const EmailService = {
   /**
    * Generates formatted HTML email for a resolution vote request
    */
+  /** Standard-Begleittext, wenn der Vorstand nichts eigenes formuliert hat. */
+  defaultVoteIntro(): string {
+    return 'es liegt ein neuer Beschlussentwurf zur Abstimmung im Vorstand vor. Du kannst deine Stimme direkt mit 1 Klick aus dieser E-Mail abgeben:';
+  },
+
   generateResolutionEmailHtml(
     resolution: Resolution,
     member: BoardMember,
     baseUrl?: string,
-    links?: VoteLinks
+    links?: VoteLinks,
+    /** Vom Vorstand angepasster Begleittext (siehe EmailVoteModal). */
+    intro?: string
   ): string {
     const base = baseUrl || this.getBaseUrl();
     // Bevorzugt die serverseitig signierten Einmal-Links: damit kann direkt
@@ -99,7 +106,14 @@ export const EmailService = {
                 Hallo <strong>${member.name}</strong>,
               </p>
               <p style="font-size: 14px; margin: 0 0 20px 0; color: #475569; line-height: 1.6;">
-                es liegt ein neuer Beschlussentwurf zur Abstimmung im Vorstand vor. Du kannst deine Stimme direkt mit <strong>1 Klick</strong> aus dieser E-Mail abgeben:
+                ${
+                  intro
+                    ? intro
+                        .split(/\n{2,}/)
+                        .map((p) => p.replace(/\n/g, '<br>'))
+                        .join('</p><p style="font-size: 14px; margin: 0 0 20px 0; color: #475569; line-height: 1.6;">')
+                    : 'es liegt ein neuer Beschlussentwurf zur Abstimmung im Vorstand vor. Du kannst deine Stimme direkt mit <strong>1 Klick</strong> aus dieser E-Mail abgeben:'
+                }
               </p>
 
               <!-- Resolution Summary Box -->
@@ -195,7 +209,8 @@ export const EmailService = {
     resolution: Resolution,
     member: BoardMember,
     baseUrl?: string,
-    links?: VoteLinks
+    links?: VoteLinks,
+    intro?: string
   ): string {
     const base = baseUrl || this.getBaseUrl();
     const yesUrl = links?.yes || this.buildVoteUrl(resolution.id, member.id, 'yes', base);
@@ -210,7 +225,7 @@ Digitales Umlaufverfahren - Beschluss ${resolution.number}
 
 Hallo ${member.name},
 
-es liegt ein neuer Beschlussentwurf zur Abstimmung im Vorstand vor.
+${intro || 'es liegt ein neuer Beschlussentwurf zur Abstimmung im Vorstand vor.'}
 
 Titel: ${resolution.title}
 Nummer: ${resolution.number}
@@ -765,7 +780,9 @@ export async function sendMail(params: {
  */
 export async function sendResolutionVoteMails(
   resolution: Resolution,
-  recipients: BoardMember[]
+  recipients: BoardMember[],
+  /** Optionaler, vom Vorstand angepasster Begleittext. */
+  intro?: string
 ): Promise<MailSendResult> {
   const result: MailSendResult = { sent: 0, failed: 0, errors: [] };
 
@@ -776,8 +793,8 @@ export async function sendResolutionVoteMails(
       await sendMail({
         to: [member.email],
         subject: `[Umlaufbeschluss ${resolution.number}] ${resolution.title}`,
-        html: EmailService.generateResolutionEmailHtml(resolution, member, undefined, links),
-        text: EmailService.generateResolutionEmailText(resolution, member, undefined, links),
+        html: EmailService.generateResolutionEmailHtml(resolution, member, undefined, links, intro),
+        text: EmailService.generateResolutionEmailText(resolution, member, undefined, links, intro),
       });
       result.sent++;
     } catch (err: any) {

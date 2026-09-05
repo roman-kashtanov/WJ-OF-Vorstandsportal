@@ -729,13 +729,22 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                       : 'bg-white border-slate-200 hover:border-slate-300'
                   }`}
                 >
-                  {/* Kopfzeile: bewusst knapp - Nummer, Name, Status */}
-                  <div className="flex items-center gap-2 p-3">
-                    <button
-                      type="button"
-                      onClick={() => onSelectResolution(res.id)}
-                      className="flex-1 min-w-0 text-left cursor-pointer"
-                    >
+                  {/* Kopfzeile: bewusst knapp - Nummer, Name, Status. Die
+                      GANZE Zeile oeffnet den Beschluss, nicht nur der Titel -
+                      der Pfeil daneben klappt weiterhin nur die Kurzinfo auf. */}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => onSelectResolution(res.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onSelectResolution(res.id);
+                      }
+                    }}
+                    className="flex items-center gap-2 p-3 cursor-pointer rounded-xl hover:bg-slate-50/70 transition-colors"
+                  >
+                    <div className="flex-1 min-w-0 text-left">
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-mono font-bold text-[#003594] shrink-0">
                           {res.number}
@@ -747,7 +756,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                       <div className="text-sm font-bold text-slate-900 truncate mt-0.5">
                         {res.title}
                       </div>
-                    </button>
+                    </div>
 
                     <span
                       className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
@@ -767,7 +776,10 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
 
                     <button
                       type="button"
-                      onClick={() => setExpandedListId(isExpanded ? null : res.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpandedListId(isExpanded ? null : res.id);
+                      }}
                       className="p-1 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer shrink-0"
                       title={isExpanded ? 'Zuklappen' : 'Kurzinfo anzeigen'}
                     >

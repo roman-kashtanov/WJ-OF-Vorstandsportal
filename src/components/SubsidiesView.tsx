@@ -237,7 +237,7 @@ export const SubsidiesView: React.FC<Props> = ({
 
   const stageCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    subsidies
+    scoped
       .filter((s) => s.year === year)
       .forEach((s) => {
         const key = stageOf.get(s.status);
@@ -557,7 +557,7 @@ export const SubsidiesView: React.FC<Props> = ({
           }`}
         >
           Alle (
-          {subsidies.filter((s) => s.year === year && stageOf.get(s.status) !== 'erledigt').length}
+          {scoped.filter((s) => s.year === year && stageOf.get(s.status) !== 'erledigt').length}
           )
         </button>
         {SUBSIDY_STAGES.map((stage) => (
@@ -700,12 +700,21 @@ export const SubsidiesView: React.FC<Props> = ({
               key={s.id}
               className="bg-white rounded-xl border border-slate-200 wj-view-enter"
             >
-              <div className="flex items-center gap-2 p-3">
-                <button
-                  type="button"
-                  onClick={() => setExpandedId(isExpanded ? null : s.id)}
-                  className="flex-1 min-w-0 text-left cursor-pointer"
-                >
+              {/* Die GANZE Kopfzeile klappt auf - nicht nur der kleine Pfeil,
+                  der bleibt nur als Hinweis auf den Zustand. */}
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => setExpandedId(isExpanded ? null : s.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setExpandedId(isExpanded ? null : s.id);
+                  }
+                }}
+                className="flex items-center gap-2 p-3 cursor-pointer rounded-xl hover:bg-slate-50 transition-colors"
+              >
+                <div className="flex-1 min-w-0 text-left">
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="font-bold text-slate-900 text-sm truncate">
                       {s.personName}
@@ -718,7 +727,7 @@ export const SubsidiesView: React.FC<Props> = ({
                     {s.eventName}
                     {s.eventDate ? ` · ${formatDate(s.eventDate)}` : ''}
                   </div>
-                </button>
+                </div>
 
                 <span
                   className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
@@ -728,16 +737,13 @@ export const SubsidiesView: React.FC<Props> = ({
                   {STATUS_LABEL[s.status]}
                 </span>
 
-                <button
-                  type="button"
-                  onClick={() => setExpandedId(isExpanded ? null : s.id)}
-                  className="p-1 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer shrink-0"
-                >
-                  <ChevronDown
-                    className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                    strokeWidth={1.75}
-                  />
-                </button>
+                <ChevronDown
+                  aria-hidden="true"
+                  className={`w-4 h-4 shrink-0 text-slate-400 transition-transform ${
+                    isExpanded ? 'rotate-180' : ''
+                  }`}
+                  strokeWidth={1.75}
+                />
               </div>
 
               {isExpanded && (

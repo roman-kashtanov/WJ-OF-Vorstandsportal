@@ -42,7 +42,7 @@ export const KIND_TEXTS: Record<SubsidyKind, KindTexts> = {
     tabLabel: 'Zuschüsse',
     paymentPrefix: 'Zuschuss',
     fileLabel: 'Zuschuesse',
-    resolutionTitle: 'Zuschussauszahlung',
+    resolutionTitle: 'Zuschüsse',
     proofLabel: 'Kostennachweis',
   },
   auslage: {

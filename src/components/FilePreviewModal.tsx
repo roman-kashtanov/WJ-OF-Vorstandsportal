@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Download } from 'lucide-react';
+import { OverlayActionBar, OverlayIconButton, OverlayIconLink } from './OverlayActionBar';
 
 export interface PreviewableFile {
   name: string;
@@ -30,27 +31,21 @@ export const FilePreviewModal: React.FC<Props> = ({ file, onClose }) => {
       className="fixed inset-0 z-100 bg-slate-950/90 flex items-center justify-center p-4 animate-in fade-in duration-150"
       onClick={onClose}
     >
-      <div className="absolute top-4 right-4 flex items-center gap-2">
+      <OverlayActionBar>
         {file.dataUrl && (
-          <a
+          <OverlayIconLink
             href={file.dataUrl}
             download={file.name}
             onClick={(e) => e.stopPropagation()}
-            className="p-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors"
             title="Herunterladen"
           >
             <Download className="w-5 h-5" />
-          </a>
+          </OverlayIconLink>
         )}
-        <button
-          type="button"
-          onClick={onClose}
-          className="p-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors cursor-pointer"
-          title="Schließen"
-        >
+        <OverlayIconButton onClick={onClose} title="Schließen">
           <X className="w-5 h-5" />
-        </button>
-      </div>
+        </OverlayIconButton>
+      </OverlayActionBar>
 
       {isImage && file.dataUrl ? (
         <img

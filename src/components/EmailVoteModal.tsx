@@ -71,6 +71,14 @@ export const EmailVoteModal: React.FC<EmailVoteModalProps> = ({
   const [showOtherMembers, setShowOtherMembers] = useState(false);
   const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
   const [showPreview, setShowPreview] = useState(false);
+  /**
+   * Begleittext der E-Mail. Leer = Standardtext. Bearbeitet wird er in einem
+   * eigenen Fenster ("Anpassen"), damit die Vorschau nicht nur zum Ansehen
+   * da ist, sondern auch tatsaechlich veraendert werden kann.
+   */
+  const [intro, setIntro] = useState('');
+  const [isEditingIntro, setIsEditingIntro] = useState(false);
+  const [introDraft, setIntroDraft] = useState('');
   const [copiedType, setCopiedType] = useState<'html' | 'text' | 'yes' | 'no' | null>(null);
   const [sentFeedback, setSentFeedback] = useState<string | null>(null);
   const [showTechGuide, setShowTechGuide] = useState<boolean>(false);
@@ -82,8 +90,20 @@ export const EmailVoteModal: React.FC<EmailVoteModalProps> = ({
   if (!isOpen || !resolution) return null;
 
   const previewMember = members.find((m) => m.id === selectedMemberId) || eligibleMembers[0] || members[0];
-  const emailHtml = EmailService.generateResolutionEmailHtml(resolution, previewMember);
-  const emailText = EmailService.generateResolutionEmailText(resolution, previewMember);
+  const emailHtml = EmailService.generateResolutionEmailHtml(
+    resolution,
+    previewMember,
+    undefined,
+    undefined,
+    intro || undefined
+  );
+  const emailText = EmailService.generateResolutionEmailText(
+    resolution,
+    previewMember,
+    undefined,
+    undefined,
+    intro || undefined
+  );
   const subject = `[WJ Offenbach Umlaufbeschluss] ${resolution.number}: ${resolution.title} (1-Klick Abstimmung)`;
 
   const handleToggleRecipient = (id: string) => {
@@ -146,7 +166,7 @@ export const EmailVoteModal: React.FC<EmailVoteModalProps> = ({
 
     setIsSending(true);
     try {
-      const result = await sendResolutionVoteMails(resolution, recipientMembers);
+      const result = await sendResolutionVoteMails(resolution, recipientMembers, intro || undefined);
 
       recipientMembers.slice(0, result.sent).forEach((m) => onLogEmailSent(m, subject));
 
@@ -438,6 +458,17 @@ export const EmailVoteModal: React.FC<EmailVoteModalProps> = ({
                   </div>
                   <button
                     type="button"
+                    onClick={() => {
+                      setIntroDraft(intro || EmailService.defaultVoteIntro());
+                      setIsEditingIntro(true);
+                    }}
+                    className="px-2 py-1 rounded-lg bg-[#003594] hover:bg-[#00266B] text-white text-[11px] font-bold transition-colors cursor-pointer"
+                    title="Begleittext der E-Mail anpassen"
+                  >
+                    Anpassen
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setShowPreview(false)}
                     className="p-1 rounded-md text-slate-500 hover:text-[#003594]"
                     title="Vorschau ausblenden"
@@ -503,6 +534,74 @@ export const EmailVoteModal: React.FC<EmailVoteModalProps> = ({
         </div>
 
       </div>
+
+      {/* Begleittext anpassen - eigenes Fenster ueber der Vorschau, damit man
+          den Text tatsaechlich aendern kann und nicht nur ansieht. */}
+      {isEditingIntro && (
+        <div
+          className="fixed inset-0 z-60 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setIsEditingIntro(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl w-full max-w-md border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[85dvh]"
+          >
+            <div className="px-5 py-4 bg-[#003594] text-white flex items-center justify-between shrink-0">
+              <h4 className="text-sm font-bold">Begleittext anpassen</h4>
+              <button
+                type="button"
+                onClick={() => setIsEditingIntro(false)}
+                className="p-1.5 rounded-lg hover:bg-white/10 text-white/80 hover:text-white transition-colors cursor-pointer"
+                aria-label="Schließen"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3 overflow-y-auto">
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Dieser Text steht in der E-Mail direkt unter der Anrede. Beschlusstitel,
+                Antragswortlaut und die Abstimmungs-Knöpfe kommen automatisch darunter.
+              </p>
+              <textarea
+                autoFocus
+                value={introDraft}
+                onChange={(e) => setIntroDraft(e.target.value)}
+                rows={6}
+                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-[#003594]"
+              />
+              <button
+                type="button"
+                onClick={() => setIntroDraft(EmailService.defaultVoteIntro())}
+                className="text-[11px] font-semibold text-slate-400 hover:text-slate-700 underline decoration-dotted cursor-pointer"
+              >
+                Standardtext wiederherstellen
+              </button>
+            </div>
+
+            <div className="px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsEditingIntro(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-200 transition-colors cursor-pointer"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIntro(introDraft.trim());
+                  setIsEditingIntro(false);
+                  setShowPreview(true);
+                }}
+                className="px-4 py-2 rounded-xl bg-[#003594] hover:bg-[#00266B] text-white text-xs font-bold transition-colors cursor-pointer"
+              >
+                Übernehmen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

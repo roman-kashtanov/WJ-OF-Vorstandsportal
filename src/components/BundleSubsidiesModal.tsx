@@ -116,7 +116,7 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
       chosen.map((s) => s.id),
       {
         number: autoNumber,
-        title: `${texts.resolutionTitle} ${year} – Sammelfreigabe (${chosen.length})`,
+        title: `${texts.resolutionTitle} ${year} (${chosen.length})`,
         description: '',
         motionText: `Der Vorstand beschließt die ${
           kind === 'auslage' ? 'Erstattung folgender geprüfter Auslagen' : 'Auszahlung folgender geprüfter Zuschüsse'

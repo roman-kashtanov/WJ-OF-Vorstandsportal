@@ -76,7 +76,13 @@ export const StorageGuideView: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* 1. Firebase Storage */}
           <div className="bg-white rounded-2xl border-2 border-[#003594] p-5 shadow-xs relative">
-            <div className="absolute top-4 right-4">
+            <div
+              className="absolute z-10"
+              style={{
+                top: 'max(1rem, env(safe-area-inset-top))',
+                right: 'max(1rem, env(safe-area-inset-right))',
+              }}
+            >
               <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-blue-100 text-[#003594]">
                 Empfehlung #1
               </span>
