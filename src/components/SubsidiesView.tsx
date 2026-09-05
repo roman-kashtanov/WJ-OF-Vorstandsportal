@@ -804,13 +804,15 @@ export const SubsidiesView: React.FC<Props> = ({
                           onChange={(e) => onUpdateStatus(s.id, e.target.value as SubsidyStatus)}
                           className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#003594]"
                         >
-                          {(Object.keys(STATUS_LABEL) as SubsidyStatus[])
-                            .filter((st) => !PIPELINE_MANAGED_STATUSES.includes(st) || st === s.status)
-                            .map((st) => (
-                              <option key={st} value={st}>
-                                {STATUS_LABEL[st]}
-                              </option>
-                            ))}
+                          {/* Hier bewusst KEIN Filter auf PIPELINE_MANAGED_STATUSES:
+                              das ist der Ausnahme-Pfad fuer Korrekturen/Altfaelle,
+                              da muessen auch die von der Automatik verwalteten
+                              Stati (im_beschluss, zur_zahlung_freigegeben) waehlbar sein. */}
+                          {(Object.keys(STATUS_LABEL) as SubsidyStatus[]).map((st) => (
+                            <option key={st} value={st}>
+                              {STATUS_LABEL[st]}
+                            </option>
+                          ))}
                         </select>
                         <button
                           type="button"
