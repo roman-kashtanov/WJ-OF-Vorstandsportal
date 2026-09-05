@@ -12,7 +12,7 @@ import {
   Subsidy,
   SubsidyPerson
 } from '../types';
-import { STATUS_LABEL as SUBSIDY_STATUS_LABEL } from '../utils/subsidies';
+import { STATUS_LABEL as SUBSIDY_STATUS_LABEL, subsidyKind, KIND_TEXTS } from '../utils/subsidies';
 import { generateResolutionBundlePdf } from '../utils/resolutionBundlePdf';
 import { 
   formatCurrency, 
@@ -427,6 +427,17 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
     ? subsidies.filter((s) => s.resolutionId === activeResolution.id)
     : [];
   const linkedSubsidiesTotal = linkedSubsidies.reduce((sum, s) => sum + (s.amount || 0), 0);
+  /**
+   * Ein Sammelbeschluss buendelt immer nur eine Vorgangsart - die Bezeichnung
+   * ("Zuschuesse" vs. "Auslagen") richtet sich deshalb nach dem ersten
+   * verknuepften Eintrag statt fest verdrahtet "Zuschuesse" zu heissen.
+   */
+  const linkedKind = linkedSubsidies.length > 0 ? subsidyKind(linkedSubsidies[0]) : 'zuschuss';
+  const linkedTexts = KIND_TEXTS[linkedKind];
+  /** Belege, die an den verknuepften Auslagen/Zuschuessen selbst haengen. */
+  const linkedReceipts = linkedSubsidies
+    .map((s) => ({ subsidy: s, file: s.costProofFile || s.proofFile }))
+    .filter((entry): entry is { subsidy: Subsidy; file: NonNullable<Subsidy['costProofFile']> } => !!entry.file);
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -1325,7 +1336,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                     <div className="flex items-center space-x-2">
                       <HandCoins className="w-4 h-4 text-[#003594]" />
                       <h4 className="text-xs uppercase font-bold text-slate-700 tracking-wider">
-                        Zugeordnete Zuschüsse ({linkedSubsidies.length})
+                        Zugeordnete {linkedTexts.plural} ({linkedSubsidies.length})
                       </h4>
                     </div>
                     <span className="text-xs font-bold text-slate-900">
@@ -1366,8 +1377,9 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                   </div>
 
                   <p className="mt-2.5 text-[11px] text-slate-400 leading-relaxed">
-                    Wird der Beschluss angenommen, wechseln diese Zuschüsse automatisch auf „Zur
-                    Zahlung freigegeben" und erscheinen unter Zuschüsse zur Sammelüberweisung.
+                    Wird der Beschluss angenommen, wechseln diese Positionen automatisch auf „Zur
+                    Zahlung freigegeben" und erscheinen unter {linkedTexts.tabLabel} zur
+                    Sammelüberweisung.
                   </p>
                 </div>
               )}
@@ -1378,7 +1390,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                   <div className="flex items-center space-x-2">
                     <Receipt className="w-4 h-4 text-emerald-600" />
                     <h4 className="text-xs uppercase font-bold text-slate-700 tracking-wider">
-                      Zugeordnete Rechnungen ({linkedInvoices.length})
+                      Zugeordnete Rechnungen ({linkedInvoices.length + linkedReceipts.length})
                     </h4>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -1416,10 +1428,52 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                   </div>
                 </div>
 
+                {/* Belege, die direkt an einer zugeordneten Auslage/einem
+                    Zuschuss haengen - genau die Rechnung aus dem Antrag, ohne
+                    dass sie jemand zusaetzlich als Rechnung anlegen muesste. */}
+                {linkedReceipts.length > 0 && (
+                  <div className="space-y-1.5 mb-3">
+                    {linkedReceipts.map(({ subsidy, file }) => (
+                      <button
+                        key={subsidy.id}
+                        type="button"
+                        onClick={() => {
+                          const isImage = file.mimeType?.startsWith('image/');
+                          if (!file.dataUrl || isImage) {
+                            setPreviewFile({
+                              name: file.name,
+                              mimeType: file.mimeType,
+                              dataUrl: file.dataUrl,
+                            });
+                          } else {
+                            window.open(file.dataUrl, '_blank');
+                          }
+                        }}
+                        className="w-full flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 hover:bg-blue-50/50 border border-slate-200 text-left transition-colors cursor-pointer"
+                      >
+                        <Paperclip className="w-3.5 h-3.5 text-[#003594] shrink-0" strokeWidth={1.75} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-xs font-bold text-slate-900 truncate">
+                            {file.name}
+                          </span>
+                          <span className="block text-[11px] text-slate-500 truncate">
+                            aus: {subsidy.personName} – {subsidy.eventName}
+                          </span>
+                        </span>
+                        <span className="text-xs font-bold text-slate-900 shrink-0">
+                          {formatCurrency(subsidy.amount)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 {linkedInvoices.length === 0 ? (
                   <div className="bg-slate-50 rounded-xl p-4 text-center border border-dashed border-slate-200 space-y-2">
                     <p className="text-xs text-slate-500">
-                      Bisher keine Rechnungen oder Belege zugeordnet.
+                      {linkedReceipts.length > 0
+                        ? 'Darüber hinaus keine weiteren Rechnungen zugeordnet.'
+                        : 'Bisher keine Rechnungen oder Belege zugeordnet.'}
                     </p>
                     {onOpenNewInvoiceWithResolution && (
                       <button

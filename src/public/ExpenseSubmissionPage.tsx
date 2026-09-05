@@ -134,7 +134,7 @@ export const ExpenseSubmissionPage: React.FC = () => {
   };
 
   const inputClass =
-    'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-[#003594]';
+    'w-full max-w-full min-w-0 block px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-[#003594]';
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-start sm:items-center justify-center p-4 py-10">
@@ -233,8 +233,10 @@ export const ExpenseSubmissionPage: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
+              {/* Auf dem Handy untereinander: das native Datumsfeld hat eine
+                  Mindestbreite und schob sonst das Betragsfeld aus der Spalte. */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="min-w-0">
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Datum des Belegs *
                   </label>
@@ -246,7 +248,7 @@ export const ExpenseSubmissionPage: React.FC = () => {
                     className={inputClass}
                   />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <label className="block text-xs font-bold text-slate-700 mb-1">Betrag (€) *</label>
                   <input
                     required
@@ -277,19 +279,27 @@ export const ExpenseSubmissionPage: React.FC = () => {
                     Diese IBAN ist nicht gültig.
                   </p>
                 )}
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    value={bic}
-                    onChange={(e) => setBic(e.target.value)}
-                    placeholder="BIC (nur falls bekannt)"
-                    className={`${inputClass} font-mono`}
-                  />
-                  <input
-                    value={accountHolder}
-                    onChange={(e) => setAccountHolder(e.target.value)}
-                    placeholder="Kontoinhaber (falls abweichend)"
-                    className={inputClass}
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="min-w-0">
+                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+                      BIC <span className="text-slate-400">(nur falls bekannt)</span>
+                    </label>
+                    <input
+                      value={bic}
+                      onChange={(e) => setBic(e.target.value)}
+                      className={`${inputClass} font-mono`}
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+                      Kontoinhaber <span className="text-slate-400">(falls abweichend)</span>
+                    </label>
+                    <input
+                      value={accountHolder}
+                      onChange={(e) => setAccountHolder(e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
                 </div>
               </div>
 

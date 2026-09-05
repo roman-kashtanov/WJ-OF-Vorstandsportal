@@ -25,10 +25,13 @@ interface Props {
   currentMember: BoardMember;
   members: BoardMember[];
   existingResolutionCount: number;
+  /** Fuer "einem bestehenden Beschluss zuordnen" statt einen neuen zu fassen. */
+  resolutions: Resolution[];
   onCreate: (
     subsidyIds: string[],
     resolutionData: Omit<Resolution, 'id' | 'votes' | 'comments' | 'linkedInvoiceIds' | 'createdAt'>
   ) => void;
+  onAssignExisting: (subsidyIds: string[], resolutionId: string) => void;
 }
 
 export const BundleSubsidiesModal: React.FC<Props> = ({
@@ -41,7 +44,9 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
   currentMember,
   members,
   existingResolutionCount,
+  resolutions,
   onCreate,
+  onAssignExisting,
 }) => {
   const personById = useMemo(
     () => Object.fromEntries(people.map((p) => [p.id, p])),
@@ -58,6 +63,9 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
   );
 
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  /** Neuen Beschluss fassen oder an einen vorhandenen haengen. */
+  const [mode, setMode] = useState<'new' | 'existing'>('new');
+  const [existingResolutionId, setExistingResolutionId] = useState('');
 
   const effectiveSelected = useMemo(() => {
     if (Object.keys(selected).length > 0) return selected;
@@ -69,7 +77,9 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
 
   const chosen = eligible.filter((s) => effectiveSelected[s.id]);
   const sum = chosen.reduce((acc, s) => acc + s.amount, 0);
-  const missingProof = chosen.filter((s) => !s.proofFile);
+  /** Welche Datei am jeweiligen Vorgang als Beleg zaehlt. */
+  const proofOf = (s: Subsidy) => (kind === 'auslage' ? s.costProofFile : s.proofFile);
+  const missingProof = chosen.filter((s) => !proofOf(s));
 
   const eligibleVoterIds = (() => {
     const voting = members.filter(isVotingMember);
@@ -88,9 +98,9 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
     });
 
     const attachments: ResolutionAttachment[] = chosen
-      .filter((s) => !!s.proofFile)
+      .filter((s) => !!proofOf(s))
       .map((s) => {
-        const f = s.proofFile!;
+        const f = proofOf(s)!;
         return {
           id: `att_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
           name: f.name,
@@ -106,9 +116,11 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
       chosen.map((s) => s.id),
       {
         number: autoNumber,
-        title: `${texts.plural} ${year} – Sammelfreigabe (${chosen.length})`,
+        title: `${texts.resolutionTitle} ${year} – Sammelfreigabe (${chosen.length})`,
         description: '',
-        motionText: `Der Vorstand beschließt die Auszahlung folgender geprüfter ${texts.plural}:\n\n${lines.join(
+        motionText: `Der Vorstand beschließt die ${
+          kind === 'auslage' ? 'Erstattung folgender geprüfter Auslagen' : 'Auszahlung folgender geprüfter Zuschüsse'
+        }:\n\n${lines.join(
           '\n'
         )}\n\nGesamtsumme: ${formatCurrency(sum)}`,
         category: 'Finanzen & Budget',
@@ -128,6 +140,17 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
     setSelected({});
     onClose();
   };
+
+  const handleAssignExisting = () => {
+    if (chosen.length === 0 || !existingResolutionId) return;
+    onAssignExisting(chosen.map((s) => s.id), existingResolutionId);
+    setSelected({});
+    onClose();
+  };
+
+  const assignableResolutions = resolutions.filter(
+    (r) => !r.isArchived && (r.status === 'in_abstimmung' || r.status === 'angenommen')
+  );
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
@@ -155,6 +178,58 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
               erstellt. Erst wenn der Vorstand ihn annimmt, werden sie zur Zahlung freigegeben.
             </span>
           </div>
+
+          {/* Zwei Wege: neuen Beschluss fassen oder an einen vorhandenen
+              haengen - z.B. wenn die Ausgabe laengst beschlossen wurde. */}
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              type="button"
+              onClick={() => setMode('new')}
+              className={`py-2 px-2 rounded-xl text-[11px] font-bold border transition-colors cursor-pointer ${
+                mode === 'new'
+                  ? 'bg-[#003594] text-white border-[#003594]'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              Neuen Beschluss fassen
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('existing')}
+              className={`py-2 px-2 rounded-xl text-[11px] font-bold border transition-colors cursor-pointer ${
+                mode === 'existing'
+                  ? 'bg-[#003594] text-white border-[#003594]'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              Bestehendem zuordnen
+            </button>
+          </div>
+
+          {mode === 'existing' && (
+            <div className="space-y-1.5">
+              <label className="block text-[11px] font-bold text-slate-700">
+                Welcher Beschluss?
+              </label>
+              <select
+                value={existingResolutionId}
+                onChange={(e) => setExistingResolutionId(e.target.value)}
+                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#003594]"
+              >
+                <option value="">— bitte auswählen —</option>
+                {assignableResolutions.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.number} – {r.title}
+                    {r.status === 'angenommen' ? ' (angenommen)' : ' (in Abstimmung)'}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-slate-400">
+                Ist der Beschluss bereits angenommen, wechseln die ausgewählten Positionen
+                direkt auf „Zur Zahlung freigegeben".
+              </p>
+            </div>
+          )}
 
           {eligible.length === 0 ? (
             <p className="text-slate-400 py-6 text-center">
@@ -192,7 +267,7 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
                         </span>
                       </div>
                       <div className="text-[11px] text-slate-500 mt-0.5">{s.eventName}</div>
-                      {!s.proofFile && (
+                      {!proofOf(s) && (
                         <div className="text-[11px] font-semibold text-amber-800 mt-1 flex items-center gap-1">
                           <AlertTriangle className="w-3 h-3" strokeWidth={2} />
                           Noch kein Nachweis hinterlegt
@@ -222,15 +297,16 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
             </div>
             <button
               type="button"
-              onClick={handleCreate}
-              disabled={chosen.length === 0}
+              onClick={mode === 'new' ? handleCreate : handleAssignExisting}
+              disabled={chosen.length === 0 || (mode === 'existing' && !existingResolutionId)}
               className="px-5 py-2.5 rounded-xl bg-[#003594] hover:bg-[#00266B] disabled:opacity-40 font-bold text-white text-xs flex items-center gap-2 transition-all cursor-pointer"
             >
               <Vote className="w-4 h-4" strokeWidth={2} />
               {/* Anzahl bewusst im Knopf: so ist vor dem Klick eindeutig, wie
-                  viele Zuschuesse tatsaechlich in den Beschluss wandern. */}
-              Beschluss über {chosen.length}{' '}
-              {chosen.length === 1 ? texts.singular : texts.plural} erstellen
+                  viele Positionen tatsaechlich in den Beschluss wandern. */}
+              {mode === 'new' ? 'Beschluss über' : 'Zuordnen:'} {chosen.length}{' '}
+              {chosen.length === 1 ? texts.singular : texts.plural}
+              {mode === 'new' ? ' erstellen' : ''}
             </button>
           </div>
         )}

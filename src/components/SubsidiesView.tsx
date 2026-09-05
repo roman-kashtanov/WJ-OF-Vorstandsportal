@@ -758,6 +758,10 @@ export const SubsidiesView: React.FC<Props> = ({
                     )}
                   </div>
 
+                  {/* Bei einer Auslage gibt es keinen separaten
+                      Teilnahmenachweis - die hochgeladene Rechnung ist der
+                      Beleg, mehr braucht es nicht. */}
+                  {kind !== 'auslage' && (
                   <div className="text-slate-600">
                     Teilnahmenachweis:{' '}
                     {s.proofState === 'hochgeladen' && s.proofFile ? (
@@ -783,9 +787,10 @@ export const SubsidiesView: React.FC<Props> = ({
                       <span className="text-amber-700 font-semibold">offen</span>
                     )}
                   </div>
+                  )}
 
                   <div className="text-slate-600">
-                    Kostennachweis:{' '}
+                    {texts.proofLabel}:{' '}
                     {s.costProofState === 'hochgeladen' && s.costProofFile ? (
                       <button
                         type="button"
@@ -811,7 +816,9 @@ export const SubsidiesView: React.FC<Props> = ({
                   </div>
 
                   {person?.email &&
-                    (s.proofState !== 'hochgeladen' || s.costProofState !== 'hochgeladen') && (
+                    (kind === 'auslage'
+                      ? s.costProofState !== 'hochgeladen'
+                      : s.proofState !== 'hochgeladen' || s.costProofState !== 'hochgeladen') && (
                       <button
                         type="button"
                         onClick={() => handleResendProofLink(s, person.email!)}
@@ -863,8 +870,10 @@ export const SubsidiesView: React.FC<Props> = ({
                       type="button"
                       onClick={() => {
                         const missing: string[] = [];
-                        if (s.proofState === 'offen') missing.push('Teilnahmenachweis');
-                        if (s.costProofState === 'offen') missing.push('Kostennachweis');
+                        if (kind !== 'auslage' && s.proofState === 'offen') {
+                          missing.push('Teilnahmenachweis');
+                        }
+                        if (s.costProofState === 'offen') missing.push(texts.proofLabel);
                         if (
                           missing.length === 0 ||
                           confirm(

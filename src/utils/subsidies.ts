@@ -25,6 +25,14 @@ export interface KindTexts {
   paymentPrefix: string;
   /** Dateiname-Baustein fuer SEPA/QR-Dateien */
   fileLabel: string;
+  /**
+   * Wie der daraus entstehende Vorstandsbeschluss heisst. Bewusst
+   * sprechend ("Zuschussauszahlung"/"Auslagenerstattung") statt nur
+   * "Zuschuesse"/"Auslagen", damit Beschluesse spaeter auffindbar sind.
+   */
+  resolutionTitle: string;
+  /** Welche Datei am Vorgang der eigentliche Beleg ist. */
+  proofLabel: string;
 }
 
 export const KIND_TEXTS: Record<SubsidyKind, KindTexts> = {
@@ -34,6 +42,8 @@ export const KIND_TEXTS: Record<SubsidyKind, KindTexts> = {
     tabLabel: 'Zuschüsse',
     paymentPrefix: 'Zuschuss',
     fileLabel: 'Zuschuesse',
+    resolutionTitle: 'Zuschussauszahlung',
+    proofLabel: 'Kostennachweis',
   },
   auslage: {
     singular: 'Auslage',
@@ -41,6 +51,8 @@ export const KIND_TEXTS: Record<SubsidyKind, KindTexts> = {
     tabLabel: 'Auslagen',
     paymentPrefix: 'Auslagenerstattung',
     fileLabel: 'Auslagen',
+    resolutionTitle: 'Auslagenerstattung',
+    proofLabel: 'Rechnung / Beleg',
   },
 };
 

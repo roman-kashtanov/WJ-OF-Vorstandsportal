@@ -1035,7 +1035,11 @@ export default function App() {
         currentMember={currentMember}
         members={members}
         existingResolutionCount={resolutions.length}
+        resolutions={resolutions}
         onCreate={handleBundleSubsidies}
+        onAssignExisting={(ids, resolutionId) =>
+          ids.forEach((id) => handleReassignSubsidyResolution(id, resolutionId))
+        }
       />
 
       <BiometricLock

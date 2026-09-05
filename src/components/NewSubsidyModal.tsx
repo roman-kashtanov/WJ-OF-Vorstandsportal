@@ -446,7 +446,9 @@ export const NewSubsidyModal: React.FC<Props> = ({
             )}
           </div>
 
-          {/* Nachweis: Teilnahme */}
+          {/* Nachweis: Teilnahme - bei einer Auslage gibt es den nicht, dort
+              ist die hochgeladene Rechnung der einzige noetige Beleg. */}
+          {!isExpense && (
           <div>
             <label className="font-bold text-slate-900 block mb-1.5">Teilnahmenachweis</label>
             <div className="grid grid-cols-3 gap-1.5">
@@ -528,12 +530,14 @@ export const NewSubsidyModal: React.FC<Props> = ({
               </div>
             )}
           </div>
+          )}
 
           {/* Nachweis: Kosten (Rechnung) - § 9: Zuschuss darf die tatsächlichen
-              Kosten nicht übersteigen, daher eigener Nachweis. */}
+              Kosten nicht übersteigen, daher eigener Nachweis. Bei einer
+              Auslage ist genau das der Beleg der Erstattung. */}
           <div>
             <label className="font-bold text-slate-900 block mb-1.5">
-              Kostennachweis (Rechnung)
+              {isExpense ? 'Rechnung / Beleg' : 'Kostennachweis (Rechnung)'}
             </label>
             <div className="grid grid-cols-3 gap-1.5">
               {(
