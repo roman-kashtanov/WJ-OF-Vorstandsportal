@@ -978,15 +978,18 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
               <div className="space-y-1.5">
                 <p className="text-[11px] uppercase font-bold text-slate-400 tracking-wider">Abstimmung</p>
                 <div className="space-y-1">
-                  {members.map((member) => {
+                  {members
+                    .filter(
+                      (member) =>
+                        !activeResolution.eligibleVoterIds ||
+                        activeResolution.eligibleVoterIds.length === 0 ||
+                        activeResolution.eligibleVoterIds.includes(member.id)
+                    )
+                    .map((member) => {
                     const vote = activeResolution.votes[member.id];
                     const isMe = member.id === currentMember.id;
-                    const isEligible =
-                      !activeResolution.eligibleVoterIds ||
-                      activeResolution.eligibleVoterIds.length === 0 ||
-                      activeResolution.eligibleVoterIds.includes(member.id);
                     const isOpen = isMe && voteBoxOpenFor === activeResolution.id;
-                    const canInteract = isMe && isEligible;
+                    const canInteract = isMe;
 
                     return (
                       <div
@@ -1027,10 +1030,8 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                               }`}>
                                 {vote.vote === 'yes' ? '✓ Ja' : vote.vote === 'no' ? '✗ Nein' : '— Enth.'}
                               </span>
-                            ) : isEligible ? (
-                              <span className="text-[10px] text-slate-400 italic">Ausstehend</span>
                             ) : (
-                              <span className="text-[10px] text-slate-300 italic">Kein Stimmrecht</span>
+                              <span className="text-[10px] text-slate-400 italic">Ausstehend</span>
                             )}
                             {canInteract && (
                               <ChevronDown

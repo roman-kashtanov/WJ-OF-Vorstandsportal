@@ -95,6 +95,45 @@ export default function App() {
     PwaNotificationService.registerServiceWorker();
   }, []);
 
+  // Immer den aktuellen authSession-Stand fuer den unten stehenden,
+  // langlebigen Firestore-Listener verfuegbar halten (der Listener wird nur
+  // einmal beim Mount registriert, siehe zentraler Sync-Effekt weiter unten -
+  // ohne Ref wuerde er sich sonst dauerhaft an den authSession-Stand vom
+  // allerersten Rendern "erinnern").
+  const authSessionRef = React.useRef(authSession);
+  useEffect(() => {
+    authSessionRef.current = authSession;
+  }, [authSession]);
+
+  // Zeitpunkt der letzten Anmeldung - kurze Gnadenfrist danach, bevor ein
+  // "nicht mehr in der Mitgliederliste" aus einem frischen Firestore-Snapshot
+  // zu einem automatischen Logout fuehrt. Ohne diese Frist wuerde ein
+  // brandneu angelegtes Profil sich selbst sofort wieder ausloggen, weil der
+  // eigene Schreibvorgang (FirebaseSync.saveMember) den naechsten Snapshot
+  // manchmal erst nach dem allerersten (noch leeren/alten) Snapshot erreicht.
+  const authSinceRef = React.useRef<number>(0);
+  useEffect(() => {
+    if (authSession?.isAuthenticated) authSinceRef.current = Date.now();
+  }, [authSession?.isAuthenticated]);
+
+  /**
+   * Verbindungs-Gate: ohne eine tatsaechlich erfolgreiche Leseverbindung zur
+   * Vereinsdatenbank darf die App fuer bereits angemeldete Sitzungen nicht
+   * nutzbar werden - sonst koennte ein Geraet mit einer alten, lokal
+   * zwischengespeicherten Anmeldung offline weiterhin die zuletzt gesehenen
+   * (moeglicherweise laengst veralteten) Daten anzeigen, selbst wenn die
+   * Person laengst aus dem Vorstand entfernt wurde. Ohne Verbindung kann das
+   * nicht geprueft werden - also ohne Verbindung auch kein Zugriff.
+   */
+  const [connectionGate, setConnectionGate] = useState<'checking' | 'ok' | 'blocked'>('checking');
+  const verifyConnection = () => {
+    setConnectionGate('checking');
+    FirebaseSync.checkConnection().then((conn) => {
+      setSyncBlocked(!conn.canRead || !conn.canWrite);
+      setConnectionGate(conn.canRead ? 'ok' : 'blocked');
+    });
+  };
+
   // Echtzeit-Synchronisation mit Firestore.
   //
   // Wichtig: Die allererste Antwort aus der Cloud darf lokale Daten nicht
@@ -118,10 +157,9 @@ export default function App() {
     FirebaseSync.autoInitCloudIfEmpty(local);
 
     // Aktiv pruefen statt darauf zu warten, dass ein Listener stillschweigend
-    // scheitert - sonst merkt niemand, dass nichts synchronisiert wird.
-    FirebaseSync.checkConnection().then((conn) => {
-      setSyncBlocked(!conn.canRead || !conn.canWrite);
-    });
+    // scheitert - sonst merkt niemand, dass nichts synchronisiert wird. Setzt
+    // nebenbei auch das Verbindungs-Gate (siehe oben).
+    verifyConnection();
 
     const firstSnapshot = {
       resolutions: true,
@@ -190,11 +228,32 @@ export default function App() {
       )
     );
 
-    const unsubMem = FirebaseSync.subscribeMembers((remote) =>
+    const unsubMem = FirebaseSync.subscribeMembers((remote) => {
       applyRemote('members', remote, local.members, setMembers, (m) =>
         FirebaseSync.saveMember(m).catch(() => {})
-      )
-    );
+      );
+
+      // Sicherheits-Check: wurde die aktuell angemeldete Person aus dem
+      // Vorstand entfernt, sofort ausloggen - unabhaengig davon, ob dieses
+      // Geraet gerade den entsprechenden Tab offen hat. Ohne diesen Check
+      // bliebe eine entfernte Person mit einer alten lokalen Sitzung
+      // unbegrenzt angemeldet (siehe Kommentar bei authSinceRef weiter oben).
+      const session = authSessionRef.current;
+      if (
+        remote &&
+        remote.length > 0 &&
+        session?.isAuthenticated &&
+        session.user &&
+        Date.now() - authSinceRef.current > 8000 &&
+        !remote.some(
+          (m) =>
+            m.id === session.user!.id ||
+            (m.email || '').toLowerCase() === (session.user!.email || '').toLowerCase()
+        )
+      ) {
+        handleLogout();
+      }
+    });
 
     const unsubReq = FirebaseSync.subscribeInvoiceRequests((remote) =>
       applyRemote('requests', remote, local.invoiceRequests, setInvoiceRequests, (r) =>
@@ -969,6 +1028,47 @@ export default function App() {
         members={members}
         securitySettings={securitySettings}
       />
+
+      {/* Verbindungs-Gate: siehe Kommentar bei connectionGate weiter oben.
+          Nur relevant, wenn ohnehin schon angemeldet - der Login-Vorgang
+          selbst prueft die Freigabe bereits live gegen Firestore
+          (AuthModal/handleGoogleUser), unabhaengig hiervon. */}
+      {!isAuthModalOpen && authSession?.isAuthenticated && connectionGate !== 'ok' && (
+        <div className="fixed inset-0 z-50 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-5">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 text-center shadow-2xl">
+            {connectionGate === 'checking' ? (
+              <>
+                <div className="w-10 h-10 mx-auto rounded-full border-2 border-slate-200 border-t-[#003594] animate-spin" />
+                <p className="mt-4 text-sm font-semibold text-slate-700">
+                  Verbindung zur Vereinsdatenbank wird geprüft…
+                </p>
+              </>
+            ) : (
+              <>
+                <h3 className="text-base font-bold text-slate-900">Keine Verbindung</h3>
+                <p className="mt-2 text-sm text-slate-600">
+                  Ohne Verbindung zur Vereinsdatenbank kann nicht geprüft werden, ob dieses Konto
+                  noch im Vorstand freigegeben ist. Bitte Internetverbindung prüfen.
+                </p>
+                <button
+                  type="button"
+                  onClick={verifyConnection}
+                  className="mt-5 w-full py-2.5 rounded-xl bg-[#003594] hover:bg-[#00266B] text-white font-bold text-sm transition-colors cursor-pointer"
+                >
+                  Erneut versuchen
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="mt-2 w-full py-2 text-xs font-semibold text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  Abmelden
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       <SettingsModal
         isOpen={isSettingsOpen}

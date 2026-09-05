@@ -169,7 +169,11 @@ export const SubsidiesView: React.FC<Props> = ({
       .filter(
         (s) => filterType === 'all' || personById[s.personId]?.type === filterType
       )
-      .filter((s) => activeStage === 'all' || stageOf.get(s.status) === activeStage)
+      .filter((s) =>
+        activeStage === 'all'
+          ? stageOf.get(s.status) !== 'erledigt'
+          : stageOf.get(s.status) === activeStage
+      )
       .filter(
         (s) =>
           !q ||
@@ -459,7 +463,9 @@ export const SubsidiesView: React.FC<Props> = ({
               : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
           }`}
         >
-          Alle ({subsidies.filter((s) => s.year === year).length})
+          Alle (
+          {subsidies.filter((s) => s.year === year && stageOf.get(s.status) !== 'erledigt').length}
+          )
         </button>
         {SUBSIDY_STAGES.map((stage) => (
           <button
@@ -762,7 +768,19 @@ export const SubsidiesView: React.FC<Props> = ({
                   {s.status === 'beantragt' && (
                     <button
                       type="button"
-                      onClick={() => onUpdateStatus(s.id, 'bestaetigt')}
+                      onClick={() => {
+                        const missing: string[] = [];
+                        if (s.proofState === 'offen') missing.push('Teilnahmenachweis');
+                        if (s.costProofState === 'offen') missing.push('Kostennachweis');
+                        if (
+                          missing.length === 0 ||
+                          confirm(
+                            `${missing.join(' und ')} ${missing.length === 1 ? 'ist' : 'sind'} noch nicht hinterlegt. Trotzdem als geprüft markieren?`
+                          )
+                        ) {
+                          onUpdateStatus(s.id, 'bestaetigt');
+                        }
+                      }}
                       className="w-full py-2 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[#003594] font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                     >
                       <Check className="w-3.5 h-3.5" strokeWidth={2} />
