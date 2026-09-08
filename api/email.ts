@@ -21,6 +21,50 @@ export interface SendEmailResult {
  * eigene Domain verifiziert werden muss. Ist kein SMTP hinterlegt, wird
  * Resend als Alternative genutzt.
  */
+/**
+ * Erzeugt aus dem HTML eine lesbare Nur-Text-Fassung.
+ *
+ * Eine E-Mail, die ausschliesslich aus HTML besteht, ist eines der
+ * bekanntesten Spam-Merkmale - echte Programme verschicken beide Fassungen.
+ * Deshalb wird hier notfalls automatisch eine erzeugt, statt sich darauf zu
+ * verlassen, dass jeder Aufrufer eine mitliefert.
+ */
+function htmlToText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<head[\s\S]*?<\/head>/gi, ' ')
+    // Links als "Text (URL)" erhalten, damit die Textfassung nutzbar bleibt
+    .replace(/<a[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_m, href, label) => {
+      const text = String(label).replace(/<[^>]+>/g, '').trim();
+      return text ? `${text}: ${href}` : String(href);
+    })
+    .replace(/<\/(p|div|tr|h[1-6]|li)>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
+ * Kopfzeilen, die seriöse Absender von Massenmail unterscheiden:
+ * eine Abmeldemoeglichkeit (List-Unsubscribe) wertet vor allem Gmail
+ * deutlich positiv, und eine echte Antwortadresse ebenso.
+ */
+function mailHeaders(replyTo: string): Record<string, string> {
+  if (!replyTo) return {};
+  return {
+    'List-Unsubscribe': `<mailto:${replyTo}?subject=Abmeldung%20Vorstandsportal>`,
+    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+  };
+}
+
 export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
   const cfg = getServerConfig();
 
@@ -36,7 +80,10 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     return sendViaSmtp(input, recipients, cfg);
   }
 
-  if (cfg.resendApiKey) {
+  // Nur wenn Resend VOLLSTAENDIG eingerichtet ist (Schluessel + verifizierte
+  // Absenderadresse). Sonst waere die Folge eine irrefuehrende Fehlermeldung
+  // statt eines klaren Hinweises auf die fehlende SMTP-Einrichtung.
+  if (cfg.resendApiKey && cfg.resendFrom) {
     return sendViaResend(input, recipients, cfg);
   }
 
@@ -67,9 +114,11 @@ async function sendViaSmtp(
     const info = await transporter.sendMail({
       from: cfg.smtpFrom,
       to: recipients.join(', '),
+      replyTo: cfg.mailReplyTo || undefined,
       subject: input.subject,
-      text: input.text,
+      text: input.text || (input.html ? htmlToText(input.html) : undefined),
       html: input.html,
+      headers: mailHeaders(cfg.mailReplyTo),
     });
 
     return { status: 200, body: { success: true, id: info.messageId, via: 'smtp' } };
@@ -110,9 +159,11 @@ async function sendViaResend(
       body: JSON.stringify({
         from: cfg.resendFrom,
         to: recipients,
+        reply_to: cfg.mailReplyTo || undefined,
         subject: input.subject,
         html: input.html,
-        text: input.text,
+        text: input.text || (input.html ? htmlToText(input.html) : undefined),
+        headers: mailHeaders(cfg.mailReplyTo),
       }),
     });
 

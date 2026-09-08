@@ -96,6 +96,7 @@ die E-Mail verweist dann wie bisher ins Portal.
 | `SMTP_USER` | `offenbachwj@gmail.com` |
 | `SMTP_PASSWORD` | das 16-stellige App-Passwort aus Schritt 1.2 |
 | `MAIL_FROM` | `WJ Offenbach Vorstand <offenbachwj@gmail.com>` |
+| `MAIL_REPLY_TO` | `offenbachwj@gmail.com` *(optional – Antwort- und Abmeldeadresse in den Mails; ohne Angabe wird `SMTP_USER` verwendet)* |
 | `VAPID_PUBLIC_KEY` | `BARgUjgWCDkONgCMjD3qFOshYrFt_8oD61_sdcnX2ZbdwbM83uH0p_jbliHqRwXO2vY8Pd77FVOy26Ik4J3Xdy0` |
 | `VAPID_PRIVATE_KEY` | *(privater Schlüssel – wird separat übergeben, gehört nicht ins Repository)* |
 | `VAPID_SUBJECT` | `mailto:vorstand@wj-offenbach.de` |

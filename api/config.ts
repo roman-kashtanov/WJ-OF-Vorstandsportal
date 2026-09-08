@@ -24,10 +24,23 @@ export function getServerConfig() {
      */
     smtpFrom: e.MAIL_FROM || (smtpUser ? `WJ Offenbach Vorstand <${smtpUser}>` : ''),
     isSmtpConfigured: !!(smtpUser && smtpPassword),
+    /**
+     * Antwortadresse und Abmelde-Kontakt. Beides sind Signale, an denen
+     * Spamfilter echte Absender von Massenmail unterscheiden: eine Mail
+     * ohne funktionierende Antwortmoeglichkeit wirkt automatisiert.
+     * Standard ist das versendende Postfach selbst.
+     */
+    mailReplyTo: e.MAIL_REPLY_TO || smtpUser || '',
 
     // --- E-Mail ueber Resend (Alternative, benoetigt verifizierte Domain) --
+    // Bewusst OHNE Standard-Absender: frueher stand hier
+    // "onboarding@resend.dev". Mit dieser Test-Adresse nimmt Resend nur
+    // Mails an das eigene Postfach an und meldet sonst einen langen
+    // englischen Fehler - genau das war fuer den Vorstand sichtbar, obwohl
+    // Resend gar nicht eingerichtet war. Ohne verifizierte Absenderadresse
+    // wird der Weg deshalb gar nicht erst versucht (siehe email.ts).
     resendApiKey: e.RESEND_API_KEY || '',
-    resendFrom: e.RESEND_FROM || 'WJ Offenbach Vorstand <onboarding@resend.dev>',
+    resendFrom: e.RESEND_FROM || '',
 
     // --- Push-Benachrichtigungen ------------------------------------------
     vapidPublicKey: e.VAPID_PUBLIC_KEY || e.VITE_VAPID_PUBLIC_KEY || '',
