@@ -236,6 +236,13 @@ Zwei Wege:
   **ohne** Passwoerter weiterzugeben. Netlify (Teammitglieder) und Firebase
   (Rollen unter *IAM*) koennen das genauso.
 
+### Verwandte Anleitung
+
+`ANLEITUNG-Domain-und-Mailversand.md` beschreibt Schritt fuer Schritt, wie das
+Portal auf eine eigene Adresse unter `wj-offenbach.de` umgestellt und der
+Mailversand ueber die Vereinsdomain eingerichtet wird - inklusive der Frage,
+was das fuer das Spam-Problem bedeutet.
+
 ### Checkliste fuer den Tag der Uebergabe
 
 1. Zugaenge: Portal-Google-Konto (inkl. Zwei-Faktor-Wiederherstellung),
