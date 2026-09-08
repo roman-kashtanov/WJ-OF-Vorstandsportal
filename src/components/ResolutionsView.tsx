@@ -361,9 +361,14 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
    */
   const hasExplicitSelection = !!resolutions.find((r) => r.id === selectedResolutionId);
 
-  const activeResolution =
-    resolutions.find((r) => r.id === selectedResolutionId) ||
-    (filteredResolutions.length > 0 ? filteredResolutions[0] : null);
+  /**
+   * Bewusst OHNE Ersatzauswahl: frueher wurde automatisch der erste Beschluss
+   * der Liste geoeffnet. Dadurch stand man beim Wechsel in den Reiter sofort
+   * in einer aufgeklappten Detailansicht, die den ganzen Platz einnahm,
+   * statt die Uebersicht zu sehen. Jetzt gilt: erst Liste, Details nur auf
+   * ausdrueckliches Antippen.
+   */
+  const activeResolution = resolutions.find((r) => r.id === selectedResolutionId) || null;
 
   const handleVoteClick = (voteType: VoteType) => {
     if (!activeResolution) return;
@@ -1713,7 +1718,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
             </div>
           ) : (
             <div className="bg-white p-12 text-center rounded-2xl border border-slate-200 text-slate-500 text-sm">
-              Wähle einen Beschluss aus der linken Liste aus, um die Details, Abstimmungen und Kommentare zu sehen.
+              Wähle einen Beschluss aus der Liste aus, um Details, Abstimmung und Kommentare zu sehen.
             </div>
           )}
         </div>

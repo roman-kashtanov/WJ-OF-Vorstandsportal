@@ -354,6 +354,18 @@ export default function App() {
    * Dialog offen ist, kann der Reiter nicht gewechselt werden.
    */
   const currentSubsidyKind: SubsidyKind = activeTab === 'expenses' ? 'auslage' : 'zuschuss';
+
+  /**
+   * Reiterwechsel ueber die Navigation. Beim Sprung in die Beschluesse wird
+   * eine noch offene Detailauswahl zurueckgesetzt, damit man dort immer auf
+   * der Uebersicht landet und nicht in dem Beschluss, den man zuletzt
+   * angesehen hat. Sprünge aus einer Benachrichtigung heraus setzen die
+   * Auswahl selbst und laufen bewusst nicht ueber diesen Weg.
+   */
+  const handleSelectTab = (tab: ActiveTab) => {
+    if (tab === 'resolutions') setSelectedResolutionId(null);
+    setActiveTab(tab);
+  };
   
   // Modals state
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -669,7 +681,7 @@ export default function App() {
         members={members}
         onSelectMember={handleSelectMember}
         activeTab={activeTab}
-        onSelectTab={setActiveTab}
+        onSelectTab={handleSelectTab}
         pendingVotesCount={pendingVotesCount}
         openInvoicesCount={openInvoicesCount}
         onOpenSettings={() => setIsSettingsOpen(true)}
@@ -1230,7 +1242,7 @@ export default function App() {
       {/* Native Mobile Bottom Navigation Bar (Optimized for smartphone handling) */}
       <MobileBottomNav
         activeTab={activeTab}
-        onSelectTab={setActiveTab}
+        onSelectTab={handleSelectTab}
         pendingVotesCount={pendingVotesCount}
         openInvoicesCount={openInvoicesCount}
         onOpenSettings={() => {
