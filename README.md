@@ -202,3 +202,47 @@ geschlossener App an.
 3. Parallel geht eine Push-Nachricht an alle angemeldeten Geräte.
 4. Ein Klick in der E-Mail öffnet das Portal und verbucht die Stimme – sie wird
    immer für das *angemeldete* Konto gezählt.
+
+## 6. Übergabe an Nachfolger
+
+Das Portal haengt an mehreren Diensten. Damit es spaeter uebergeben werden
+kann (Vorstandswechsel), muss jeder davon auf einem Konto liegen, das **nicht**
+das Privatkonto einer einzelnen Person ist.
+
+### Was wo laeuft
+
+| Dienst | Wofuer | Konto |
+|---|---|---|
+| Google/Firebase | Anmeldung + Datenbank (Projekt `vorstandsportal-wj-offenbach`) | eigens angelegtes Portal-Konto |
+| Netlify | Hosting, Server-Funktionen, Umgebungsvariablen | *pruefen – haengt am GitHub-Login* |
+| GitHub | Quellcode, loest bei jedem Push den Netlify-Build aus | **derzeit persoenliches Konto** |
+| Domain (spaeter) | Adresse des Portals und Mailversand | Vereinsdomain bei IONOS |
+| Mailpostfach | Absender der Benachrichtigungen | eigens angelegtes Portal-Konto |
+
+### Offener Punkt
+
+Das Repository liegt unter einem persoenlichen GitHub-Konto. Solange das so
+ist, kann der Quellcode nicht ohne Weiteres weitergegeben werden, und Netlify
+zieht seine Builds aus einem fremden Konto.
+
+Zwei Wege:
+
+* **Einfach:** Repository auf ein GitHub-Konto uebertragen, das mit dem
+  Portal-Postfach angelegt wurde (GitHub → *Settings* → *Transfer ownership*).
+  Uebergabe heisst dann: Zugangsdaten dieses einen Kontos weitergeben.
+* **Sauberer:** eine GitHub-**Organisation** anlegen und das Repository dorthin
+  verschieben. Organisationen koennen mehrere Eigentuemer haben - ein Wechsel
+  bedeutet dann, den Nachfolger aufzunehmen und sich selbst zu entfernen,
+  **ohne** Passwoerter weiterzugeben. Netlify (Teammitglieder) und Firebase
+  (Rollen unter *IAM*) koennen das genauso.
+
+### Checkliste fuer den Tag der Uebergabe
+
+1. Zugaenge: Portal-Google-Konto (inkl. Zwei-Faktor-Wiederherstellung),
+   GitHub, Netlify.
+2. Geheimnisse, die **nicht** im Repository stehen und separat uebergeben
+   werden muessen: `SMTP_PASSWORD` (App-Passwort), `VAPID_PRIVATE_KEY`,
+   ggf. `RESEND_API_KEY`, der Firebase-Dienstkontoschluessel
+   (`FIREBASE_SERVICE_ACCOUNT`) sowie Vorstands- und Admin-Code der App.
+3. Diese README - sie beschreibt die komplette Einrichtung.
+4. `CLAUDE.md` - Entwicklungsstand und Begruendungen zu den Entscheidungen.
