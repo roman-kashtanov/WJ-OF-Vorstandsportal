@@ -76,15 +76,25 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     return { status: 400, body: { error: 'Kein Betreff angegeben.' } };
   }
 
-  if (cfg.isSmtpConfigured) {
+  // Resend gilt nur als eingerichtet, wenn Schluessel UND verifizierte
+  // Absenderadresse vorliegen - sonst kaeme statt eines klaren Hinweises auf
+  // die fehlende Einrichtung eine irrefuehrende englische Fehlermeldung.
+  const resendReady = !!(cfg.resendApiKey && cfg.resendFrom);
+
+  if (cfg.mailProvider === 'smtp' && cfg.isSmtpConfigured) {
     return sendViaSmtp(input, recipients, cfg);
   }
-
-  // Nur wenn Resend VOLLSTAENDIG eingerichtet ist (Schluessel + verifizierte
-  // Absenderadresse). Sonst waere die Folge eine irrefuehrende Fehlermeldung
-  // statt eines klaren Hinweises auf die fehlende SMTP-Einrichtung.
-  if (cfg.resendApiKey && cfg.resendFrom) {
+  if (cfg.mailProvider === 'resend' && resendReady) {
     return sendViaResend(input, recipients, cfg);
+  }
+
+  // Ohne ausdrueckliche Vorgabe: der Weg mit der besseren Zustellbarkeit
+  // zuerst (eigene, signierte Absenderdomain statt Gmail-Postfach).
+  if (resendReady) {
+    return sendViaResend(input, recipients, cfg);
+  }
+  if (cfg.isSmtpConfigured) {
+    return sendViaSmtp(input, recipients, cfg);
   }
 
   return {

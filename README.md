@@ -97,12 +97,43 @@ die E-Mail verweist dann wie bisher ins Portal.
 | `SMTP_PASSWORD` | das 16-stellige App-Passwort aus Schritt 1.2 |
 | `MAIL_FROM` | `WJ Offenbach Vorstand <offenbachwj@gmail.com>` |
 | `MAIL_REPLY_TO` | `offenbachwj@gmail.com` *(optional – Antwort- und Abmeldeadresse in den Mails; ohne Angabe wird `SMTP_USER` verwendet)* |
+| `MAIL_PROVIDER` | *(optional – `smtp` oder `resend`, um den Weg festzulegen. Ohne Angabe wird Resend bevorzugt, sobald es vollständig eingerichtet ist, sonst SMTP.)* |
+| `RESEND_API_KEY` | *(nur beim Versand über Resend – siehe Abschnitt 1.5)* |
+| `RESEND_FROM` | `WJ Offenbach Vorstand <vorstand@mail.wj-offenbach.de>` *(nur beim Versand über Resend; muss zur dort verifizierten Domain passen)* |
 | `VAPID_PUBLIC_KEY` | `BARgUjgWCDkONgCMjD3qFOshYrFt_8oD61_sdcnX2ZbdwbM83uH0p_jbliHqRwXO2vY8Pd77FVOy26Ik4J3Xdy0` |
 | `VAPID_PRIVATE_KEY` | *(privater Schlüssel – wird separat übergeben, gehört nicht ins Repository)* |
 | `VAPID_SUBJECT` | `mailto:vorstand@wj-offenbach.de` |
 
 Build-Einstellungen stehen in `netlify.toml` und müssen nicht angeklickt werden:
 Build-Befehl `npm run build`, Verzeichnis `dist`, Functions in `netlify/functions`.
+
+### 1.5 Versand an viele Mitglieder (empfohlen ab ~50 Empfängern)
+
+Das Gmail-Postfach reicht für die Handvoll Vorstandsmails, **nicht** aber für
+Zuschuss- und Auslagenanträge aus dem gesamten Mitgliederkreis. Der Grund ist
+nicht die Menge – Anträge kommen verteilt herein, das Tageslimit von rund 100
+Empfängern wird dabei praktisch nie erreicht – sondern der Empfängerkreis:
+
+* Beim Vorstand (fünf Personen) genügt es, wenn jeder die Mail einmal als
+  "Kein Spam" markiert. Bei rund 100 Mitgliedern ist das nicht machbar: jedes
+  Mitglied bekommt seine erste Mail ohne Vorgeschichte.
+* Genau dort entscheidet die Absenderreputation. Eine `@gmail.com`-Adresse
+  kann nicht für den Verein signiert werden (kein DKIM auf eigene Domain),
+  und die Links zeigen auf eine fremde Sammeldomain – das ist das Muster,
+  das Filter aussortieren.
+
+Besserer Weg: eine **Sende-Subdomain** über einen Versanddienst (hier: Resend,
+kostenlos bis 3.000 Mails/Monat bzw. 100/Tag):
+
+1. In Resend unter *Domains* eine **Subdomain** anlegen, z. B. `mail.wj-offenbach.de`
+   – ausdrücklich nicht die Hauptdomain. Die Vereinswebsite und vorhandene
+   Postfächer auf `wj-offenbach.de` bleiben davon unberührt.
+2. Die dort angezeigten DNS-Einträge (DKIM/SPF) beim DNS-Verwalter der Domain
+   eintragen lassen. Es werden ausschließlich Einträge **für diese Subdomain**
+   gesetzt.
+3. In Netlify `RESEND_API_KEY` und `RESEND_FROM` setzen (Absender muss auf der
+   verifizierten Subdomain liegen). Die SMTP-Variablen können als Rückfallebene
+   stehen bleiben – Resend wird automatisch bevorzugt.
 
 ---
 
