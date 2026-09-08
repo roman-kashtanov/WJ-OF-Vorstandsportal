@@ -88,13 +88,18 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     return sendViaResend(input, recipients, cfg);
   }
 
-  // Ohne ausdrueckliche Vorgabe: der Weg mit der besseren Zustellbarkeit
-  // zuerst (eigene, signierte Absenderdomain statt Gmail-Postfach).
-  if (resendReady) {
-    return sendViaResend(input, recipients, cfg);
-  }
+  // Ohne ausdrueckliche Vorgabe bleibt es beim bisherigen Weg: SMTP
+  // (Gmail-Postfach). Ein Wechsel auf Resend passiert NIE von selbst, auch
+  // wenn dort schon Zugangsdaten hinterlegt sind - er muss mit
+  // MAIL_PROVIDER=resend bewusst eingeschaltet werden. Sonst koennte ein
+  // halb fertig eingerichteter Versand unbemerkt den laufenden Betrieb
+  // uebernehmen.
   if (cfg.isSmtpConfigured) {
     return sendViaSmtp(input, recipients, cfg);
+  }
+  // Nur wenn gar kein SMTP hinterlegt ist, dient Resend als Rueckfallebene.
+  if (resendReady) {
+    return sendViaResend(input, recipients, cfg);
   }
 
   return {

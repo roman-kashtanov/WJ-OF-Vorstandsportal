@@ -116,10 +116,17 @@ Netlify → **Site configuration** → **Environment variables**:
 | `RESEND_API_KEY` | der Schlüssel aus Resend (dort unter *API Keys*) |
 | `RESEND_FROM` | `WJ Offenbach Vorstandsportal <portal@vorstand.wj-offenbach.de>` |
 | `MAIL_REPLY_TO` | eine echte Adresse, an die Antworten gehen sollen |
+| `MAIL_PROVIDER` | `resend` |
 
-Die vorhandenen SMTP-Variablen können stehen bleiben – sie dienen dann als
-Rückfallebene. Sobald Resend vollständig eingerichtet ist, nutzt das Portal
-automatisch Resend.
+**Wichtig:** Der Wechsel passiert erst durch `MAIL_PROVIDER=resend`. Solange
+diese Variable fehlt, verschickt das Portal weiter über das Gmail-Postfach –
+auch wenn die Resend-Zugangsdaten schon eingetragen sind. So kann ein halb
+fertig eingerichteter Versand den laufenden Betrieb nicht unbemerkt
+übernehmen.
+
+Die vorhandenen SMTP-Variablen bleiben stehen. Sollte mit Resend etwas nicht
+stimmen, genügt es, `MAIL_PROVIDER` wieder zu entfernen – dann läuft sofort
+wieder alles über Gmail.
 
 Anschließend in Netlify einmal **Deploy** auslösen (oder eine beliebige
 Änderung pushen), damit die neuen Werte greifen.
@@ -215,6 +222,7 @@ beeinflussen kann, sind dann beseitigt.
 - [ ] Resend: `vorstand.wj-offenbach.de` als Domain eintragen
 - [ ] IONOS: die von Resend angezeigten Einträge setzen, in Resend verifizieren
 - [ ] Netlify: `RESEND_API_KEY`, `RESEND_FROM`, `MAIL_REPLY_TO` eintragen
+- [ ] Netlify: `MAIL_PROVIDER` auf `resend` setzen (erst das schaltet um)
 - [ ] Deploy auslösen
 - [ ] Testmail an eine eigene Adresse schicken und prüfen, wo sie landet
 - [ ] *Mails kommen jetzt von `portal@vorstand.wj-offenbach.de`*

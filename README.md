@@ -97,7 +97,7 @@ die E-Mail verweist dann wie bisher ins Portal.
 | `SMTP_PASSWORD` | das 16-stellige App-Passwort aus Schritt 1.2 |
 | `MAIL_FROM` | `WJ Offenbach Vorstand <offenbachwj@gmail.com>` |
 | `MAIL_REPLY_TO` | `offenbachwj@gmail.com` *(optional – Antwort- und Abmeldeadresse in den Mails; ohne Angabe wird `SMTP_USER` verwendet)* |
-| `MAIL_PROVIDER` | *(optional – `smtp` oder `resend`, um den Weg festzulegen. Ohne Angabe wird Resend bevorzugt, sobald es vollständig eingerichtet ist, sonst SMTP.)* |
+| `MAIL_PROVIDER` | *(optional – `smtp` oder `resend`. **Ohne Angabe wird SMTP genutzt**, also das Gmail-Postfach. Resend übernimmt nie von selbst, sondern nur mit `MAIL_PROVIDER=resend` oder wenn gar kein SMTP hinterlegt ist.)* |
 | `RESEND_API_KEY` | *(nur beim Versand über Resend – siehe Abschnitt 1.5)* |
 | `RESEND_FROM` | `WJ Offenbach Vorstand <vorstand@mail.wj-offenbach.de>` *(nur beim Versand über Resend; muss zur dort verifizierten Domain passen)* |
 | `VAPID_PUBLIC_KEY` | `BARgUjgWCDkONgCMjD3qFOshYrFt_8oD61_sdcnX2ZbdwbM83uH0p_jbliHqRwXO2vY8Pd77FVOy26Ik4J3Xdy0` |

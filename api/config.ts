@@ -9,14 +9,15 @@ export function getServerConfig() {
   /**
    * Welcher Versandweg genutzt wird: 'smtp', 'resend' oder leer (automatisch).
    *
-   * Automatisch heisst: ein vollstaendig eingerichteter Resend-Zugang hat
-   * Vorrang vor SMTP. Grund ist die Zustellbarkeit gegenueber dem grossen
-   * Empfaengerkreis (Zuschuss-/Auslagenantraege kommen aus der ganzen
-   * Mitgliedschaft): ueber Resend wird mit einer eigenen, per DKIM
-   * signierten Absenderdomain verschickt. Ein Gmail-Postfach kann nicht fuer
-   * den Verein signiert werden, und anders als beim fuenfkoepfigen Vorstand
-   * laesst sich bei rund 100 Mitgliedern nicht jedes Postfach einmalig per
-   * "Kein Spam" anlernen.
+   * Ohne Angabe wird SMTP verwendet (das Gmail-Postfach), also der bisherige
+   * Weg. Resend wird NUR genutzt, wenn es hier ausdruecklich gewaehlt ist
+   * oder gar kein SMTP hinterlegt ist - ein halb fertig eingerichteter
+   * Versand soll den laufenden Betrieb nicht unbemerkt uebernehmen.
+   *
+   * Fuer den spaeteren Wechsel (Zuschuss-/Auslagenantraege gehen an die
+   * gesamte Mitgliedschaft, dort ist eine eigene signierte Absenderdomain
+   * deutlich zustellbarer): MAIL_PROVIDER=resend setzen. Details in
+   * ANLEITUNG-Domain-und-Mailversand.md.
    */
   const mailProvider = (e.MAIL_PROVIDER || '').toLowerCase();
 
