@@ -1,6 +1,7 @@
 import { sendEmail } from './email';
 import { sendPush, getVapidPublicKey } from './push';
 import { handleVoteLink } from './vote';
+import { handleSendInvite, handleExchangeInvite, handleRequestPasswordReset } from './auth';
 import { createVoteToken } from './voteToken';
 import {
   handleVerifySubsidyCode,
@@ -85,6 +86,23 @@ export async function handleApiRequest(
         abstain: base + createVoteToken(resolutionId, memberId, 'abstain'),
       },
     };
+  }
+
+  // Anmeldung mit E-Mail + Passwort: Einladung, Einladungslink einloesen,
+  // Passwort vergessen (siehe api/auth.ts)
+  if (method === 'POST' && route === 'auth/invite') {
+    const result = await handleSendInvite(payload || {}, origin || '');
+    return { status: result.status, body: result.body };
+  }
+
+  if (method === 'POST' && route === 'auth/invite-exchange') {
+    const result = await handleExchangeInvite(payload || {});
+    return { status: result.status, body: result.body };
+  }
+
+  if (method === 'POST' && route === 'auth/password-reset') {
+    const result = await handleRequestPasswordReset(payload || {}, origin || '');
+    return { status: result.status, body: result.body };
   }
 
   if (method === 'POST' && route === 'email/send') {

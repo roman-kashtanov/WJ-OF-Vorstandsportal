@@ -18,7 +18,7 @@ interface ServiceAccount {
   private_key: string;
 }
 
-function loadServiceAccount(): ServiceAccount | null {
+export function loadServiceAccount(): ServiceAccount | null {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
   if (!raw) return null;
   try {
@@ -38,7 +38,7 @@ const base64url = (input: Buffer | string) =>
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
 /** Holt ein OAuth2-Zugriffstoken fuer das Dienstkonto (mit kurzem Zwischenspeicher). */
-async function getAccessToken(sa: ServiceAccount): Promise<string> {
+export async function getAccessToken(sa: ServiceAccount): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   if (cachedToken && cachedToken.expiresAt > now + 60) return cachedToken.token;
 
@@ -46,7 +46,9 @@ async function getAccessToken(sa: ServiceAccount): Promise<string> {
   const claim = base64url(
     JSON.stringify({
       iss: sa.client_email,
-      scope: 'https://www.googleapis.com/auth/datastore',
+      // datastore = Firestore, identitytoolkit = Firebase-Anmeldung (Konten
+      // anlegen, Links zum Passwort-Festlegen erzeugen, siehe firebaseAuthAdmin.ts)
+      scope: 'https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/identitytoolkit',
       aud: 'https://oauth2.googleapis.com/token',
       iat: now,
       exp: now + 3600,

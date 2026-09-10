@@ -44,10 +44,12 @@ aus `api/` bezieht — dieselben Module nutzt der lokale Express-Server
 
 ## Zugangskonzept
 
-1. Google-Anmeldung (einziger Weg)
-2. E-Mail muss in der Firestore-Sammlung `allowlist` stehen (Dokument-ID = die
-   Adresse, klein geschrieben) — das ist die **maßgebliche** Prüfung, nicht die
-   lokale Mitgliederliste
+1. Anmeldung mit **E-Mail + Passwort** (Standard, Konto über die Einladung)
+   oder mit **Google** — seit v3.17.0, vorher nur Google
+2. E-Mail-Adresse muss **bestätigt** sein (`email_verified`, Pflicht in
+   `firestore.rules`) und in der Firestore-Sammlung `allowlist` stehen
+   (Dokument-ID = die Adresse, klein geschrieben) — das ist die
+   **maßgebliche** Prüfung, nicht die lokale Mitgliederliste
 3. 5-stelliger Vorstandscode, Standard `11111`
 4. Danach optional Face ID / Touch ID pro Gerät
 
@@ -1516,3 +1518,54 @@ Animationen gibt es weiterhin nur in `SettingsModal`
 
 **App-Sperre:** Frist auf 2 Minuten (Nutzerwunsch - Belegsuche in Fotos
 oder Dateien dauert laenger als 15 s).
+
+## v3.17.0 - Anmeldung mit E-Mail + Passwort (Standard), Einladung, Passwort vergessen
+
+**Warum:** Nicht jedes Vorstandsmitglied hat ein Google-Konto. E-Mail +
+Passwort ist jetzt die Standard-Anmeldung, Google bleibt als zweiter Weg.
+In Firebase ist *Authentication → Sign-in method → E-Mail/Passwort*
+aktiviert (vom Nutzer erledigt).
+
+**Ablauf** (`api/auth.ts`, alles ueber die vorhandene Netlify-Function und
+das vorhandene `FIREBASE_SERVICE_ACCOUNT`, keine neuen Variablen):
+1. *Einstellungen → Vorstand → Person freigeben* legt Mitglied + Freigabe an,
+   danach "Einladung senden" → `POST /api/auth/invite`. Der Server prueft das
+   ID-Token des Einladenden (Signatur gegen die securetoken-Zertifikate, Projekt,
+   Ablauf, Freigabeliste), legt das Firebase-Konto **bereits bestaetigt** mit
+   Zufallspasswort an und schickt die Einladung aus dem Gmail-Postfach.
+2. Die Einladung verlinkt `/passwort?t=...` - ein eigener, 14 Tage gueltiger
+   HMAC-Link (`api/inviteToken.ts`, Schluessel `VOTE_LINK_SECRET` mit Zweck
+   "invite:"). **Grund:** Firebase-Codes zum Passwort-Festlegen gelten nur
+   1 Stunde. Erst beim Oeffnen tauscht `POST /api/auth/invite-exchange` den
+   Link gegen einen frischen Code. Verbraucht, sobald `passwordUpdatedAt`
+   juenger als der Link ist.
+3. `/passwort` (`src/public/PasswordSetupPage.tsx`) setzt das Passwort per
+   `confirmPasswordReset` direkt bei Firebase - das Passwort beruehrt den
+   eigenen Server nie. Danach Installationsanleitung (`InstallGuide.tsx`).
+4. "Passwort vergessen" → `POST /api/auth/password-reset`: gleiche Antwort
+   egal ob freigegeben (keine Mitglieder-Ausforschung), 2 Minuten Sperre je
+   Adresse (`passwordResets/{email}`), Link `/passwort?oobCode=...` (1 Stunde).
+
+**Sicherheit - wichtig:** Firebase erlaubt Selbstregistrierung mit E-Mail +
+Passwort. Ohne weitere Pruefung koennte sich jemand ein Konto mit der Adresse
+eines Vorstandsmitglieds anlegen und kaeme an die Daten. Deshalb verlangen
+`firestore.rules` jetzt `request.auth.token.email_verified == true`, das
+Anmeldefenster weist unbestaetigte Konten ab, und `ensureVerifiedAccount`
+setzt bei einem vorgefundenen unbestaetigten Konto ein neues Zufallspasswort
+und entwertet alle Sitzungen (`validSince`), bevor es bestaetigt wird.
+Google-Konten sind immer bestaetigt. **Die Regeln muessen in der Konsole
+veroeffentlicht sein** - der Code allein schliesst die Luecke nicht.
+
+**Dienstkonto:** Das OAuth-Token fragt jetzt zusaetzlich den Bereich
+`identitytoolkit` an (`firestoreAdmin.ts`). Das Firebase-Admin-Dienstkonto hat
+die Rechte dafuer standardmaessig.
+
+**Einladungs-Mail** (`api/authEmails.ts`): drei nummerierte Schritte, die
+App-Installation als eigener, orange hervorgehobener Schritt 2 mit Hinweis
+"In Safari oeffnen" (aus Gmail/Outlook heraus fehlt sonst "Zum
+Home-Bildschirm"). Vorher stand die Anleitung klein am Ende und wurde
+uebersehen. Der Vorstandscode steht bewusst nicht in der Mail.
+
+**Nicht lokal testbar:** Ohne `FIREBASE_SERVICE_ACCOUNT` antworten die
+Endpunkte mit "Firebase-Zugang fehlt"; getestet wurden lokal nur Seiten,
+Routing und Fehlerpfade.

@@ -50,6 +50,15 @@ if (path === '/antrag') {
       </StrictMode>
     );
   });
+} else if (path === '/passwort') {
+  // Passwort festlegen (aus der Einladung) oder zuruecksetzen (Passwort vergessen)
+  import('./public/PasswordSetupPage').then(({ PasswordSetupPage }) => {
+    root.render(
+      <StrictMode>
+        <PasswordSetupPage />
+      </StrictMode>
+    );
+  });
 } else if (path === '/beleg') {
   import('./public/InvoiceAttachmentUploadPage').then(({ InvoiceAttachmentUploadPage }) => {
     root.render(

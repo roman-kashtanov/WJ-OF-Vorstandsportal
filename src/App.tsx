@@ -1142,7 +1142,7 @@ export default function App() {
       {/* Verbindungs-Gate: siehe Kommentar bei connectionGate weiter oben.
           Nur relevant, wenn ohnehin schon angemeldet - der Login-Vorgang
           selbst prueft die Freigabe bereits live gegen Firestore
-          (AuthModal/handleGoogleUser), unabhaengig hiervon. */}
+          (AuthModal/handleSignedInUser), unabhaengig hiervon. */}
       {!isAuthModalOpen && authSession?.isAuthenticated && connectionGate !== 'ok' && (
         <div className="fixed inset-0 z-50 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center wj-overlay animate-in fade-in">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 text-center shadow-2xl animate-in fade-in zoom-in-95">

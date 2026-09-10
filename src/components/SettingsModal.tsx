@@ -42,7 +42,8 @@ import {
   isDeviceSubscribed,
   PwaNotificationService,
 } from '../utils/pwaNotifications';
-import { sendMail, sendMemberInvite } from '../utils/emailService';
+import { sendMail } from '../utils/emailService';
+import { sendMemberInvite } from '../utils/accountService';
 import { Biometric } from '../utils/biometric';
 import { isVotingMember, formatDate } from '../utils/formatters';
 import { firebaseConfig } from '../lib/firebase';
@@ -391,7 +392,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       avatarColor: 'bg-[#003594]',
       isPermanentStaff,
       isVotingMember: newIsVoting,
-      authProvider: 'google',
+      authProvider: 'email',
     };
 
     const updated = [...members, newMember];
@@ -797,7 +798,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Tab Content Body */}
         <div className="overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4 text-xs">
           
-          {/* TAB 1: MEMBERS & GOOGLE WHITELIST */}
+          {/* TAB 1: VORSTAND & FREIGABELISTE */}
           {activeTab === 'members' && (
             <div key="members" className="space-y-4 wj-expand">
               <div className="flex items-center justify-between flex-wrap gap-2">
@@ -806,7 +807,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     Autorisierte Vorstandsmitglieder
                   </h4>
                   <p className="text-xs text-slate-500">
-                    Nur hier hinterlegte Google-Konten können sich im Portal anmelden.
+                    Nur hier hinterlegte Personen können sich anmelden – mit E-Mail und Passwort (per Einladung) oder mit Google.
                   </p>
                 </div>
 
@@ -816,7 +817,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   className="px-3 py-1.5 bg-[#003594] hover:bg-[#00266B] text-white rounded-xl font-bold text-xs flex items-center space-x-1.5 transition-all cursor-pointer shadow-2xs"
                 >
                   <UserPlus className="w-3.5 h-3.5" />
-                  <span>{isAddingMember ? 'Schließen' : '+ Google-Konto freigeben'}</span>
+                  <span>{isAddingMember ? 'Schließen' : '+ Person freigeben'}</span>
                 </button>
               </div>
 
@@ -832,7 +833,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <p className="text-[11px] text-emerald-900 leading-relaxed">
                     <strong>{pendingInviteMember.name}</strong> wurde angelegt. Soll direkt eine
                     Einladung per E-Mail an <span className="font-mono">{pendingInviteMember.email}</span>{' '}
-                    verschickt werden (mit Link + Installationsanleitung)?
+                    verschickt werden? Darin legt die Person ihr Passwort fest und sieht, wie sie das Portal als App installiert.
                   </p>
                   {inviteError && inviteState[pendingInviteMember.id] === 'error' && (
                     <p className="text-[11px] font-semibold text-rose-700">{inviteError}</p>
@@ -942,14 +943,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                     <div>
                       <label className="block font-bold text-slate-700 mb-1">
-                        Google E-Mail-Adresse *
+                        E-Mail-Adresse *
                       </label>
                       <input
                         type="email"
                         required
                         value={newEmail}
                         onChange={(e) => setNewEmail(e.target.value)}
-                        placeholder="vorstand@gmail.com"
+                        placeholder="name@beispiel.de"
                         className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#003594] text-base sm:text-sm"
                       />
                     </div>

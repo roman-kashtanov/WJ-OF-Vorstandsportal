@@ -8,10 +8,14 @@ import { FirebaseSync } from '../utils/firebaseSync';
 import {
   signInWithPopup,
   signInWithRedirect,
+  signInWithEmailAndPassword,
   getRedirectResult,
   signOut,
   type User,
 } from 'firebase/auth';
+import { Eye, EyeOff } from 'lucide-react';
+import { requestPasswordReset } from '../utils/accountService';
+import { InstallGuide, detectPlatform, isRunningAsApp } from './InstallGuide';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -20,11 +24,24 @@ interface AuthModalProps {
   securitySettings: SecuritySettings;
 }
 
-/** Google-Fehlercodes in verstaendliche Hinweise uebersetzen. */
+/** Firebase-Fehlercodes in verstaendliche Hinweise uebersetzen. */
 function describeAuthError(code: string, message: string): string {
   switch (code) {
+    case 'auth/invalid-credential':
+    case 'auth/invalid-login-credentials':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      return 'E-Mail-Adresse oder Passwort stimmt nicht.\n\nNoch kein Passwort? Dann über den Link in der Einladung festlegen – oder „Passwort vergessen" nutzen.';
+    case 'auth/invalid-email':
+      return 'Bitte eine gültige E-Mail-Adresse eingeben.';
+    case 'auth/too-many-requests':
+      return 'Zu viele Versuche. Bitte kurz warten oder „Passwort vergessen" nutzen.';
+    case 'auth/user-disabled':
+      return 'Dieses Konto ist gesperrt.';
+    case 'auth/network-request-failed':
+      return 'Keine Verbindung. Bitte Internet prüfen und erneut versuchen.';
     case 'auth/operation-not-allowed':
-      return 'Die Google-Anmeldung ist im Firebase-Projekt noch nicht aktiviert (Authentication → Sign-in method → Google).';
+      return 'Diese Anmeldeart ist im Firebase-Projekt nicht aktiviert (Authentication → Sign-in method).';
     case 'auth/unauthorized-domain':
       return `Diese Adresse (${window.location.hostname}) ist in Firebase noch nicht freigegeben (Authentication → Settings → Authorized domains).`;
     case 'auth/popup-blocked':
@@ -42,13 +59,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   members,
   securitySettings,
 }) => {
-  const [step, setStep] = useState<'login' | 'code' | 'biometric'>('login');
+  const [step, setStep] = useState<'login' | 'forgot' | 'code' | 'biometric'>('login');
   const [biometricSupported, setBiometricSupported] = useState(false);
   const [isEnablingBiometric, setIsEnablingBiometric] = useState(false);
   const [biometricError, setBiometricError] = useState<string | null>(null);
   const [pendingUser, setPendingUser] = useState<BoardMember | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSigningIn, setIsSigningIn] = useState(false);
+
+  // Anmeldung mit E-Mail + Passwort (Standard) und "Passwort vergessen"
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetState, setResetState] = useState<'idle' | 'busy' | 'sent'>('idle');
+  const [resetError, setResetError] = useState<string | null>(null);
 
   const [digits, setDigits] = useState<string[]>(['', '', '', '', '']);
   const [codeError, setCodeError] = useState<string | null>(null);
@@ -74,7 +99,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   useEffect(() => {
     getRedirectResult(auth)
       .then((res) => {
-        if (res?.user) void handleGoogleUser(res.user);
+        if (res?.user) void handleSignedInUser(res.user);
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -94,10 +119,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleGoogleUser = async (googleUser: User) => {
-    const email = (googleUser.email || '').toLowerCase().trim();
+  const handleSignedInUser = async (firebaseUser: User) => {
+    const email = (firebaseUser.email || '').toLowerCase().trim();
     if (!email) {
-      setError('Google hat keine E-Mail-Adresse übermittelt.');
+      setError('Für dieses Konto ist keine E-Mail-Adresse hinterlegt.');
       return;
     }
 
@@ -145,7 +170,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     );
 
     if (matched) {
-      proceedWith({ ...matched, name: matched.name || googleUser.displayName || matched.name });
+      proceedWith({ ...matched, name: matched.name || firebaseUser.displayName || matched.name });
       return;
     }
 
@@ -168,7 +193,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     // Wirklich der allererste Zugang ueberhaupt (Mitgliederliste komplett
     // leer) - richtet einmalig den Vorstand ein.
-    const name = googleUser.displayName || email.split('@')[0];
+    const name = firebaseUser.displayName || email.split('@')[0];
     const initials = name
       .split(' ')
       .map((w) => w[0])
@@ -192,7 +217,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setError(null);
     try {
       const res = await signInWithPopup(auth, googleProvider);
-      await handleGoogleUser(res.user);
+      await handleSignedInUser(res.user);
     } catch (err: any) {
       const code = err?.code || '';
       if (code === 'auth/popup-blocked' || code === 'auth/cancelled-popup-request') {
@@ -210,6 +235,46 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     } finally {
       setIsSigningIn(false);
     }
+  };
+
+  const handlePasswordLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const email = loginEmail.trim().toLowerCase();
+    if (!email || !loginPassword) return;
+    setIsSigningIn(true);
+    setError(null);
+    try {
+      const res = await signInWithEmailAndPassword(auth, email, loginPassword);
+      // Konten aus der Einladung sind bestaetigt. Ein unbestaetigtes Konto hat
+      // jemand selbst angelegt - die Datenbankregeln wuerden es ohnehin abweisen.
+      if (!res.user.emailVerified) {
+        await signOut(auth).catch(() => {});
+        setError(
+          'Dieses Konto ist noch nicht bestätigt. Bitte über den Link in der Einladung ein Passwort festlegen oder „Passwort vergessen" nutzen.'
+        );
+        return;
+      }
+      setLoginPassword('');
+      await handleSignedInUser(res.user);
+    } catch (err: any) {
+      const msg = describeAuthError(err?.code || '', err?.message || '');
+      if (msg) setError(msg);
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
+
+  const handleRequestReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetError(null);
+    setResetState('busy');
+    const result = await requestPasswordReset(resetEmail.trim());
+    if (result.ok === false) {
+      setResetError(result.error);
+      setResetState('idle');
+      return;
+    }
+    setResetState('sent');
   };
 
   const verifyAndEnter = async (code: string) => {
@@ -256,11 +321,75 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         {step === 'login' ? (
           <div key="login" className="mt-7 space-y-4 animate-in fade-in">
+            {/* Standard: E-Mail + Passwort (Konto kommt ueber die Einladung) */}
+            <form onSubmit={handlePasswordLogin} className="space-y-2.5">
+              <input
+                type="email"
+                autoComplete="username"
+                inputMode="email"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                placeholder="E-Mail-Adresse"
+                className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-[#003594]"
+              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="Passwort"
+                  className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-[#003594] pr-11"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-slate-700"
+                  aria-label={showPassword ? 'Passwort verbergen' : 'Passwort anzeigen'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <button
+                type="submit"
+                disabled={isSigningIn || !loginEmail.trim() || !loginPassword}
+                className="w-full py-3.5 rounded-2xl bg-[#003594] hover:bg-[#00266B] text-white text-sm font-bold disabled:opacity-40 transition-colors"
+              >
+                {isSigningIn ? 'Anmeldung läuft …' : 'Anmelden'}
+              </button>
+            </form>
+
+            <button
+              type="button"
+              onClick={() => {
+                setResetEmail(loginEmail.trim());
+                setResetState('idle');
+                setResetError(null);
+                setError(null);
+                setStep('forgot');
+              }}
+              className="block mx-auto text-[12px] font-semibold text-[#003594] hover:underline"
+            >
+              Passwort vergessen?
+            </button>
+
+            {error && (
+              <div className="rounded-2xl bg-rose-50 border border-rose-200 p-3 text-[12px] leading-relaxed text-rose-800 whitespace-pre-line">
+                {error}
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 text-[11px] text-slate-400">
+              <span className="flex-1 h-px bg-slate-200" />
+              oder
+              <span className="flex-1 h-px bg-slate-200" />
+            </div>
+
             <button
               type="button"
               onClick={handleGoogleLogin}
               disabled={isSigningIn}
-              className="w-full py-3.5 px-4 border border-slate-300 hover:border-slate-400 active:bg-slate-50 rounded-2xl flex items-center justify-center gap-3 text-sm font-semibold text-slate-800 transition-colors disabled:opacity-60"
+              className="w-full py-3 px-4 border border-slate-300 hover:border-slate-400 active:bg-slate-50 rounded-2xl flex items-center justify-center gap-3 text-sm font-semibold text-slate-800 transition-colors disabled:opacity-60"
             >
               <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -268,7 +397,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
               </svg>
-              <span>{isSigningIn ? 'Anmeldung läuft …' : 'Mit Google anmelden'}</span>
+              <span>Mit Google anmelden</span>
             </button>
 
             {/* Nur im lokalen Entwicklungsmodus - im Produktions-Build entfernt der
@@ -296,11 +425,64 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </button>
             )}
 
-            {error && (
-              <div className="rounded-2xl bg-rose-50 border border-rose-200 p-3 text-[12px] leading-relaxed text-rose-800 whitespace-pre-line">
-                {error}
-              </div>
+            {!isRunningAsApp() && detectPlatform() !== 'desktop' && (
+              <details className="rounded-2xl border border-amber-300 bg-amber-50 px-3.5 py-2.5">
+                <summary className="cursor-pointer select-none text-[12px] font-bold text-amber-900">
+                  Tipp: Portal als App auf den Home-Bildschirm legen
+                </summary>
+                <div className="mt-3 bg-white rounded-xl p-3">
+                  <InstallGuide />
+                </div>
+              </details>
             )}
+          </div>
+        ) : step === 'forgot' ? (
+          <div key="forgot" className="mt-7 space-y-4 animate-in fade-in slide-in-from-right">
+            <div className="text-center space-y-1">
+              <div className="text-sm font-bold text-slate-900">Passwort vergessen?</div>
+              <p className="text-[12px] text-slate-500 leading-relaxed">
+                Gib deine E-Mail-Adresse ein. Du bekommst einen Link, mit dem du ein neues Passwort
+                festlegst.
+              </p>
+            </div>
+
+            {resetState === 'sent' ? (
+              <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-3.5 text-[12px] leading-relaxed text-emerald-900 animate-in fade-in">
+                Wenn <strong>{resetEmail}</strong> im Portal freigegeben ist, ist die E-Mail unterwegs.
+                Der Link gilt 1 Stunde – bitte auch im Spam-Ordner nachsehen.
+              </div>
+            ) : (
+              <form onSubmit={handleRequestReset} className="space-y-2.5">
+                <input
+                  type="email"
+                  autoComplete="email"
+                  inputMode="email"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  placeholder="E-Mail-Adresse"
+                  className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-[#003594]"
+                  autoFocus
+                />
+                {resetError && (
+                  <div className="text-center text-[12px] font-semibold text-rose-600">{resetError}</div>
+                )}
+                <button
+                  type="submit"
+                  disabled={resetState === 'busy' || !resetEmail.trim()}
+                  className="w-full py-3.5 rounded-2xl bg-[#003594] hover:bg-[#00266B] text-white text-sm font-bold disabled:opacity-40 transition-colors"
+                >
+                  {resetState === 'busy' ? 'Wird gesendet …' : 'Link senden'}
+                </button>
+              </form>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setStep('login')}
+              className="w-full py-3 rounded-2xl border border-slate-200 text-xs font-semibold text-slate-600 active:bg-slate-50"
+            >
+              Zurück zur Anmeldung
+            </button>
           </div>
         ) : step === 'code' ? (
           <div key="code" className="mt-7 space-y-5 animate-in fade-in slide-in-from-right">

@@ -25,12 +25,22 @@ Grund, warum die Echtzeit-Synchronisation nicht funktioniert hat.
    Dokument mit der **eigenen E-Mail-Adresse als Dokument-ID** erstellen
    (ein Feld genügt, z. B. `aktiv` = `true`).
    Ohne diesen einen Eintrag kommt niemand in die Datenbank.
-5. **Authentication → Sign-in method → Google** aktivieren.
+5. **Authentication → Sign-in method**: **E-Mail/Passwort** (Standard) und
+   **Google** aktivieren.
 6. **Authentication → Settings → Authorized domains**: die Netlify-Adresse
    eintragen (z. B. `wjof-vorstand.netlify.app` und eine spätere eigene Domain).
 
 Alle weiteren Vorstandsmitglieder werden danach bequem in der App unter
 *Portal → Vorstand* gepflegt; die Freigabeliste wird automatisch mitgeführt.
+
+**Anmeldung:** Standard ist E-Mail + Passwort. Neue Personen werden unter
+*Einstellungen → Vorstand → Person freigeben* angelegt und bekommen eine
+Einladung, in der sie ihr Passwort selbst festlegen (Link 14 Tage gültig) und
+die Installation als App erklärt bekommen. „Passwort vergessen" schickt einen
+Link, der 1 Stunde gilt. Beides braucht `FIREBASE_SERVICE_ACCOUNT` (siehe 1.3)
+und den Regelstand aus `firestore.rules` – dort ist eine **bestätigte**
+E-Mail-Adresse Pflicht, sonst könnte sich jemand selbst ein Konto mit der
+Adresse eines Vorstandsmitglieds anlegen.
 
 ### 1.2 E-Mail-Versand ueber das Vereins-Postfach
 
