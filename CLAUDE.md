@@ -1569,3 +1569,14 @@ uebersehen. Der Vorstandscode steht bewusst nicht in der Mail.
 **Nicht lokal testbar:** Ohne `FIREBASE_SERVICE_ACCOUNT` antworten die
 Endpunkte mit "Firebase-Zugang fehlt"; getestet wurden lokal nur Seiten,
 Routing und Fehlerpfade.
+
+## v3.17.1 - Hinweis: Google nur mit der hinterlegten Adresse
+
+Typischer Fehlversuch: "Mit Google anmelden" mit dem privaten Google-Konto,
+waehrend im Portal eine andere Adresse hinterlegt ist. Jetzt steht ein
+kurzer Hinweis unter dem Google-Knopf, die Fehlermeldung nennt bei
+Google-Konten (`providerData` enthaelt `google.com`) die verwendete Adresse
+und beide Auswege, und Einladungs-Mail sowie Einstellungen erwaehnen es.
+Der Google-Anbieter nutzt `prompt: 'select_account'`, nach dem Fehlversuch
+wird abgemeldet - beim naechsten Versuch erscheint also wieder die
+Kontoauswahl.

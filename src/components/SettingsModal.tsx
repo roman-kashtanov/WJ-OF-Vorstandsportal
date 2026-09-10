@@ -807,7 +807,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     Autorisierte Vorstandsmitglieder
                   </h4>
                   <p className="text-xs text-slate-500">
-                    Nur hier hinterlegte Personen können sich anmelden – mit E-Mail und Passwort (per Einladung) oder mit Google.
+                    Nur hier hinterlegte Personen können sich anmelden – mit E-Mail und Passwort (per Einladung) oder mit Google, dann aber nur mit genau dieser Adresse.
                   </p>
                 </div>
 

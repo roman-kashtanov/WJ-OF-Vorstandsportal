@@ -133,8 +133,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     const allow = await FirebaseSync.getAllowlistState(email);
 
     if (allow.state === 'not_allowed') {
+      // Haeufigster Fall: aus Gewohnheit das private Google-Konto gewaehlt,
+      // im Portal ist aber eine andere Adresse hinterlegt.
+      const viaGoogle = firebaseUser.providerData.some((p) => p.providerId === 'google.com');
       setError(
-        `Das Konto ${email} ist nicht freigegeben.\n\nEin Administrator muss diese Adresse im Portal unter Einstellungen → Vorstand hinzufügen.`
+        viaGoogle
+          ? `Das Google-Konto ${email} ist im Portal nicht hinterlegt.\n\nMit Google geht es nur mit genau der Adresse, die für dich eingetragen ist. Wähle das passende Google-Konto – oder melde dich oben mit E-Mail und Passwort an.`
+          : `Das Konto ${email} ist nicht freigegeben.\n\nEin Administrator muss diese Adresse im Portal unter Einstellungen → Vorstand hinzufügen.`
       );
       await signOut(auth).catch(() => {});
       return;
@@ -399,6 +404,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </svg>
               <span>Mit Google anmelden</span>
             </button>
+            <p className="-mt-2 text-center text-[11px] leading-relaxed text-slate-400">
+              Nur mit dem Google-Konto, dessen E-Mail-Adresse im Portal hinterlegt ist.
+            </p>
 
             {/* Nur im lokalen Entwicklungsmodus - im Produktions-Build entfernt der
                 Bundler diesen Block vollstaendig. */}

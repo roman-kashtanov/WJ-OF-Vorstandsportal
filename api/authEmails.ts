@@ -120,6 +120,10 @@ export function inviteEmail(input: {
         fragt das Portal gegebenenfalls den 5-stelligen Vorstandscode ab – den bekommst du vom
         Vorstand, er steht aus Sicherheitsgründen nicht in dieser E-Mail.
       </p>
+      <p style="font-size: 13px; line-height: 1.6; color: #64748b; margin: 10px 0 0;">
+        „Mit Google anmelden" funktioniert nur, wenn ${email} selbst ein Google-Konto ist – ein
+        anderes (z.&nbsp;B. privates) Google-Konto wird nicht erkannt.
+      </p>
     </div>
 
     <p style="font-size: 12px; line-height: 1.6; color: #64748b; margin: 20px 0 0;">
@@ -142,6 +146,7 @@ export function inviteEmail(input: {
     `Computer: ${input.portalUrl} im Browser öffnen, nichts zu installieren.`,
     '',
     `3) ANMELDEN mit ${input.email} und deinem Passwort. Den Vorstandscode bekommst du vom Vorstand.`,
+    `„Mit Google anmelden" geht nur, wenn ${input.email} selbst ein Google-Konto ist.`,
   ].join('\n');
 
   return { subject: 'Einladung zum WJOF Vorstandsportal – bitte Passwort festlegen', html, text };
