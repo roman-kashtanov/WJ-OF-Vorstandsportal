@@ -901,7 +901,7 @@ export const SubsidiesView: React.FC<Props> = ({
                   {s.status === 'bestaetigt' && !s.resolutionId && (
                     <div className="bg-blue-50/60 border border-blue-100 rounded-lg p-2 space-y-1.5">
                       {reassignId === s.id ? (
-                        <div className="space-y-1.5">
+                        <div className="space-y-1.5 wj-expand">
                           <ResolutionPicker
                             resolutions={resolutions}
                             value={reassignChoice}
@@ -1024,7 +1024,7 @@ export const SubsidiesView: React.FC<Props> = ({
                           ? ['im_beschluss', 'zur_zahlung_freigegeben', 'bezahlt']
                           : [];
                         return (
-                          <div className="space-y-1.5">
+                          <div className="space-y-1.5 wj-expand">
                             <div className="flex items-center gap-2">
                               <select
                                 value={s.status}
@@ -1085,7 +1085,7 @@ export const SubsidiesView: React.FC<Props> = ({
                                   ). Ohne angenommenen Beschluss darf nicht zur Zahlung freigegeben werden.
                                 </p>
                                 {reassignId === s.id ? (
-                                  <div className="space-y-1.5 pt-0.5">
+                                  <div className="space-y-1.5 pt-0.5 wj-expand">
                                     <ResolutionPicker
                                       resolutions={resolutions}
                                       value={reassignChoice}

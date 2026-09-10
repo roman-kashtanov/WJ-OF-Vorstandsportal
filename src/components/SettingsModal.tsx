@@ -639,12 +639,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   return (
     <div
-      className={`fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 ${
+      className={`fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center wj-overlay ${
         isClosing ? 'animate-out fade-out' : 'animate-in fade-in'
       }`}
     >
       <div
-        className={`bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden duration-150 flex flex-col max-h-[90dvh] ${
+        className={`bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden duration-150 flex flex-col wj-overlay-panel ${
           isClosing ? 'animate-out fade-out zoom-out-95' : 'animate-in fade-in zoom-in-95'
         }`}
       >

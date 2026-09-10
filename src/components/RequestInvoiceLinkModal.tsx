@@ -71,7 +71,7 @@ export const RequestInvoiceLinkModal: React.FC<Props> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-start sm:items-center justify-center p-3 sm:p-4">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-start sm:items-center justify-center wj-overlay animate-in fade-in">
       <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95">
         <div className="px-5 py-4 bg-[#003594] text-white flex items-center justify-between">
           <div>

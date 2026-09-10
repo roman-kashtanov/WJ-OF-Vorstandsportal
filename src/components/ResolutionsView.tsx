@@ -983,7 +983,10 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
         {/* Rechte Spalte: Detailansicht des gewaehlten Beschlusses */}
         <div className={`lg:col-span-7 ${hasExplicitSelection ? '' : 'hidden lg:block'}`}>
           {activeResolution && activeStats ? (
-            <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs space-y-5">
+            <div
+              key={activeResolution.id}
+              className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs space-y-5 wj-view-enter"
+            >
               {/* Kopf: Nummer + auf dem Handy zurueck zur Liste */}
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-mono font-black text-[#003594] bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-md">
@@ -1875,7 +1878,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
 
       {/* Endgueltiges Loeschen - nur mit Admin-Code */}
       {deleteTargetId && (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-5">
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center wj-overlay animate-in fade-in">
           <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl">
             <div className="w-11 h-11 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
               <Trash2 className="w-5 h-5" strokeWidth={1.75} />
@@ -1937,7 +1940,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
       )}
 
       {liftTargetId && (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-5">
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center wj-overlay animate-in fade-in">
           <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl animate-in fade-in zoom-in-95">
             <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#003594] flex items-center justify-center mx-auto">
               <LockOpenIcon className="w-6 h-6" strokeWidth={1.75} />

@@ -238,7 +238,7 @@ export const MeetingsView: React.FC<MeetingsViewProps> = ({
             </button>
 
             {isAllExpanded && (
-              <div className="space-y-3 mt-3">
+              <div className="space-y-3 mt-3 wj-expand">
                 {sortedMeetings.map(renderMeetingCard)}
               </div>
             )}

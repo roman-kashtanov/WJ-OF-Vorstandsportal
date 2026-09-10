@@ -150,8 +150,8 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-      <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] animate-in fade-in zoom-in-95">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center wj-overlay animate-in fade-in">
+      <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col wj-overlay-panel animate-in fade-in zoom-in-95">
         <div className="px-5 py-4 bg-[#003594] text-white flex items-center justify-between shrink-0">
           <div>
             <div className="text-[11px] font-bold uppercase tracking-wider text-blue-200">
@@ -205,7 +205,7 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
           </div>
 
           {mode === 'existing' && (
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 wj-expand">
               <label className="block text-[11px] font-bold text-slate-700">
                 Welcher Beschluss?
               </label>

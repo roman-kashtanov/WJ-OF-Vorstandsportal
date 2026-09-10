@@ -1440,7 +1440,7 @@ Bestaetigungsseite, verbucht wird mit `&confirm=1` (Nonce wird erst dann
 verbraucht).
 
 **3. App-Sperre beim Zurueckkehren** (`useMembers.ts`, `BiometricLock.tsx`).
-War die App laenger als `RELOCK_AFTER_MS` (15 s) im Hintergrund
+War die App laenger als `RELOCK_AFTER_MS` (seit v3.16.1: 2 Minuten) im Hintergrund
 (`visibilitychange`), wird gesperrt; ebenso bei jedem neuen Start - jetzt
 fuer alle, nicht nur mit Face ID. Entsperren per Face ID/Touch ID oder
 Vorstandscode (5 Fehlversuche = Abmeldung). Vom Code Befreite ohne Face ID
@@ -1487,3 +1487,32 @@ zusaetzlich auf `subsidies`.
 **9. Beschlussliste:** Symbole je Eintrag - Bueroklammer mit Anzahl
 (Anhaenge + Rechnungen), "Z n" (Zuschuesse), "A n" (Auslagen), Schloss bei
 Festschreibung.
+
+## v3.16.1 - Fenster respektieren den Geraeterand, Animationen vervollstaendigt
+
+**Fenster unter der Statusleiste.** In der installierten iPhone-App
+(`viewport-fit=cover`) lag der Kopf der Fenster samt Schliessen-Kreuz unter
+Uhrzeit/Akku (gemeldet am Termin-Fenster, betraf aber alle). Neu in
+`index.css`: **`wj-overlay`** fuer den abgedunkelten Hintergrund
+(Innenabstand = Safe Area + 0,5rem) und **`wj-overlay-panel`** fuer das
+Fenster selbst (Hoehe = Bildschirm minus beide Raender) - beide bewusst
+ausserhalb von `@layer`, damit sie immer gegen Tailwind-Utilities gewinnen.
+Alle 26 Fenster umgestellt, `max-h-[92dvh]`/`[90dvh]` gibt es nicht mehr.
+Fenster mit fester Innenhoehe (`max-h-[80dvh]` im Inhalt:
+`InvoiceDetailModal`, `NewMeetingModal`) sind jetzt `flex flex-col` mit
+`flex-1 min-h-0` im Inhalt. **Neue Fenster immer mit diesen beiden Klassen
+bauen.**
+
+**Animationen.** Jeder Fenster-Hintergrund blendet ein; ohne Animation
+waren Anmeldefenster, Update-Hinweis und Verbindungspruefung. Die Schritte
+im Anmeldefenster haben jetzt einen `key` - ohne ihn verwendet React das
+`div` weiter und die Animation laeuft nicht. Ebenso `key` am Beschluss in
+der Detailansicht (Wechsel zwischen Beschluessen). Aufklapp-Animation
+(`wj-expand`) ergaenzt bei: Termine "alle", Formathinweis im Termin,
+Beschlussauswahl (Zuschuesse + Buendeln), manueller Status. Schliess-
+Animationen gibt es weiterhin nur in `SettingsModal`
+(`useModalTransition`) - die uebrigen Fenster werden vom Aufrufer per
+`{isOpen && ...}` entfernt, dafuer muesste jedes umgebaut werden.
+
+**App-Sperre:** Frist auf 2 Minuten (Nutzerwunsch - Belegsuche in Fotos
+oder Dateien dauert laenger als 15 s).

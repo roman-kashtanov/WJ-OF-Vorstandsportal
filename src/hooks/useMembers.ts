@@ -7,10 +7,12 @@ import { RoleCatalogueSettings, DEFAULT_ROLE_CATALOGUE } from '../data/roleCatal
 /**
  * Nach so langer Zeit im Hintergrund wird beim Zurueckkehren erneut
  * gesperrt. Nicht 0: Das System schickt die App auch bei eigenen Aktionen
- * kurz in den Hintergrund (Face-ID-Abfrage, Foto-Auswahl, Teilen-Menue) -
- * ohne Frist sperrte man sich dabei selbst aus.
+ * in den Hintergrund (Face-ID-Abfrage, Teilen-Menue, Foto- oder
+ * Dokumentauswahl) - ohne Frist sperrte man sich dabei selbst aus.
+ * 2 Minuten (Nutzerwunsch, war 15 s): Das Suchen eines Belegs in der
+ * Fotomediathek oder der Dateien-App dauert oft laenger.
  */
-const RELOCK_AFTER_MS = 15_000;
+const RELOCK_AFTER_MS = 2 * 60_000;
 
 /**
  * Kapselt Vorstandsmitglieder, Anmeldung/Google-Login-Freigabeliste,

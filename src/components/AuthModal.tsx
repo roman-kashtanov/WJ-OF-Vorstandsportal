@@ -247,15 +247,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-5">
-      <div className="bg-white rounded-3xl w-full max-w-sm p-7 shadow-2xl">
+    <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center wj-overlay animate-in fade-in">
+      <div className="bg-white rounded-3xl w-full max-w-sm p-7 shadow-2xl animate-in fade-in zoom-in-95">
         <div className="text-center">
           <div className="text-lg font-extrabold tracking-tight text-[#003594]">WJOF.</div>
           <div className="mt-1 text-[11px] text-slate-400">Vorstandsportal</div>
         </div>
 
         {step === 'login' ? (
-          <div className="mt-7 space-y-4">
+          <div key="login" className="mt-7 space-y-4 animate-in fade-in">
             <button
               type="button"
               onClick={handleGoogleLogin}
@@ -303,7 +303,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             )}
           </div>
         ) : step === 'code' ? (
-          <div className="mt-7 space-y-5">
+          <div key="code" className="mt-7 space-y-5 animate-in fade-in slide-in-from-right">
             <div className="text-center text-[12px] text-slate-500">
               Vorstandscode für <strong className="text-slate-800">{pendingUser?.name}</strong>
             </div>
@@ -375,7 +375,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
         ) : (
           /* Angebot: dieses Geraet kuenftig per Face ID / Touch ID entsperren */
-          <div className="mt-7 space-y-5">
+          <div key="biometric" className="mt-7 space-y-5 animate-in fade-in slide-in-from-right">
             <div className="text-center space-y-2">
               <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#003594] flex items-center justify-center mx-auto">
                 <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">

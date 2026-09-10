@@ -56,9 +56,9 @@ export const ForceUpdateModal: React.FC<ForceUpdateModalProps> = ({ versionConfi
   return (
     <div
       id="force-update-modal"
-      className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs"
+      className="fixed inset-0 z-100 flex items-center justify-center wj-overlay animate-in fade-in bg-slate-900/60 backdrop-blur-xs"
     >
-      <div className="bg-white rounded-2xl max-w-sm w-full p-6 text-slate-900 shadow-xl border border-slate-200 text-center">
+      <div className="bg-white rounded-2xl max-w-sm w-full p-6 text-slate-900 shadow-xl border border-slate-200 text-center animate-in fade-in zoom-in-95">
         <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-800 flex items-center justify-center mx-auto mb-4">
           <ArrowUpCircle className="w-6 h-6 text-[#003594]" strokeWidth={1.75} />
         </div>

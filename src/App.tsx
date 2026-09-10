@@ -975,7 +975,7 @@ export default function App() {
         };
 
         return (
-          <div className="fixed inset-0 z-100 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-5">
+          <div className="fixed inset-0 z-100 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center wj-overlay animate-in fade-in">
             <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl animate-in fade-in zoom-in-95">
               {pending.previous ? (
                 <>
@@ -1144,8 +1144,8 @@ export default function App() {
           selbst prueft die Freigabe bereits live gegen Firestore
           (AuthModal/handleGoogleUser), unabhaengig hiervon. */}
       {!isAuthModalOpen && authSession?.isAuthenticated && connectionGate !== 'ok' && (
-        <div className="fixed inset-0 z-50 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-5">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 text-center shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center wj-overlay animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 text-center shadow-2xl animate-in fade-in zoom-in-95">
             {connectionGate === 'checking' ? (
               <>
                 <div className="w-10 h-10 mx-auto rounded-full border-2 border-slate-200 border-t-[#003594] animate-spin" />

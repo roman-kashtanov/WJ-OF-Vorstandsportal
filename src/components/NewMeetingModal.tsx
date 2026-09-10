@@ -188,8 +188,8 @@ export const NewMeetingModal: React.FC<NewMeetingModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center wj-overlay animate-in fade-in">
+      <div className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col wj-overlay-panel">
         {/* Header */}
         <div className="bg-[#003594] text-white p-4 sm:p-5 flex items-center justify-between">
           <div className="flex items-center space-x-2.5">
@@ -215,7 +215,7 @@ export const NewMeetingModal: React.FC<NewMeetingModalProps> = ({
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4 text-xs max-h-[80dvh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4 text-xs flex-1 min-h-0 overflow-y-auto">
           {/* Title & Type */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="sm:col-span-2">

@@ -32,7 +32,7 @@ export const QuickAgendaModal: React.FC<QuickAgendaModalProps> = ({
   if (!isOpen || !meeting) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center wj-overlay animate-in fade-in">
       <div className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
         <div className="bg-[#003594] text-white p-5 flex items-center justify-between">

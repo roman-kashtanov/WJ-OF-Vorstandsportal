@@ -124,6 +124,41 @@
   }
 }
 
+/* ---------------------------------------------------------------------------
+ * Fenster (Overlays) und der Geraeterand
+ *
+ * In der installierten iPhone-App (viewport-fit=cover) reicht die Seite bis
+ * unter Statusleiste, Dynamic Island und Home-Leiste. Die Fenster hatten nur
+ * 12-20px Innenabstand - der Kopf mit dem Schliessen-Kreuz lag dadurch
+ * UNTER der Uhrzeit/dem Akku und war nicht bedienbar (z. B. Termin-Details).
+ *
+ * `wj-overlay` gehoert auf den abgedunkelten Hintergrund, `wj-overlay-panel`
+ * ersetzt die feste Hoehenbegrenzung des Fensters, damit es zwischen die
+ * beiden Raender passt. Bewusst AUSSERHALB von @layer: nicht geschichtete
+ * Regeln gewinnen immer gegen Tailwind-Utilities, egal in welcher Reihenfolge.
+ * ------------------------------------------------------------------------- */
+.wj-overlay {
+  padding-top: max(0.75rem, calc(env(safe-area-inset-top) + 0.5rem));
+  padding-right: max(0.75rem, calc(env(safe-area-inset-right) + 0.5rem));
+  padding-bottom: max(0.75rem, calc(env(safe-area-inset-bottom) + 0.5rem));
+  padding-left: max(0.75rem, calc(env(safe-area-inset-left) + 0.5rem));
+}
+
+@media (min-width: 640px) {
+  .wj-overlay {
+    padding-top: max(1rem, calc(env(safe-area-inset-top) + 0.5rem));
+    padding-right: max(1rem, calc(env(safe-area-inset-right) + 0.5rem));
+    padding-bottom: max(1rem, calc(env(safe-area-inset-bottom) + 0.5rem));
+    padding-left: max(1rem, calc(env(safe-area-inset-left) + 0.5rem));
+  }
+}
+
+.wj-overlay-panel {
+  max-height: calc(
+    100dvh - max(1.5rem, calc(env(safe-area-inset-top) + env(safe-area-inset-bottom) + 1rem))
+  );
+}
+
 /* Wer im Betriebssystem reduzierte Bewegung eingestellt hat, bekommt keine.
    Das ist keine Kosmetik: Bewegung kann Uebelkeit und Schwindel ausloesen. */
 @media (prefers-reduced-motion: reduce) {

@@ -96,7 +96,7 @@ export const BiometricLock: React.FC<BiometricLockProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-200 bg-slate-900/95 backdrop-blur-md flex items-center justify-center p-5">
+    <div className="fixed inset-0 z-200 bg-slate-900/95 backdrop-blur-md flex items-center justify-center wj-overlay animate-in fade-in">
       <div className="bg-white rounded-3xl w-full max-w-sm p-7 shadow-2xl text-center animate-in fade-in zoom-in-95">
         <div className="text-lg font-extrabold tracking-tight text-[#003594]">WJOF.</div>
         <div className="mt-1 text-[11px] text-slate-400">Vorstandsportal</div>
