@@ -1,9 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AuthSession, BoardMember, SecuritySettings } from '../types';
 import { AppStorage } from '../utils/storage';
 import { FirebaseSync } from '../utils/firebaseSync';
-import { Biometric } from '../utils/biometric';
 import { RoleCatalogueSettings, DEFAULT_ROLE_CATALOGUE } from '../data/roleCatalogue';
+
+/**
+ * Nach so langer Zeit im Hintergrund wird beim Zurueckkehren erneut
+ * gesperrt. Nicht 0: Das System schickt die App auch bei eigenen Aktionen
+ * kurz in den Hintergrund (Face-ID-Abfrage, Foto-Auswahl, Teilen-Menue) -
+ * ohne Frist sperrte man sich dabei selbst aus.
+ */
+const RELOCK_AFTER_MS = 15_000;
 
 /**
  * Kapselt Vorstandsmitglieder, Anmeldung/Google-Login-Freigabeliste,
@@ -29,14 +36,14 @@ export function useMembers() {
     return !existing || !existing.isAuthenticated || !existing.isCodeVerified;
   });
 
-  // Face-ID-Sperre: Die Anmeldung bleibt bestehen, aber solange dieses Geraet
-  // biometrisch geschuetzt ist, muss beim Oeffnen entsperrt werden.
-  // sessionStorage = pro geoeffneter App-Sitzung genau einmal.
+  // App-Sperre: Die Anmeldung bleibt bestehen, aber beim Oeffnen muss mit
+  // Face ID / Touch ID oder dem Vorstandscode entsperrt werden - frueher nur,
+  // wenn Face ID eingerichtet war; ohne kam jeder direkt hinein.
+  // sessionStorage = pro geoeffneter App-Sitzung.
   const [isDeviceLocked, setIsDeviceLocked] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     const session = AppStorage.getAuthSession();
-    if (!session?.isAuthenticated) return false;
-    if (!Biometric.isEnabled()) return false;
+    if (!session?.isAuthenticated || !session.isCodeVerified) return false;
     return sessionStorage.getItem('wjof_unlocked') !== '1';
   });
 
@@ -68,6 +75,36 @@ export function useMembers() {
     AppStorage.saveRoleCatalogue(roleCatalogue);
   }, [roleCatalogue]);
 
+  /**
+   * Erneut sperren, wenn die App im Hintergrund war: Sonst kommt jeder, der
+   * das entsperrte Handy oder den PC in die Hand bekommt, direkt ins Portal.
+   * Gemerkt wird der Zeitpunkt nur, wenn die App gerade entsperrt war - geht
+   * sie WAEHREND der Sperre in den Hintergrund (z. B. durch die
+   * Face-ID-Abfrage selbst), darf das keine neue Sperre ausloesen.
+   */
+  const hiddenAtRef = useRef<number | null>(null);
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        const isUnlocked =
+          !!authSession?.isAuthenticated &&
+          !!authSession.isCodeVerified &&
+          !isAuthModalOpen &&
+          !isDeviceLocked;
+        hiddenAtRef.current = isUnlocked ? Date.now() : null;
+        return;
+      }
+      const hiddenAt = hiddenAtRef.current;
+      hiddenAtRef.current = null;
+      if (hiddenAt !== null && Date.now() - hiddenAt >= RELOCK_AFTER_MS) {
+        sessionStorage.removeItem('wjof_unlocked');
+        setIsDeviceLocked(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [authSession, isAuthModalOpen, isDeviceLocked]);
+
   // Platzhalter, damit die App auch vor der ersten Anmeldung rendern kann
   // (die Vorstandsliste ist bei einer frischen Installation leer).
   const currentMember: BoardMember =
@@ -85,6 +122,9 @@ export function useMembers() {
   const handleAuthSuccess = (session: AuthSession) => {
     setAuthSession(session);
     setIsAuthModalOpen(false);
+    // Gerade erst angemeldet - nicht sofort wieder sperren.
+    sessionStorage.setItem('wjof_unlocked', '1');
+    setIsDeviceLocked(false);
     if (!session.user) return;
 
     const user = session.user;

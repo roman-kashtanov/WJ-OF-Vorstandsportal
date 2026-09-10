@@ -10,6 +10,7 @@ import {
   AuditLogEntry
 } from '../types';
 import { RevisionHistoryModal } from './RevisionHistoryModal';
+import { saveDataUrl } from '../utils/fileHelpers';
 import { 
   formatCurrency, 
   formatDate, 
@@ -278,14 +279,14 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
                 Belegdatei: {invoice.fileName || 'Rechnung.pdf'} ({invoice.fileSize || 'Standard'})
               </span>
               {invoice.fileUrl && (
-                <a
-                  href={invoice.fileUrl}
-                  download={invoice.fileName || 'Rechnung.png'}
-                  className="text-xs font-semibold text-[#003594] hover:underline flex items-center space-x-1"
+                <button
+                  type="button"
+                  onClick={() => void saveDataUrl(invoice.fileUrl!, invoice.fileName || 'Rechnung.png')}
+                  className="text-xs font-semibold text-[#003594] hover:underline flex items-center space-x-1 cursor-pointer"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>Beleg herunterladen</span>
-                </a>
+                </button>
               )}
             </div>
 

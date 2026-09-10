@@ -1,18 +1,14 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { Subsidy, SubsidyKind, SubsidyPerson } from '../types';
 import { formatCurrency } from '../utils/formatters';
 import { paymentReference, subsidyKind, KIND_TEXTS } from '../utils/subsidies';
-import {
-  buildSepaCreditTransfer,
-  downloadSepaFile,
-  isValidIban,
-  formatIban,
-  SepaPayment,
-} from '../utils/sepa';
+import { buildSepaCreditTransfer, isValidIban, formatIban, SepaPayment } from '../utils/sepa';
 import { generateGiroCodePaymentsPdf } from '../utils/giroCodePdf';
-import { downloadBlob } from '../utils/fileHelpers';
-import { X, Banknote, AlertTriangle, Download, Info, QrCode } from 'lucide-react';
+import { saveFile, isAppleMobile, SaveFileResult } from '../utils/fileHelpers';
+import { X, AlertTriangle, Download, Info, QrCode, FileText, Loader2, Check } from 'lucide-react';
+
+type PayoutFormat = 'sepa-xml' | 'girocode-pdf';
 
 interface Props {
   isOpen: boolean;
@@ -24,7 +20,15 @@ interface Props {
   kind: SubsidyKind;
   clubAccount: { name: string; iban: string; bic?: string };
   onSaveClubAccount: (account: { name: string; iban: string; bic?: string }) => void;
-  onMarkPaid: (ids: string[], format: 'sepa-xml' | 'girocode-pdf') => void;
+  onMarkPaid: (ids: string[], format: PayoutFormat) => void;
+}
+
+interface GeneratedFile {
+  blob: Blob;
+  fileName: string;
+  count: number;
+  sum: number;
+  format: PayoutFormat;
 }
 
 export const SubsidyPayoutModal: React.FC<Props> = ({
@@ -44,10 +48,17 @@ export const SubsidyPayoutModal: React.FC<Props> = ({
   const [executionDate, setExecutionDate] = useState(
     new Date(Date.now() + 86400000).toISOString().slice(0, 10)
   );
-  const [generated, setGenerated] = useState<
-    { count: number; sum: number; format: 'sepa-xml' | 'girocode-pdf' } | null
-  >(null);
-  const [isGeneratingQr, setIsGeneratingQr] = useState(false);
+  /** form -> (working, nur bei der QR-PDF) -> done */
+  const [phase, setPhase] = useState<'form' | 'working' | 'done'>('form');
+  /**
+   * Die erzeugte Datei bleibt im Speicher, damit sie in der Erfolgsansicht
+   * jederzeit erneut gespeichert werden kann - frueher war sie nach dem
+   * (auf dem iPhone oft stillen) Download-Versuch einfach weg.
+   */
+  const [generated, setGenerated] = useState<GeneratedFile | null>(null);
+  const [saveResult, setSaveResult] = useState<SaveFileResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const onApple = isAppleMobile();
 
   const personById = useMemo(
     () => Object.fromEntries(people.map((p) => [p.id, p])),
@@ -78,6 +89,16 @@ export const SubsidyPayoutModal: React.FC<Props> = ({
     return Object.fromEntries(groups.filter((g) => g.hasValidIban).map((g) => [g.personId, true]));
   }, [selected, groups]);
 
+  // Beim Schliessen zuruecksetzen, damit das naechste Oeffnen wieder beim Formular beginnt.
+  useEffect(() => {
+    if (isOpen) return;
+    setPhase('form');
+    setGenerated(null);
+    setSaveResult(null);
+    setError(null);
+    setSelected({});
+  }, [isOpen]);
+
   useBodyScrollLock(isOpen);
   if (!isOpen) return null;
 
@@ -95,45 +116,96 @@ export const SubsidyPayoutModal: React.FC<Props> = ({
       endToEndId: `WJOF-${year}-${g.personId.slice(-8)}`,
     }));
 
-  const generateSepa = () => {
-    if (!accountValid || chosen.length === 0) return;
+  const startSave = (file: GeneratedFile) => {
+    setSaveResult(null);
+    void saveFile(file.blob, file.fileName).then(setSaveResult);
+  };
 
-    const result = buildSepaCreditTransfer(
-      account,
-      buildPayments(),
-      executionDate,
-      texts.fileLabel
-    );
-    downloadSepaFile(result);
+  /** Datei anbieten, Vorgaenge als erledigt markieren, Erfolgsansicht zeigen. */
+  const complete = (file: GeneratedFile) => {
+    // Speichern ZUERST anstossen: Auf dem iPhone muss das Teilen-Menue noch im
+    // selben Tipp geoeffnet werden, sonst verweigert Safari es.
+    startSave(file);
     onSaveClubAccount(account);
     // Datei erzeugen und als erledigt markieren sind EIN Schritt - kein
-    // separater Bestaetigungs-Klick mehr noetig (Nutzerwunsch: der Ablauf
-    // soll nahezu vollstaendig automatisch laufen).
-    onMarkPaid(chosen.flatMap((g) => g.items.map((i) => i.id)), 'sepa-xml');
-    setGenerated({ count: result.count, sum: result.sum, format: 'sepa-xml' });
+    // separater Bestaetigungs-Klick mehr noetig.
+    onMarkPaid(chosen.flatMap((g) => g.items.map((i) => i.id)), file.format);
+    setGenerated(file);
+    setPhase('done');
+  };
+
+  const generateSepa = () => {
+    if (!accountValid || chosen.length === 0) return;
+    setError(null);
+    const result = buildSepaCreditTransfer(account, buildPayments(), executionDate, texts.fileLabel);
+    complete({
+      blob: new Blob([result.xml], { type: 'application/xml;charset=utf-8' }),
+      fileName: result.fileName,
+      count: result.count,
+      sum: result.sum,
+      format: 'sepa-xml',
+    });
   };
 
   const generateGiroCode = async () => {
     if (!accountValid || chosen.length === 0) return;
-    setIsGeneratingQr(true);
+    setError(null);
+    setPhase('working');
     try {
       const payments = buildPayments();
       const { blob, fileName } = await generateGiroCodePaymentsPdf(account, payments, texts.fileLabel);
-      downloadBlob(blob, fileName);
-      onSaveClubAccount(account);
-      onMarkPaid(chosen.flatMap((g) => g.items.map((i) => i.id)), 'girocode-pdf');
-      setGenerated({
+      complete({
+        blob,
+        fileName,
         count: payments.length,
         sum: payments.reduce((acc, p) => acc + p.amount, 0),
         format: 'girocode-pdf',
       });
-    } finally {
-      setIsGeneratingQr(false);
+    } catch (err: any) {
+      setPhase('form');
+      setError(`Die QR-Code-PDF konnte nicht erzeugt werden: ${err?.message || 'unbekannter Fehler'}`);
     }
   };
 
+  const saveHint: { tone: 'muted' | 'ok' | 'warn'; text: string } | null = (() => {
+    switch (saveResult) {
+      case null:
+        return {
+          tone: 'muted',
+          text: onApple ? 'Das Teilen-Menü öffnet sich …' : 'Download wird gestartet …',
+        };
+      case 'shared':
+        return { tone: 'ok', text: 'Datei über das Teilen-Menü weitergegeben.' };
+      case 'downloaded':
+        return {
+          tone: 'ok',
+          text: onApple
+            ? 'Download gestartet – die Datei liegt in der Dateien-App unter „Downloads".'
+            : 'Im Download-Ordner deines Browsers gespeichert.',
+        };
+      case 'cancelled':
+        return {
+          tone: 'warn',
+          text: 'Speichern abgebrochen – die Datei ist noch nicht gesichert. Einfach nochmal auf „Datei speichern" tippen.',
+        };
+      case 'failed':
+        return {
+          tone: 'warn',
+          text: 'Die Datei konnte nicht automatisch geöffnet werden. Bitte auf „Datei speichern" tippen.',
+        };
+      default:
+        return null;
+    }
+  })();
+
+  const toneClass = {
+    muted: 'text-slate-500',
+    ok: 'text-emerald-700 font-semibold',
+    warn: 'text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 font-semibold',
+  };
+
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-start sm:items-center justify-center p-3 sm:p-4">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-start sm:items-center justify-center p-3 sm:p-4 animate-in fade-in">
       <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] animate-in fade-in zoom-in-95">
         <div className="px-5 py-4 bg-[#003594] text-white flex items-center justify-between shrink-0">
           <div>
@@ -144,28 +216,82 @@ export const SubsidyPayoutModal: React.FC<Props> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-white/10 text-white/80 hover:text-white transition-colors cursor-pointer"
+            disabled={phase === 'working'}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-white/80 hover:text-white transition-colors cursor-pointer disabled:opacity-40"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="overflow-y-auto p-4 sm:p-5 space-y-4 text-xs">
-          {generated ? (
-            <div className="text-center py-4 space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center mx-auto text-2xl">
-                ✓
-              </div>
-              <div>
+        <div className="overflow-y-auto p-4 sm:p-5 text-xs">
+          {phase === 'working' && (
+            <div key="working" className="py-12 flex flex-col items-center gap-3 text-center animate-in fade-in">
+              <Loader2 className="w-8 h-8 text-[#003594] animate-spin" strokeWidth={2} />
+              <div className="font-bold text-slate-900 text-sm">QR-Code-PDF wird erzeugt …</div>
+              <p className="text-slate-500">Einen Moment – je Überweisung entsteht eine Seite.</p>
+            </div>
+          )}
+
+          {phase === 'done' && generated && (
+            <div key="done" className="py-2 space-y-4 animate-in fade-in slide-in-from-bottom-2">
+              <div className="text-center space-y-2">
+                <div className="w-14 h-14 rounded-full bg-emerald-500 text-white flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/30 animate-in zoom-in-90">
+                  <Check className="w-7 h-7" strokeWidth={3} />
+                </div>
                 <div className="font-bold text-slate-900 text-sm">Datei erstellt</div>
-                <p className="mt-1 text-slate-500 leading-relaxed">
+                <p className="text-slate-500">
                   {generated.count} {generated.count === 1 ? 'Überweisung' : 'Überweisungen'} über{' '}
-                  {formatCurrency(generated.sum)} wurden heruntergeladen.
+                  {formatCurrency(generated.sum)}
                 </p>
               </div>
 
+              {/* Die Datei selbst - sichtbar und jederzeit erneut speicherbar */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2.5">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0 text-[#003594]">
+                    {generated.format === 'sepa-xml' ? (
+                      <FileText className="w-4 h-4" strokeWidth={2} />
+                    ) : (
+                      <QrCode className="w-4 h-4" strokeWidth={2} />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-bold text-slate-800">
+                      {generated.format === 'sepa-xml' ? 'SEPA-Datei (XML)' : 'QR-Code-PDF'}
+                    </div>
+                    <div className="text-[11px] font-mono text-slate-500 break-all">{generated.fileName}</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => startSave(generated)}
+                  className="w-full py-2.5 rounded-xl bg-[#003594] hover:bg-[#00266B] text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                >
+                  <Download className="w-4 h-4" strokeWidth={2} />
+                  Datei speichern
+                </button>
+                {saveHint && (
+                  <p className={`text-[11px] leading-relaxed ${toneClass[saveHint.tone]}`}>{saveHint.text}</p>
+                )}
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-1 text-[11px] text-slate-600">
+                <div className="font-bold text-slate-800">Wo finde ich die Datei?</div>
+                {onApple ? (
+                  <div>
+                    Im Teilen-Menü <strong>„In Dateien sichern"</strong> wählen. Danach liegt sie in
+                    der Dateien-App – beim Hochladen im Online-Banking dort auswählen.
+                  </div>
+                ) : (
+                  <div>
+                    Im Download-Ordner (meist <strong>„Downloads"</strong>). Beim Hochladen im
+                    Online-Banking von dort auswählen.
+                  </div>
+                )}
+              </div>
+
               {generated.format === 'sepa-xml' ? (
-                <div className="text-left bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1.5 text-[11px] text-slate-600">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1.5 text-[11px] text-slate-600">
                   <div className="font-bold text-slate-800">So spielst du die Datei ein:</div>
                   <div>
                     <strong>Sparkasse:</strong> Online-Banking → Banking → Datei-Übertragung → SEPA
@@ -180,7 +306,7 @@ export const SubsidyPayoutModal: React.FC<Props> = ({
                   </div>
                 </div>
               ) : (
-                <div className="text-left bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1.5 text-[11px] text-slate-600">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1.5 text-[11px] text-slate-600">
                   <div className="font-bold text-slate-800">So nutzt du die PDF:</div>
                   <div>
                     In der Banking-App die Funktion „Überweisung per Foto/QR-Code" öffnen (meist im
@@ -194,23 +320,33 @@ export const SubsidyPayoutModal: React.FC<Props> = ({
                 </div>
               )}
 
-              <p className="text-[11px] text-emerald-700 font-semibold">
-                Die ausgewählten Zuschüsse wurden automatisch als erledigt markiert.
-              </p>
-              <p className="text-[11px] text-slate-400">
-                Datei nochmal nötig? Im Reiter „Erledigt" beim jeweiligen Zuschuss erneut
-                herunterladen.
-              </p>
+              <div className="text-center space-y-1">
+                <p className="text-[11px] text-emerald-700 font-semibold">
+                  Die ausgewählten {texts.plural} wurden automatisch als erledigt markiert.
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  Datei später nochmal nötig? Im Reiter „Erledigt" beim jeweiligen Eintrag erneut
+                  herunterladen.
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={onClose}
-                className="w-full py-3 rounded-2xl bg-[#003594] hover:bg-[#00266B] text-white font-bold text-xs transition-colors cursor-pointer"
+                className="w-full py-3 rounded-2xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
               >
                 Fertig
               </button>
             </div>
-          ) : (
-            <>
+          )}
+
+          {phase === 'form' && (
+            <div key="form" className="space-y-4 animate-in fade-in">
+              {error && (
+                <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 text-[11px] font-semibold text-rose-800">
+                  {error}
+                </div>
+              )}
+
               {/* Auftraggeberkonto */}
               <div className="space-y-2">
                 <div className="font-bold text-slate-900 text-sm">Vereinskonto (Auftraggeber)</div>
@@ -263,7 +399,7 @@ export const SubsidyPayoutModal: React.FC<Props> = ({
 
                 {groups.length === 0 && (
                   <p className="text-slate-400 py-4 text-center">
-                    Keine zur Zahlung freigegebenen Zuschüsse. Erst bündeln, per Beschluss
+                    Keine zur Zahlung freigegebenen {texts.plural}. Erst bündeln, per Beschluss
                     abstimmen lassen - danach erscheinen sie hier.
                   </p>
                 )}
@@ -318,16 +454,16 @@ export const SubsidyPayoutModal: React.FC<Props> = ({
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-[11px] text-slate-600 flex items-start gap-2">
                 <Info className="w-3.5 h-3.5 mt-0.5 shrink-0 text-[#00A3E0]" strokeWidth={2} />
                 <span>
-                  Mehrere Zuschüsse derselben Person werden zu <strong>einer</strong> Überweisung
-                  zusammengefasst. Erzeugt wird eine SEPA-Datei im Format pain.001.001.03, die
+                  Mehrere Positionen derselben Person werden zu <strong>einer</strong> Überweisung
+                  zusammengefasst. Erzeugt wird eine SEPA-Datei im Format pain.001.001.09, die
                   Sparkasse und VR-Bank im Online-Banking einlesen.
                 </span>
               </div>
-            </>
+            </div>
           )}
         </div>
 
-        {!generated && (
+        {phase === 'form' && (
           <div className="p-3.5 sm:px-5 bg-slate-50 border-t border-slate-200 flex flex-col gap-2.5 shrink-0">
             <div className="text-xs flex items-center justify-between">
               <span className="text-slate-500">Summe </span>
@@ -337,8 +473,8 @@ export const SubsidyPayoutModal: React.FC<Props> = ({
               <button
                 type="button"
                 onClick={generateSepa}
-                disabled={!accountValid || chosen.length === 0 || isGeneratingQr}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-[#003594] hover:bg-[#00266B] disabled:opacity-40 font-bold text-white text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+                disabled={!accountValid || chosen.length === 0}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-[#003594] hover:bg-[#00266B] active:scale-[0.98] disabled:opacity-40 font-bold text-white text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
               >
                 <Download className="w-4 h-4" strokeWidth={2} />
                 SEPA-Datei (Online-Banking)
@@ -346,11 +482,11 @@ export const SubsidyPayoutModal: React.FC<Props> = ({
               <button
                 type="button"
                 onClick={generateGiroCode}
-                disabled={!accountValid || chosen.length === 0 || isGeneratingQr}
-                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-100 disabled:opacity-40 font-bold text-slate-700 text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+                disabled={!accountValid || chosen.length === 0}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-100 active:scale-[0.98] disabled:opacity-40 font-bold text-slate-700 text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
               >
                 <QrCode className="w-4 h-4" strokeWidth={2} />
-                {isGeneratingQr ? 'Wird erzeugt…' : 'QR-Code-PDF (Banking-App)'}
+                QR-Code-PDF (Banking-App)
               </button>
             </div>
           </div>

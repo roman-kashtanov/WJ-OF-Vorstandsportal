@@ -57,7 +57,7 @@ export async function handleApiRequest(
   // Stimmabgabe direkt aus der E-Mail, ohne Anmeldung
   if (method === 'GET' && route === 'vote') {
     const token = query?.get('t') || '';
-    const result = await handleVoteLink(token, origin || '/');
+    const result = await handleVoteLink(token, origin || '/', query?.get('confirm') === '1');
     return { status: result.status, body: null, html: result.html };
   }
 

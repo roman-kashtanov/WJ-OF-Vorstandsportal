@@ -1416,3 +1416,74 @@ erst beim Nutzer aufgefallen. Dateinamen enthalten jetzt Zweck, Anzahl
 der Einzelueberweisungen und Gesamtsumme
 (`WJOF_Auslagen_2026-09-08_2-Ueberweisungen_150-50-EUR.xml`), ebenso die
 QR-Code-PDF.
+
+## v3.16.0 - Festschreibung, App-Sperre, Downloads auf dem iPhone, Beschlussauswahl
+
+**1. Festschreibung von Beschluessen** (`utils/resolutionLock.ts`). Haben
+alle Stimmberechtigten abgestimmt, bleiben 24 Stunden fuer Korrekturen,
+danach sind Stimmabgabe und -aenderung gesperrt (Kommentare, Rechnungen,
+Anhaenge bleiben moeglich). **Berechnet, nicht gespeichert**: kein
+Hintergrundjob noetig, und `api/vote.ts` prueft E-Mail-Stimmen mit
+derselben Funktion. Gespeichert wird nur die Aufhebung (`lockLiftedAt`,
+`lockLiftedBy`) - nur mit dem Admin-Code (= Loeschcode,
+`verifyDeleteCode`), danach erneut 24 Stunden ab Aufhebung bzw. letzter
+Stimme. Sperre greift doppelt: `useResolutions.handleVote` UND
+`handleVoteForMember` (gibt jetzt `boolean` zurueck). Serverseitig ohne
+`eligibleVoterIds` am Beschluss keine Festschreibung (nur Altbestand).
+
+**2. Rueckfrage bei Nein/Enthaltung.** Ja geht ohne Rueckfrage durch; eine
+erste Stimme mit Nein/Enthaltung laeuft ueber `pendingVoteChange` (Feld
+`previous` jetzt optional - gesetzt = Stimmaenderung, leer = Bestaetigung)
+mit "Doch mit Ja stimmen". Gilt auch fuer `?action=vote` und fuer den
+E-Mail-Link: `api/vote.ts` zeigt bei no/abstain erst eine
+Bestaetigungsseite, verbucht wird mit `&confirm=1` (Nonce wird erst dann
+verbraucht).
+
+**3. App-Sperre beim Zurueckkehren** (`useMembers.ts`, `BiometricLock.tsx`).
+War die App laenger als `RELOCK_AFTER_MS` (15 s) im Hintergrund
+(`visibilitychange`), wird gesperrt; ebenso bei jedem neuen Start - jetzt
+fuer alle, nicht nur mit Face ID. Entsperren per Face ID/Touch ID oder
+Vorstandscode (5 Fehlversuche = Abmeldung). Vom Code Befreite ohne Face ID
+muessen sich neu anmelden. Die Frist verhindert, dass Face-ID-Abfrage,
+Foto-Auswahl oder Teilen-Menue die App selbst sperren; Verstecken WAEHREND
+der Sperre zaehlt nicht.
+
+**4. Downloads auf dem iPhone - alles ueber `saveFile()`**
+(`utils/fileHelpers.ts`). Symptom: Bild-Download in der Vorschau liess die
+installierte App kurz "blinken", danach hing JEDER weitere Download
+(auch SEPA) bis zum Neustart. Ursachen: `<a download href="data:...">`
+bzw. `window.open(dataUrl)` in der Home-Bildschirm-App, und
+`URL.revokeObjectURL` direkt nach `click()`. Jetzt: auf iPhone/iPad
+`navigator.share({ files })` (Teilen-Menue), sonst Blob-Download mit
+verzoegerter Freigabe. `dataUrlToBlob` ist bewusst synchron (Tipp-
+Berechtigung fuers Teilen-Menue). PDFs oeffnen ueber `openDataUrl`.
+**Keine neuen Download-Links mehr direkt bauen.** Ausnahme: `.ics`
+(Kalender) bleibt ein normaler Download, damit iOS "Zum Kalender
+hinzufuegen" anbietet. Nicht auf einem echten iPhone getestet.
+
+**5. Bildvorschau** (`FilePreviewModal.tsx`): eigener Zoom (Zwei Finger,
+Doppeltippen, Mausrad/Trackpad, Verschieben) - die Seite selbst ist per
+`user-scalable=no` nicht zoombar. Hintergrund-Scrollen gesperrt, Esc
+schliesst.
+
+**6. Sammelueberweisung** (`SubsidyPayoutModal.tsx`): Phasen form →
+working (nur QR-PDF) → done mit Animation; die erzeugte Datei bleibt im
+State, wird mit Namen angezeigt und ist per "Datei speichern" erneut
+abrufbar, dazu "Wo finde ich die Datei?". `saveFile` wird VOR den
+State-Updates angestossen (Teilen-Menue braucht den frischen Tipp).
+
+**7. Beschlussauswahl** (`ResolutionPicker.tsx`, in `BundleSubsidiesModal`
+und beiden Zuordnungsstellen in `SubsidiesView`): Suche, Budget, Datum
+(beschlossen/erstellt); Beschluesse mit Buchhaltung "bearbeitet" oder
+"nicht notwendig" werden nicht mehr vorgeschlagen.
+
+**8. Korrektur zu v3.15.0:** Die Aussage "die Kaskade gibt eine Zuordnung
+zu einem angenommenen Beschluss sofort frei" stimmte nicht - der Effekt
+hing nur an `[resolutions]`, eine neue Zuordnung aendert aber nur den
+Vorgang. Jetzt setzt `handleReassignSubsidyResolution` bei angenommenem
+Beschluss direkt `zur_zahlung_freigegeben`, und die Kaskade reagiert
+zusaetzlich auf `subsidies`.
+
+**9. Beschlussliste:** Symbole je Eintrag - Bueroklammer mit Anzahl
+(Anhaenge + Rechnungen), "Z n" (Zuschuesse), "A n" (Auslagen), Schloss bei
+Festschreibung.

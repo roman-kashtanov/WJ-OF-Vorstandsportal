@@ -23,7 +23,8 @@ import {
 import { CATEGORY_LABEL, SubsidyLimits } from '../data/subsidyCatalogue';
 import { formatIban, buildSepaCreditTransfer, downloadSepaFile, isValidIban } from '../utils/sepa';
 import { generateGiroCodePaymentsPdf } from '../utils/giroCodePdf';
-import { downloadBlob } from '../utils/fileHelpers';
+import { downloadBlob, openDataUrl } from '../utils/fileHelpers';
+import { ResolutionPicker } from './ResolutionPicker';
 import { EmailService, resendSubsidyProofLink } from '../utils/emailService';
 import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
 import { RevisionHistoryModal } from './RevisionHistoryModal';
@@ -316,10 +317,7 @@ export const SubsidiesView: React.FC<Props> = ({
         : 'offen',
     ]);
     const csv = [head, ...rows].map((r) => r.map((c) => `"${c}"`).join(';')).join('\n');
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
-    link.download = `WJOF_${texts.fileLabel}_${year}.csv`;
-    link.click();
+    downloadBlob(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }), `WJOF_${texts.fileLabel}_${year}.csv`);
   };
 
   return (
@@ -779,7 +777,7 @@ export const SubsidiesView: React.FC<Props> = ({
                           if (!file.dataUrl || isImage) {
                             setPreviewFile(file);
                           } else {
-                            window.open(file.dataUrl, '_blank');
+                            openDataUrl(file.dataUrl, file.name);
                           }
                         }}
                         className="text-[#003594] font-semibold hover:underline inline-flex items-center gap-1 cursor-pointer"
@@ -806,7 +804,7 @@ export const SubsidiesView: React.FC<Props> = ({
                           if (!file.dataUrl || isImage) {
                             setPreviewFile(file);
                           } else {
-                            window.open(file.dataUrl, '_blank');
+                            openDataUrl(file.dataUrl, file.name);
                           }
                         }}
                         className="text-[#003594] font-semibold hover:underline inline-flex items-center gap-1 cursor-pointer"
@@ -903,39 +901,33 @@ export const SubsidiesView: React.FC<Props> = ({
                   {s.status === 'bestaetigt' && !s.resolutionId && (
                     <div className="bg-blue-50/60 border border-blue-100 rounded-lg p-2 space-y-1.5">
                       {reassignId === s.id ? (
-                        <div className="flex items-center gap-1.5">
-                          <select
+                        <div className="space-y-1.5">
+                          <ResolutionPicker
+                            resolutions={resolutions}
                             value={reassignChoice}
-                            onChange={(e) => setReassignChoice(e.target.value)}
-                            className="flex-1 min-w-0 px-2 py-1 bg-white border border-blue-200 rounded-lg text-[11px] font-semibold cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#003594]"
-                          >
-                            <option value="">— Beschluss wählen —</option>
-                            {resolutions
-                              .filter((r) => r.status === 'angenommen' || r.status === 'in_abstimmung')
-                              .map((r) => (
-                                <option key={r.id} value={r.id}>
-                                  {r.number} – {r.title}
-                                </option>
-                              ))}
-                          </select>
-                          <button
-                            type="button"
-                            disabled={!reassignChoice}
-                            onClick={() => {
-                              onReassignResolution(s.id, reassignChoice);
-                              setReassignId(null);
-                            }}
-                            className="px-2 py-1 rounded-lg bg-[#003594] hover:bg-[#00266B] disabled:opacity-40 text-white text-[11px] font-bold cursor-pointer shrink-0"
-                          >
-                            Zuordnen
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setReassignId(null)}
-                            className="text-[11px] font-semibold text-slate-400 hover:text-slate-700 cursor-pointer shrink-0"
-                          >
-                            Abbrechen
-                          </button>
+                            onChange={setReassignChoice}
+                            statuses={['in_abstimmung', 'angenommen']}
+                          />
+                          <div className="flex items-center justify-end gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setReassignId(null)}
+                              className="text-[11px] font-semibold text-slate-400 hover:text-slate-700 cursor-pointer"
+                            >
+                              Abbrechen
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!reassignChoice}
+                              onClick={() => {
+                                onReassignResolution(s.id, reassignChoice);
+                                setReassignId(null);
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-[#003594] hover:bg-[#00266B] disabled:opacity-40 text-white text-[11px] font-bold cursor-pointer"
+                            >
+                              Zuordnen
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <button
@@ -1093,38 +1085,33 @@ export const SubsidiesView: React.FC<Props> = ({
                                   ). Ohne angenommenen Beschluss darf nicht zur Zahlung freigegeben werden.
                                 </p>
                                 {reassignId === s.id ? (
-                                  <div className="flex items-center gap-1.5 pt-0.5">
-                                    <select
+                                  <div className="space-y-1.5 pt-0.5">
+                                    <ResolutionPicker
+                                      resolutions={resolutions}
                                       value={reassignChoice}
-                                      onChange={(e) => setReassignChoice(e.target.value)}
-                                      className="flex-1 min-w-0 px-2 py-1 bg-white border border-amber-300 rounded-lg text-[11px] font-semibold cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#003594]"
-                                    >
-                                      <option value="">Keine Zuordnung</option>
-                                      {resolutions
-                                        .filter((r) => r.status === 'angenommen')
-                                        .map((r) => (
-                                          <option key={r.id} value={r.id}>
-                                            {r.number} – {r.title}
-                                          </option>
-                                        ))}
-                                    </select>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        onReassignResolution(s.id, reassignChoice || null);
-                                        setReassignId(null);
-                                      }}
-                                      className="px-2 py-1 rounded-lg bg-[#003594] hover:bg-[#00266B] text-white text-[11px] font-bold cursor-pointer shrink-0"
-                                    >
-                                      Übernehmen
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setReassignId(null)}
-                                      className="text-[11px] font-semibold text-slate-400 hover:text-slate-700 cursor-pointer shrink-0"
-                                    >
-                                      Abbrechen
-                                    </button>
+                                      onChange={setReassignChoice}
+                                      statuses={['angenommen']}
+                                      noneLabel="Keine Zuordnung"
+                                    />
+                                    <div className="flex items-center justify-end gap-3">
+                                      <button
+                                        type="button"
+                                        onClick={() => setReassignId(null)}
+                                        className="text-[11px] font-semibold text-slate-400 hover:text-slate-700 cursor-pointer"
+                                      >
+                                        Abbrechen
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          onReassignResolution(s.id, reassignChoice || null);
+                                          setReassignId(null);
+                                        }}
+                                        className="px-3 py-1.5 rounded-lg bg-[#003594] hover:bg-[#00266B] text-white text-[11px] font-bold cursor-pointer"
+                                      >
+                                        Übernehmen
+                                      </button>
+                                    </div>
                                   </div>
                                 ) : (
                                   <button

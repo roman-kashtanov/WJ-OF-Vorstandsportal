@@ -13,6 +13,7 @@ import { formatCurrency } from '../utils/formatters';
 import { isVotingMember } from '../utils/formatters';
 import { getAttachmentType } from '../utils/fileHelpers';
 import { X, Landmark, AlertTriangle, Vote } from 'lucide-react';
+import { ResolutionPicker } from './ResolutionPicker';
 
 interface Props {
   isOpen: boolean;
@@ -148,10 +149,6 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
     onClose();
   };
 
-  const assignableResolutions = resolutions.filter(
-    (r) => !r.isArchived && (r.status === 'in_abstimmung' || r.status === 'angenommen')
-  );
-
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
       <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] animate-in fade-in zoom-in-95">
@@ -174,8 +171,9 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
           <div className="bg-blue-50/60 border border-blue-100 rounded-xl p-3 text-[11px] text-slate-600 flex items-start gap-2">
             <Landmark className="w-3.5 h-3.5 mt-0.5 shrink-0 text-[#00A3E0]" strokeWidth={2} />
             <span>
-              Aus den ausgewählten, bereits geprüften Positionen wird ein neuer Beschluss
-              erstellt. Erst wenn der Vorstand ihn annimmt, werden sie zur Zahlung freigegeben.
+              {mode === 'new'
+                ? 'Aus den ausgewählten, bereits geprüften Positionen wird ein neuer Beschluss erstellt. Erst wenn der Vorstand ihn annimmt, werden sie zur Zahlung freigegeben.'
+                : 'Die ausgewählten Positionen werden einem vorhandenen Beschluss zugeordnet. Ist er bereits angenommen, sind sie sofort zur Zahlung freigegeben.'}
             </span>
           </div>
 
@@ -211,23 +209,12 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
               <label className="block text-[11px] font-bold text-slate-700">
                 Welcher Beschluss?
               </label>
-              <select
+              <ResolutionPicker
+                resolutions={resolutions}
                 value={existingResolutionId}
-                onChange={(e) => setExistingResolutionId(e.target.value)}
-                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#003594]"
-              >
-                <option value="">— bitte auswählen —</option>
-                {assignableResolutions.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.number} – {r.title}
-                    {r.status === 'angenommen' ? ' (angenommen)' : ' (in Abstimmung)'}
-                  </option>
-                ))}
-              </select>
-              <p className="text-[11px] text-slate-400">
-                Ist der Beschluss bereits angenommen, wechseln die ausgewählten Positionen
-                direkt auf „Zur Zahlung freigegeben".
-              </p>
+                onChange={setExistingResolutionId}
+                statuses={['in_abstimmung', 'angenommen']}
+              />
             </div>
           )}
 

@@ -15,6 +15,7 @@ import { AppStorage } from '../utils/storage';
 import { FirebaseSync } from '../utils/firebaseSync';
 import { calculateVoteStats } from '../utils/formatters';
 import { sendResolutionVoteMails } from '../utils/emailService';
+import { eligibleVoterIdsFor, getResolutionLockState } from '../utils/resolutionLock';
 
 /**
  * Kapselt den Beschluesse-Bereich (Abstimmung, Archivieren, Kommentare,
@@ -69,12 +70,16 @@ export function useResolutions({
   const [isEmailVoteModalOpen, setIsEmailVoteModalOpen] = useState(false);
   const [emailVoteResolution, setEmailVoteResolution] = useState<Resolution | null>(null);
 
-  /** Offene Rueckfrage zum Aendern einer bereits abgegebenen Stimme. */
+  /**
+   * Offene Rueckfrage vor einer Stimmabgabe: entweder das Aendern einer
+   * bereits abgegebenen Stimme (`previous` gesetzt) oder eine erste Stimme mit
+   * Nein/Enthaltung - Ja ist der Normalfall, alles andere wird bestaetigt.
+   */
   const [pendingVoteChange, setPendingVoteChange] = useState<{
     resolutionId: string;
     voteType: VoteType;
     note?: string;
-    previous: VoteType;
+    previous?: VoteType;
   } | null>(null);
 
   useEffect(() => {
@@ -136,7 +141,32 @@ export function useResolutions({
     });
   }, [resolutions, members, notificationSettings.notifyOnQuorumReached]);
 
-  const handleVoteForMember = (resolutionId: string, member: BoardMember, voteType: VoteType, note?: string) => {
+  const isResolutionLocked = (res: Resolution) =>
+    getResolutionLockState(res, eligibleVoterIdsFor(res, members)).isLocked;
+
+  const reportLocked = (res: Resolution) => {
+    setSystemBanner({
+      type: 'error',
+      title: `${res.number} ist festgeschrieben`,
+      message:
+        'Alle Stimmen wurden vor mehr als 24 Stunden abgegeben. Eine Änderung ist nur nach Aufhebung der Festschreibung mit dem Admin-Code möglich.',
+    });
+    setTimeout(() => setSystemBanner(null), 6000);
+  };
+
+  /** Gibt `false` zurueck, wenn die Stimme nicht verbucht wurde (festgeschrieben). */
+  const handleVoteForMember = (
+    resolutionId: string,
+    member: BoardMember,
+    voteType: VoteType,
+    note?: string
+  ): boolean => {
+    const target = resolutions.find((r) => r.id === resolutionId);
+    if (target && isResolutionLocked(target)) {
+      reportLocked(target);
+      return false;
+    }
+
     setResolutions((prev) =>
       prev.map((res) => {
         if (res.id !== resolutionId) return res;
@@ -213,24 +243,70 @@ export function useResolutions({
         return updatedRes;
       })
     );
+    return true;
   };
 
   /**
    * Stimmabgabe des angemeldeten Mitglieds.
    *
-   * Liegt bereits eine abweichende Stimme vor, wird zuerst nachgefragt: Die
-   * Abstimmungsknoepfe stehen in Listen dicht beieinander, ein versehentlicher
-   * Tipp wuerde sonst unbemerkt eine bestehende Stimme ueberschreiben.
+   * Zuerst nachgefragt wird, wenn bereits eine abweichende Stimme vorliegt
+   * oder zum ersten Mal mit Nein/Enthaltung gestimmt wird: Die Knoepfe stehen
+   * dicht beieinander, ein versehentlicher Tipp soll nicht unbemerkt zaehlen.
+   * Ja ist der Normalfall und geht ohne Rueckfrage durch.
    */
   const handleVote = (resolutionId: string, voteType: VoteType, note?: string) => {
-    const existing = resolutions.find((r) => r.id === resolutionId)?.votes[currentMember.id];
+    const target = resolutions.find((r) => r.id === resolutionId);
+    if (target && isResolutionLocked(target)) {
+      reportLocked(target);
+      return;
+    }
+
+    const existing = target?.votes[currentMember.id];
 
     if (existing && existing.vote !== voteType) {
       setPendingVoteChange({ resolutionId, voteType, note, previous: existing.vote });
       return;
     }
 
+    if (!existing && voteType !== 'yes') {
+      setPendingVoteChange({ resolutionId, voteType, note });
+      return;
+    }
+
     handleVoteForMember(resolutionId, currentMember, voteType, note);
+  };
+
+  /**
+   * Hebt die Festschreibung auf (Admin-Code wird vorher in der Ansicht
+   * geprueft). Danach laufen erneut 24 Stunden, gerechnet ab jetzt bzw. ab der
+   * letzten Stimme - siehe utils/resolutionLock.ts.
+   */
+  const handleLiftResolutionLock = (resolutionId: string) => {
+    const target = resolutions.find((r) => r.id === resolutionId);
+    if (!target) return;
+
+    const lockLiftedAt = new Date().toISOString();
+    const lockLiftedBy = currentMember.name;
+    setResolutions((prev) =>
+      prev.map((r) => (r.id === resolutionId ? { ...r, lockLiftedAt, lockLiftedBy } : r))
+    );
+    FirebaseSync.saveResolution({ ...target, lockLiftedAt, lockLiftedBy }).catch(() => {});
+
+    addAuditLogEntry({
+      entityType: 'resolution',
+      entityId: target.id,
+      entityLabel: target.number,
+      action: 'Festschreibung mit Admin-Code aufgehoben (Stimmen 24 Stunden wieder änderbar)',
+      actorName: currentMember.name,
+      actorId: currentMember.id,
+    });
+
+    setSystemBanner({
+      type: 'success',
+      title: 'Festschreibung aufgehoben',
+      message: `${target.number}: Stimmen können 24 Stunden lang wieder geändert werden.`,
+    });
+    setTimeout(() => setSystemBanner(null), 5000);
   };
 
   const handleArchiveResolution = (resolutionId: string, archive: boolean) => {
@@ -487,5 +563,6 @@ export function useResolutions({
     handleCreateResolution,
     handleUpdateResolutionBookkeepingStatus,
     handleOpenEmailVoteModal,
+    handleLiftResolutionLock,
   };
 }

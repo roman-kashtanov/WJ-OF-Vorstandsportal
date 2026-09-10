@@ -470,6 +470,7 @@ export default function App() {
     handleCreateResolution,
     handleUpdateResolutionBookkeepingStatus,
     handleOpenEmailVoteModal,
+    handleLiftResolutionLock,
   } = useResolutions({
     members,
     currentMember,
@@ -554,9 +555,26 @@ export default function App() {
       // die im Link genannte Person. Sonst koennte eine weitergeleitete E-Mail
       // genutzt werden, um im Namen anderer abzustimmen.
       const votingMember = currentMember;
-      handleVoteForMember(resId, votingMember, vote, '1-Klick-Stimmabgabe über E-Mail');
       setSelectedResolutionId(resId);
       setActiveTab('resolutions');
+
+      // Nein/Enthaltung bzw. eine abweichende Stimme laufen ueber dieselbe
+      // Rueckfrage wie im Portal - gezaehlt wird erst nach Bestaetigung.
+      const existingVote = targetRes.votes[votingMember.id]?.vote;
+      if (vote !== 'yes' || (existingVote && existingVote !== vote)) {
+        handleVote(resId, vote, '1-Klick-Stimmabgabe über E-Mail');
+        setPendingUrlAction(null);
+        clearUrl();
+        return;
+      }
+
+      // false = festgeschrieben, der Hinweis dazu kommt bereits aus dem Hook.
+      if (!handleVoteForMember(resId, votingMember, vote, '1-Klick-Stimmabgabe über E-Mail')) {
+        setPendingUrlAction(null);
+        clearUrl();
+        return;
+      }
+
       setSystemBanner({
         type: 'success',
         title: 'Stimme erfasst',
@@ -792,6 +810,7 @@ export default function App() {
             subsidyPeople={subsidyPeople}
             auditLog={auditLog}
             onVote={handleVote}
+            onLiftResolutionLock={handleLiftResolutionLock}
             onAddComment={handleAddComment}
             onOpenNewResolution={() => setIsNewResolutionOpen(true)}
             selectedResolutionId={selectedResolutionId}
@@ -944,46 +963,94 @@ export default function App() {
       </footer>
 
       {/* Modals */}
-      {/* Rueckfrage vor dem Aendern einer bereits abgegebenen Stimme */}
-      {pendingVoteChange && (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-5">
-          <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl">
-            <h3 className="text-sm font-bold text-slate-900 text-center">Stimme ändern?</h3>
-            <p className="mt-2 text-[12px] text-slate-500 text-center leading-relaxed">
-              Du hast bereits mit{' '}
-              <strong className="text-slate-800">{voteLabel(pendingVoteChange.previous)}</strong>{' '}
-              gestimmt. Soll die Stimme auf{' '}
-              <strong className="text-slate-800">{voteLabel(pendingVoteChange.voteType)}</strong>{' '}
-              geändert werden?
-            </p>
+      {/* Rueckfrage vor Nein/Enthaltung und vor dem Aendern einer bereits
+          abgegebenen Stimme - Ja ist der Normalfall und geht ohne Rueckfrage. */}
+      {pendingVoteChange && (() => {
+        const pending = pendingVoteChange;
+        const target = resolutions.find((r) => r.id === pending.resolutionId);
+        const isNo = pending.voteType === 'no';
+        const castVote = (vote: VoteType) => {
+          handleVoteForMember(pending.resolutionId, currentMember, vote, pending.note);
+          setPendingVoteChange(null);
+        };
 
-            <div className="mt-5 flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setPendingVoteChange(null)}
-                className="flex-1 py-3 rounded-2xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
-              >
-                Abbrechen
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  handleVoteForMember(
-                    pendingVoteChange.resolutionId,
-                    currentMember,
-                    pendingVoteChange.voteType,
-                    pendingVoteChange.note
-                  );
-                  setPendingVoteChange(null);
-                }}
-                className="flex-1 py-3 rounded-2xl bg-[#003594] hover:bg-[#00266B] text-white text-xs font-bold transition-colors cursor-pointer"
-              >
-                Ändern
-              </button>
+        return (
+          <div className="fixed inset-0 z-100 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-5">
+            <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl animate-in fade-in zoom-in-95">
+              {pending.previous ? (
+                <>
+                  <h3 className="text-sm font-bold text-slate-900 text-center">Stimme ändern?</h3>
+                  <p className="mt-2 text-[12px] text-slate-500 text-center leading-relaxed">
+                    Du hast bereits mit{' '}
+                    <strong className="text-slate-800">{voteLabel(pending.previous)}</strong> gestimmt.
+                    Soll die Stimme auf{' '}
+                    <strong className="text-slate-800">{voteLabel(pending.voteType)}</strong> geändert
+                    werden?
+                  </p>
+
+                  <div className="mt-5 flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setPendingVoteChange(null)}
+                      className="flex-1 py-3 rounded-2xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+                    >
+                      Abbrechen
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => castVote(pending.voteType)}
+                      className="flex-1 py-3 rounded-2xl bg-[#003594] hover:bg-[#00266B] text-white text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      Ändern
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-sm font-bold text-slate-900 text-center">
+                    {isNo ? 'Wirklich mit Nein stimmen?' : 'Wirklich enthalten?'}
+                  </h3>
+                  <p className="mt-2 text-[12px] text-slate-500 text-center leading-relaxed">
+                    {target && (
+                      <>
+                        <strong className="text-slate-800">{target.number}</strong> · {target.title}
+                        <br />
+                      </>
+                    )}
+                    Bitte kurz bestätigen, damit kein versehentlicher Tipp gezählt wird.
+                  </p>
+
+                  <div className="mt-5 flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => castVote(pending.voteType)}
+                      className={`w-full py-3 rounded-2xl text-white text-xs font-bold transition-colors cursor-pointer ${
+                        isNo ? 'bg-rose-600 hover:bg-rose-700' : 'bg-slate-600 hover:bg-slate-700'
+                      }`}
+                    >
+                      {isNo ? 'Ja, mit Nein stimmen' : 'Ja, ich enthalte mich'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => castVote('yes')}
+                      className="w-full py-3 rounded-2xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      Doch mit Ja stimmen
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPendingVoteChange(null)}
+                      className="w-full py-2.5 text-xs font-semibold text-slate-500 hover:text-slate-700 transition-colors cursor-pointer"
+                    >
+                      Abbrechen
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {isSubsidyModalOpen && (
         <NewSubsidyModal
@@ -1056,7 +1123,8 @@ export default function App() {
 
       <BiometricLock
         isOpen={isDeviceLocked && !isAuthModalOpen}
-        memberName={currentMember.name}
+        member={currentMember}
+        securitySettings={securitySettings}
         onUnlocked={() => {
           sessionStorage.setItem('wjof_unlocked', '1');
           setIsDeviceLocked(false);

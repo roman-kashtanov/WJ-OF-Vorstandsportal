@@ -79,7 +79,11 @@ export function downloadMeetingICS(meeting: Meeting) {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  // Nicht sofort freigeben: Safari startet den Download erst nach dem Klick
+  // und fand die Adresse sonst nicht mehr vor (siehe saveFile in fileHelpers.ts).
+  // Bewusst kein Teilen-Menue: Auf dem iPhone oeffnet der Download einer
+  // .ics-Datei direkt "Zum Kalender hinzufuegen".
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 /**

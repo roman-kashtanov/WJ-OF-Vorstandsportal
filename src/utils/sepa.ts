@@ -1,5 +1,7 @@
+import { saveFile, type SaveFileResult } from './fileHelpers';
+
 /**
- * SEPA-Sammelüberweisung als XML (pain.001.001.03).
+ * SEPA-Sammelüberweisung als XML (pain.001.001.09).
  *
  * Dieses Format lesen die Online-Banking-Portale von Sparkasse und
  * Volksbank/VR-Bank ein ("SEPA-Datei einreichen" bzw. "Datei-Upload").
@@ -171,15 +173,8 @@ ${transactions}
   };
 }
 
-/** Bietet die erzeugte Datei zum Herunterladen an. */
-export function downloadSepaFile(result: SepaResult): void {
+/** Bietet die erzeugte Datei zum Speichern an (iPhone: Teilen-Menü, sonst Download). */
+export function downloadSepaFile(result: SepaResult): Promise<SaveFileResult> {
   const blob = new Blob([result.xml], { type: 'application/xml;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = result.fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  return saveFile(blob, result.fileName);
 }

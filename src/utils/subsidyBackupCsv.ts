@@ -1,3 +1,5 @@
+import { saveFile } from './fileHelpers';
+
 /**
  * Format der Sicherungsdatei fuers oeffentliche Zuschuss-Antragsformular
  * (SubsidyApplicationPage.tsx) - Absicherung, falls ein Antrag den Server
@@ -57,15 +59,8 @@ export function buildSubsidyBackupCsv(fields: SubsidyBackupFields): string {
 export function downloadSubsidyBackupCsv(fields: SubsidyBackupFields, filenamePrefix: string) {
   const csv = buildSubsidyBackupCsv(fields);
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
   const datePart = new Date().toISOString().slice(0, 10);
-  a.href = url;
-  a.download = `${filenamePrefix}-${datePart}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  void saveFile(blob, `${filenamePrefix}-${datePart}.csv`);
 }
 
 function parseCsvLine(line: string): [string, string] | null {

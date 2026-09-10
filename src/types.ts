@@ -193,6 +193,12 @@ export interface Resolution {
   archivedBy?: string;
   createdAt: string;
   passedAt?: string;
+  /**
+   * Festschreibung mit dem Admin-Code aufgehoben - gibt erneut 24 Stunden
+   * Zeit fuer Stimmkorrekturen (siehe utils/resolutionLock.ts).
+   */
+  lockLiftedAt?: string;
+  lockLiftedBy?: string;
 }
 
 export interface AgendaItem {

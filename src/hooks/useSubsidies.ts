@@ -184,19 +184,32 @@ export function useSubsidies({
     if (!target) return;
 
     const now = new Date().toISOString();
+    const resolution = resolutionId ? resolutions.find((r) => r.id === resolutionId) : undefined;
 
     // Wird ein noch nicht gebuendelter Vorgang einem bestehenden Beschluss
     // zugeordnet, rueckt er damit in die Beschlussphase - genau wie beim
-    // Buendeln ueber "Beschluss erstellen". Ist der Beschluss bereits
-    // angenommen, gibt ihn die Kaskade weiter unten sofort zur Zahlung frei.
+    // Buendeln ueber "Beschluss erstellen".
     const entersResolutionPhase =
       !!resolutionId && (target.status === 'beantragt' || target.status === 'bestaetigt');
+
+    // Ist der Beschluss bereits angenommen, geht es direkt weiter auf "Zur
+    // Zahlung freigegeben". Frueher blieb der Vorgang dann auf "Im Beschluss"
+    // haengen: die Kaskade unten reagierte nur auf Aenderungen an
+    // Beschluessen, nicht auf eine neue Zuordnung.
+    const releasesImmediately =
+      resolution?.status === 'angenommen' &&
+      (entersResolutionPhase || target.status === 'im_beschluss');
 
     const updated: Subsidy = {
       ...target,
       resolutionId: resolutionId || undefined,
-      status: entersResolutionPhase ? 'im_beschluss' : target.status,
+      status: releasesImmediately
+        ? 'zur_zahlung_freigegeben'
+        : entersResolutionPhase
+        ? 'im_beschluss'
+        : target.status,
       bundledAt: entersResolutionPhase ? target.bundledAt || now : target.bundledAt,
+      releasedAt: releasesImmediately ? now : target.releasedAt,
     };
     setSubsidies((prev) => prev.map((x) => (x.id === id ? updated : x)));
 
@@ -205,7 +218,9 @@ export function useSubsidies({
       entityId: target.id,
       entityLabel: `${target.personName} – ${target.eventName}`,
       action: resolutionId
-        ? entersResolutionPhase
+        ? releasesImmediately
+          ? `Beschluss ${resolution!.number} zugeordnet (bereits angenommen) – zur Zahlung freigegeben`
+          : entersResolutionPhase
           ? 'Einem bestehenden Beschluss zugeordnet'
           : 'Manuell einem anderen Beschluss zugeordnet'
         : 'Beschluss-Verknüpfung manuell entfernt',
@@ -433,7 +448,11 @@ export function useSubsidies({
         });
       });
     }
-  }, [resolutions]);
+    // Auch auf `subsidies` reagieren: sonst greift die Kaskade nicht, wenn
+    // ein Vorgang nachtraeglich einem schon angenommenen Beschluss zugeordnet
+    // wird (dabei aendert sich nur der Vorgang, nicht der Beschluss). Keine
+    // Schleife: Nach dem Statuswechsel erfuellt kein Vorgang mehr die Bedingung.
+  }, [resolutions, subsidies]);
 
   /**
    * Anträge für Veranstaltungen, die noch nicht stattgefunden haben,

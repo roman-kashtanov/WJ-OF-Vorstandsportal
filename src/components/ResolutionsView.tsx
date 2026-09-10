@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   BoardMember,
   Resolution,
@@ -63,7 +63,9 @@ import {
 } from 'lucide-react';
 import { FirebaseSync } from '../utils/firebaseSync';
 import { verifyDeleteCode } from '../utils/security';
-import { downloadAttachment, getAttachmentType, formatFileSize, downloadBlob } from '../utils/fileHelpers';
+import { downloadAttachment, getAttachmentType, formatFileSize, downloadBlob, openDataUrl } from '../utils/fileHelpers';
+import { eligibleVoterIdsFor, formatLockDate, getResolutionLockState } from '../utils/resolutionLock';
+import { Lock as LockIcon, LockOpen as LockOpenIcon } from 'lucide-react';
 import { prepareFileForStorage, formatBytes } from '../utils/fileStorage';
 import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
 import { RevisionHistoryModal } from './RevisionHistoryModal';
@@ -92,6 +94,8 @@ interface ResolutionsViewProps {
   onOpenNewInvoiceWithResolution?: (resolutionId: string) => void;
   onArchiveResolution?: (resolutionId: string, archive: boolean) => void;
   onDeleteResolution?: (resolutionId: string) => void;
+  /** Festschreibung aufheben - der Admin-Code wird hier in der Ansicht geprueft. */
+  onLiftResolutionLock?: (resolutionId: string) => void;
   securitySettings?: SecuritySettings;
 }
 
@@ -132,6 +136,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
   onOpenNewInvoiceWithResolution,
   onArchiveResolution,
   onDeleteResolution,
+  onLiftResolutionLock,
   securitySettings,
 }) => {
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
@@ -185,6 +190,66 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
     setDeleteTargetId(null);
     setDeleteCode('');
   };
+
+  // Festschreibung: Die 24-Stunden-Frist laeuft auch bei offener Seite ab -
+  // deshalb einmal pro Minute neu bewerten statt nur beim Neuladen.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  const lockStateOf = (res: Resolution) =>
+    getResolutionLockState(res, eligibleVoterIdsFor(res, members), now);
+
+  // Festschreibung aufheben: nur mit Admin-Code (derselbe wie beim Loeschen)
+  const [liftTargetId, setLiftTargetId] = useState<string | null>(null);
+  const [liftCode, setLiftCode] = useState('');
+  const [liftError, setLiftError] = useState<string | null>(null);
+  const [isLifting, setIsLifting] = useState(false);
+
+  const confirmLift = async () => {
+    if (!liftTargetId || !securitySettings) return;
+    setIsLifting(true);
+    setLiftError(null);
+    const ok = await verifyDeleteCode(liftCode, securitySettings);
+    setIsLifting(false);
+
+    if (!ok) {
+      setLiftError('Code ungültig.');
+      setLiftCode('');
+      return;
+    }
+
+    onLiftResolutionLock?.(liftTargetId);
+    setLiftTargetId(null);
+    setLiftCode('');
+  };
+
+  /**
+   * Fuer die Symbole in der Liste: Wie viele Dateien (Anhaenge + Rechnungen),
+   * Zuschuesse (Z) und Auslagen (A) haengen an jedem Beschluss?
+   */
+  const linkCountsByResolution = useMemo(() => {
+    const map = new Map<string, { files: number; zuschuss: number; auslage: number }>();
+    const entry = (id: string) => {
+      let e = map.get(id);
+      if (!e) {
+        e = { files: 0, zuschuss: 0, auslage: 0 };
+        map.set(id, e);
+      }
+      return e;
+    };
+    for (const r of resolutions) {
+      if (r.attachments?.length) entry(r.id).files += r.attachments.length;
+    }
+    for (const inv of invoices) {
+      if (inv.resolutionId) entry(inv.resolutionId).files += 1;
+    }
+    for (const s of subsidies) {
+      if (s.resolutionId) entry(s.resolutionId)[subsidyKind(s)] += 1;
+    }
+    return map;
+  }, [resolutions, invoices, subsidies]);
 
   const query = searchQuery.toLowerCase().trim();
 
@@ -414,6 +479,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
 
   const currentMemberVote = activeResolution?.votes[currentMember.id]?.vote;
   const activeStats = activeResolution ? calculateVoteStats(activeResolution, members.length) : null;
+  const activeLock = activeResolution ? lockStateOf(activeResolution) : null;
   const linkedInvoices = activeResolution 
     ? invoices.filter((i) => i.resolutionId === activeResolution.id)
     : [];
@@ -724,6 +790,8 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                 res.eligibleVoterIds.length === 0 ||
                 res.eligibleVoterIds.includes(currentMember.id);
               const needsMyVote = res.status === 'in_abstimmung' && !hasVoted && isEligible;
+              const links = linkCountsByResolution.get(res.id);
+              const isLocked = lockStateOf(res).isLocked;
 
               return (
                 <div
@@ -756,6 +824,37 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                         </span>
                         {needsMyVote && (
                           <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 wj-pulse-soft" title="Deine Stimme fehlt" />
+                        )}
+                        {/* Was haengt am Beschluss? Klammer = Dateien, Z = Zuschuesse, A = Auslagen */}
+                        {links && links.files > 0 && (
+                          <span
+                            title={`${links.files} ${links.files === 1 ? 'Datei' : 'Dateien'} zugeordnet`}
+                            className="inline-flex items-center gap-0.5 text-[10px] font-bold text-slate-500 shrink-0"
+                          >
+                            <Paperclip className="w-3 h-3" strokeWidth={2} />
+                            {links.files}
+                          </span>
+                        )}
+                        {links && links.zuschuss > 0 && (
+                          <span
+                            title={`${links.zuschuss} ${links.zuschuss === 1 ? 'Zuschuss' : 'Zuschüsse'} zugeordnet`}
+                            className="text-[10px] font-bold leading-none px-1 py-0.5 rounded bg-blue-50 border border-blue-200 text-[#003594] shrink-0"
+                          >
+                            Z {links.zuschuss}
+                          </span>
+                        )}
+                        {links && links.auslage > 0 && (
+                          <span
+                            title={`${links.auslage} ${links.auslage === 1 ? 'Auslage' : 'Auslagen'} zugeordnet`}
+                            className="text-[10px] font-bold leading-none px-1 py-0.5 rounded bg-violet-50 border border-violet-200 text-violet-700 shrink-0"
+                          >
+                            A {links.auslage}
+                          </span>
+                        )}
+                        {isLocked && (
+                          <span title="Festgeschrieben" className="text-slate-400 shrink-0">
+                            <LockIcon className="w-3 h-3" strokeWidth={2} />
+                          </span>
                         )}
                       </div>
                       <div className="text-sm font-bold text-slate-900 truncate mt-0.5">
@@ -1030,6 +1129,56 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                 )}
               </div>
 
+              {/* Festschreibung: 24 Stunden nach der letzten Stimme, sobald alle
+                  Stimmberechtigten abgestimmt haben (utils/resolutionLock.ts). */}
+              {activeLock?.allVotesCast && activeLock.lockAt && (
+                activeLock.isLocked ? (
+                  <div className="rounded-xl border border-slate-300 bg-slate-50 p-3 text-[12px] text-slate-700 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <LockIcon className="w-4 h-4 mt-0.5 shrink-0 text-slate-600" strokeWidth={2} />
+                      <div>
+                        <div className="font-bold text-slate-900">
+                          Festgeschrieben seit {formatLockDate(activeLock.lockAt)}
+                        </div>
+                        <p className="mt-0.5 leading-relaxed">
+                          Alle Stimmen sind abgegeben, die 24-Stunden-Frist für Korrekturen ist
+                          abgelaufen. Abstimmen ist nicht mehr möglich – Kommentare, Rechnungen und
+                          Nachweise können weiterhin ergänzt werden.
+                        </p>
+                      </div>
+                    </div>
+                    {onLiftResolutionLock && securitySettings && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLiftTargetId(activeResolution.id);
+                          setLiftCode('');
+                          setLiftError(null);
+                        }}
+                        className="ml-6 text-[11px] font-bold text-[#003594] underline decoration-dotted cursor-pointer"
+                      >
+                        Festschreibung aufheben (Admin-Code)
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3 text-[12px] text-slate-700 flex items-start gap-2">
+                    <LockOpenIcon className="w-4 h-4 mt-0.5 shrink-0 text-[#003594]" strokeWidth={2} />
+                    <p className="leading-relaxed">
+                      <strong className="text-slate-900">Alle Stimmen sind abgegeben.</strong>{' '}
+                      Festschreibung am {formatLockDate(activeLock.lockAt)} – bis dahin kann jede
+                      Stimme noch geändert werden.
+                      {activeResolution.lockLiftedAt && (
+                        <span className="block mt-0.5 text-slate-500">
+                          Festschreibung zuvor aufgehoben von {activeResolution.lockLiftedBy || 'unbekannt'} am{' '}
+                          {formatLockDate(new Date(activeResolution.lockLiftedAt))}.
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )
+              )}
+
               {/* Abstimmung: Mitgliederliste. Der eigene Name ist klickbar -
                   erst danach erscheinen die Knoepfe zum Abstimmen bzw. Aendern. */}
               <div className="space-y-1.5">
@@ -1045,8 +1194,8 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                     .map((member) => {
                     const vote = activeResolution.votes[member.id];
                     const isMe = member.id === currentMember.id;
-                    const isOpen = isMe && voteBoxOpenFor === activeResolution.id;
-                    const canInteract = isMe;
+                    const isOpen = isMe && !activeLock?.isLocked && voteBoxOpenFor === activeResolution.id;
+                    const canInteract = isMe && !activeLock?.isLocked;
 
                     return (
                       <div
@@ -1275,7 +1424,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                         } else if (isImage) {
                           setPreviewFile(att);
                         } else if (isPdf) {
-                          window.open(att.dataUrl, '_blank');
+                          openDataUrl(att.dataUrl, att.name);
                         } else {
                           downloadAttachment(att);
                         }
@@ -1463,7 +1612,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                               dataUrl: file.dataUrl,
                             });
                           } else {
-                            window.open(file.dataUrl, '_blank');
+                            openDataUrl(file.dataUrl, file.name);
                           }
                         }}
                         className="w-full flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 hover:bg-blue-50/50 border border-slate-200 text-left transition-colors cursor-pointer"
@@ -1781,6 +1930,69 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                 className="flex-1 py-3 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold disabled:opacity-40 transition-colors cursor-pointer"
               >
                 {isDeleting ? 'Prüfe …' : 'Löschen'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {liftTargetId && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-5">
+          <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#003594] flex items-center justify-center mx-auto">
+              <LockOpenIcon className="w-6 h-6" strokeWidth={1.75} />
+            </div>
+            <h3 className="mt-4 text-sm font-bold text-slate-900 text-center">
+              Festschreibung aufheben
+            </h3>
+            <p className="mt-1.5 text-[12px] text-slate-500 text-center leading-relaxed">
+              Danach können die Stimmen zu{' '}
+              <strong className="text-slate-800">
+                {resolutions.find((r) => r.id === liftTargetId)?.number}
+              </strong>{' '}
+              wieder geändert werden. 24 Stunden später wird der Beschluss erneut
+              festgeschrieben. Zur Bestätigung den Admin-Code eingeben.
+            </p>
+
+            <input
+              type="password"
+              inputMode="numeric"
+              autoFocus
+              value={liftCode}
+              onChange={(e) => {
+                setLiftCode(e.target.value);
+                setLiftError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void confirmLift();
+              }}
+              placeholder="Admin-Code"
+              className="mt-4 w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-center text-base sm:text-sm tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-[#003594]"
+            />
+
+            {liftError && (
+              <div className="mt-2 text-center text-[12px] font-semibold text-rose-600">{liftError}</div>
+            )}
+
+            <div className="mt-5 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setLiftTargetId(null);
+                  setLiftCode('');
+                  setLiftError(null);
+                }}
+                className="flex-1 py-3 rounded-2xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmLift()}
+                disabled={!liftCode.trim() || isLifting}
+                className="flex-1 py-3 rounded-2xl bg-[#003594] hover:bg-[#00266B] text-white text-xs font-bold disabled:opacity-40 transition-colors cursor-pointer"
+              >
+                {isLifting ? 'Prüfe …' : 'Aufheben'}
               </button>
             </div>
           </div>
