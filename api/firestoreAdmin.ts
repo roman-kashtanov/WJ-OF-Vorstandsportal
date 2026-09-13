@@ -115,6 +115,18 @@ function toFirestoreValue(v: any): any {
   return { nullValue: null };
 }
 
+/**
+ * Dokument-IDs koennen Zeichen enthalten, die in einer URL eine eigene
+ * Bedeutung haben - v. a. die Freigabeliste, deren IDs E-Mail-Adressen sind.
+ * Unmaskiert wurde aus "name+test@gmail.com" beim Lesen "name test@gmail.com":
+ * die Freigabe wurde nicht gefunden, die Einladung meldete "noch nicht
+ * freigegeben". Maskiert wird jedes Pfadstueck einzeln, die Schraegstriche
+ * zwischen Sammlung und Dokument bleiben erhalten.
+ */
+function encodeDocumentPath(path: string): string {
+  return path.split('/').map(encodeURIComponent).join('/');
+}
+
 export const FirestoreAdmin = {
   isConfigured(): boolean {
     return loadServiceAccount() !== null;
@@ -126,7 +138,7 @@ export const FirestoreAdmin = {
     if (!sa) throw new Error('Kein Dienstkonto hinterlegt (FIREBASE_SERVICE_ACCOUNT).');
     const token = await getAccessToken(sa);
 
-    const url = `https://firestore.googleapis.com/v1/projects/${sa.project_id}/databases/(default)/documents/${path}`;
+    const url = `https://firestore.googleapis.com/v1/projects/${sa.project_id}/databases/(default)/documents/${encodeDocumentPath(path)}`;
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
 
     if (res.status === 404) return null;
@@ -150,7 +162,7 @@ export const FirestoreAdmin = {
     const mask = Object.keys(fields)
       .map((f) => `updateMask.fieldPaths=${encodeURIComponent(f)}`)
       .join('&');
-    const url = `https://firestore.googleapis.com/v1/projects/${sa.project_id}/databases/(default)/documents/${path}?${mask}`;
+    const url = `https://firestore.googleapis.com/v1/projects/${sa.project_id}/databases/(default)/documents/${encodeDocumentPath(path)}?${mask}`;
 
     // Wichtig: Firestore erwartet im Dokumentkoerper eine echte verschachtelte
     // Struktur (votes -> memberId -> ...), keinen flachen Schluessel mit

@@ -1611,3 +1611,13 @@ Einladungen funktionieren lokal nicht (kein SMTP, kein Dienstkonto).
 
 **Arbeitsablauf ab jetzt:** Claude committet nur. Der Nutzer testet lokal und
 pusht selbst (`git push`).
+
+## v3.17.3 - Einladung scheiterte bei Adressen mit "+"
+
+Die Einladung an `offenbachwj+entwickler@gmail.com` meldete "noch nicht
+freigegeben", obwohl `allowlist/offenbachwj+entwickler@gmail.com` in Firestore
+existierte (in der Konsole geprueft). Ursache: `firestoreAdmin.ts` setzte den
+Dokumentpfad unmaskiert in die REST-URL, ein "+" im Pfad wurde als Leerzeichen
+gelesen. Jetzt maskiert `encodeDocumentPath()` jedes Pfadstueck
+(`encodeURIComponent`). Betrifft alle Server-Zugriffe; Adressen ohne
+Sonderzeichen waren vorher schon korrekt.
