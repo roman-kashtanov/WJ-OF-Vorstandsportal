@@ -111,15 +111,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
    * Code wie beim endgültigen Löschen archivierter Beschlüsse) - hier
    * werden u.a. Vorstandsmitglieder verwaltet, das darf nicht ohne Code
    * für jeden zugänglich sein, der nur den App-Öffnen-Code kennt. Setzt
-   * sich beim Schließen des Modals zurück. */
-  const [isSettingsUnlocked, setIsSettingsUnlocked] = useState(false);
+   * sich beim Schließen des Modals zurück.
+   *
+   * Lokal (npm run dev) von Anfang an offen: der Code liegt nur als Hash vor
+   * und ist Claude nicht bekannt - so lassen sich die Einstellungen trotzdem
+   * testen. Im veroeffentlichten Portal ist import.meta.env.DEV fest false.
+   * Die Code-Abfragen vor unwiderruflichen Aktionen bleiben auch lokal. */
+  const [isSettingsUnlocked, setIsSettingsUnlocked] = useState<boolean>(import.meta.env.DEV);
   const [settingsCode, setSettingsCode] = useState('');
   const [settingsCodeError, setSettingsCodeError] = useState<string | null>(null);
   const [settingsCodeChecking, setSettingsCodeChecking] = useState(false);
 
   useEffect(() => {
     if (!isOpen) {
-      setIsSettingsUnlocked(false);
+      setIsSettingsUnlocked(import.meta.env.DEV);
       setSettingsCode('');
       setSettingsCodeError(null);
     }
@@ -143,7 +148,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
    * - eine zweite, redundante Sperre, da diese Ansicht besonders sensibel
    * ist (komplettes Abstimmungsverhalten). Setzt sich beim Schließen des
    * Modals zurück. */
-  const [isHistoryUnlocked, setIsHistoryUnlocked] = useState(false);
+  const [isHistoryUnlocked, setIsHistoryUnlocked] = useState<boolean>(import.meta.env.DEV);
   const [historyCode, setHistoryCode] = useState('');
   const [historyCodeError, setHistoryCodeError] = useState<string | null>(null);
   const [historyCodeChecking, setHistoryCodeChecking] = useState(false);
@@ -151,7 +156,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   useEffect(() => {
     if (!isOpen) {
-      setIsHistoryUnlocked(false);
+      setIsHistoryUnlocked(import.meta.env.DEV);
       setHistoryCode('');
       setHistoryCodeError(null);
     }

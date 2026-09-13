@@ -1681,3 +1681,13 @@ gespeicherte Stimmen/Kommentare behalten den damaligen Namen (`memberName`
 wird beim Abstimmen kopiert). `handleUpdateMembers` gleicht jetzt auch
 `authSession.user` ab, damit Aenderungen an der eigenen Person sofort im
 Kopfbereich sichtbar sind.
+
+## v3.17.8 - Einstellungen lokal ohne Admin-Code testbar
+
+Admin-Code und Vorstandscode liegen nur als SHA-256-Hash vor; Claude kennt sie
+nicht und soll sie nicht durchprobieren. Damit Einstellungen und Historie
+trotzdem lokal testbar sind, starten beide Sperren in `SettingsModal` bei
+`npm run dev` (`import.meta.env.DEV`) entsperrt. Im Produktions-Build bleibt es
+bei `false`. **Bewusst weiter geschuetzt, auch lokal:** Admin-Code vor dem
+endgueltigen Loeschen, vor dem Aufheben einer Festschreibung und beim Aendern
+des Admin-Codes - lokal wird mit echten Daten gearbeitet.
