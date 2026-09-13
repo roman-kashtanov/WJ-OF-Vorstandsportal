@@ -14,6 +14,7 @@ import {
   PERSON_TYPE_LABEL,
   PIPELINE_MANAGED_STATUSES,
   SUBSIDY_STAGES,
+  defaultSubsidyStage,
   budgetOverview,
   isPayable,
   paymentReference,
@@ -75,6 +76,8 @@ interface Props {
   onOpenPayout: () => void;
   onOpenBundle: () => void;
   onImportCsv: (text: string) => { ok: true } | { ok: false; error: string };
+  /** Vorausgewaehlte Phase beim Sprung aus der Uebersicht. */
+  initialStage?: string;
 }
 
 const STATUS_STYLE: Record<SubsidyStatus, string> = {
@@ -108,11 +111,14 @@ export const SubsidiesView: React.FC<Props> = ({
   onOpenPayout,
   onOpenBundle,
   onImportCsv,
+  initialStage,
 }) => {
   const [showFilters, setShowFilters] = useState(false);
   const [filterPerson, setFilterPerson] = useState('all');
   const [filterType, setFilterType] = useState<'all' | SubsidyPersonType>('all');
-  const [activeStage, setActiveStage] = useState<string>('all');
+  const [activeStage, setActiveStage] = useState<string>(
+    () => initialStage || defaultSubsidyStage(ofKind(subsidies, kind), year)
+  );
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [manualOverrideId, setManualOverrideId] = useState<string | null>(null);
@@ -255,11 +261,7 @@ export const SubsidiesView: React.FC<Props> = ({
       .filter(
         (s) => filterType === 'all' || personById[s.personId]?.type === filterType
       )
-      .filter((s) =>
-        activeStage === 'all'
-          ? stageOf.get(s.status) !== 'erledigt'
-          : stageOf.get(s.status) === activeStage
-      )
+      .filter((s) => activeStage === 'all' || stageOf.get(s.status) === activeStage)
       .filter(
         (s) =>
           !q ||
@@ -543,21 +545,9 @@ export const SubsidiesView: React.FC<Props> = ({
       {/* Laufbahn-Reiter: Offen -> Geprüft -> Im Beschluss -> Zur Zahlung
           freigegeben -> Erledigt. Der Übergang zwischen den Phasen passiert
           bis auf "Geprüft setzen" automatisch (siehe useSubsidies.ts) - die
-          Reiter dienen nur der Übersicht, nicht der manuellen Steuerung. */}
+          Reiter dienen nur der Übersicht, nicht der manuellen Steuerung.
+          "Alle" steht auf Wunsch des Vorstands ganz am Ende, hinter "Erledigt". */}
       <div className="flex gap-1.5 overflow-x-auto pb-0.5">
-        <button
-          type="button"
-          onClick={() => setActiveStage('all')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors cursor-pointer shrink-0 ${
-            activeStage === 'all'
-              ? 'bg-[#003594] text-white'
-              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-          }`}
-        >
-          Alle (
-          {scoped.filter((s) => s.year === year && stageOf.get(s.status) !== 'erledigt').length}
-          )
-        </button>
         {SUBSIDY_STAGES.map((stage) => (
           <button
             key={stage.key}
@@ -572,6 +562,17 @@ export const SubsidiesView: React.FC<Props> = ({
             {stage.label} ({stageCounts[stage.key] || 0})
           </button>
         ))}
+        <button
+          type="button"
+          onClick={() => setActiveStage('all')}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors cursor-pointer shrink-0 ${
+            activeStage === 'all'
+              ? 'bg-[#003594] text-white'
+              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          Alle ({scoped.filter((s) => s.year === year).length})
+        </button>
       </div>
 
       {/* Filter */}

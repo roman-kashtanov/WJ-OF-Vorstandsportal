@@ -1,40 +1,53 @@
-import React, { useState } from 'react';
-import { 
-  BoardMember, 
-  Resolution, 
-  Invoice, 
-  Meeting, 
+import React from 'react';
+import {
+  BoardMember,
+  Resolution,
+  Invoice,
+  Meeting,
   ActiveTab,
-  Subsidy
+  Subsidy,
+  SubsidyKind
 } from '../types';
-import { ofKind } from '../utils/subsidies';
+import { ofKind, SUBSIDY_STAGES } from '../utils/subsidies';
+import {
+  RESOLUTION_SECTIONS,
+  ResolutionSectionKey,
+  countResolutionSection
+} from '../utils/resolutionSections';
 import { formatDate } from '../utils/formatters';
-import { subscribeToPushServer } from '../utils/pwaNotifications';
-import { BellRing } from 'lucide-react';
 import { downloadMeetingICS } from '../utils/calendar';
-import { 
-  Vote, 
-  Receipt, 
-  Calendar, 
-  Video, 
-  AlertCircle, 
-  Plus, 
+import { DashboardModule, DashboardModuleRow } from './DashboardModule';
+import {
+  Vote,
+  HandCoins,
+  Wallet,
+  Video,
+  AlertCircle,
+  Plus,
   Download,
   FileText,
-  ArrowRight,
-  ChevronDown,
-  ChevronUp
+  ArrowRight
 } from 'lucide-react';
+
+/**
+ * Wohin ein Tipp auf ein Modul der Uebersicht springt: Reiter samt
+ * vorausgewaehltem Bereich (Beschluesse) bzw. Phase und Jahr (Zuschuesse,
+ * Auslagen).
+ */
+export type OverviewTarget =
+  | { tab: 'resolutions'; section: ResolutionSectionKey }
+  | { tab: 'subsidies' | 'expenses'; stage: string; year?: number };
 
 interface DashboardViewProps {
   currentMember: BoardMember;
   members: BoardMember[];
   resolutions: Resolution[];
   invoices: Invoice[];
-  /** Zuschuesse UND Auslagen - fuer die Handlungsbedarf-Kacheln. */
+  /** Zuschuesse UND Auslagen - fuer die beiden Module. */
   subsidies: Subsidy[];
   nextMeeting: Meeting | null;
   onNavigate: (tab: ActiveTab) => void;
+  onNavigateTo: (target: OverviewTarget) => void;
   onOpenNewResolution: () => void;
   onOpenNewInvoice: () => void;
   onSelectResolution: (resId: string) => void;
@@ -43,26 +56,30 @@ interface DashboardViewProps {
   onOpenTeamsSettings?: () => void;
 }
 
+const STAGE_DOT: Record<string, string> = {
+  offen: 'bg-amber-400',
+  geprueft: 'bg-blue-500',
+  im_beschluss: 'bg-violet-500',
+  zur_zahlung: 'bg-teal-500',
+};
+
+const RESOLUTION_DOT: Record<ResolutionSectionKey, string> = {
+  offen: 'bg-amber-400',
+  buchhaltung: 'bg-emerald-500',
+  alle: 'bg-slate-300',
+};
+
 export const DashboardView: React.FC<DashboardViewProps> = ({
   currentMember,
-  members,
   resolutions,
-  invoices,
   subsidies,
   nextMeeting,
   onNavigate,
+  onNavigateTo,
   onOpenNewResolution,
   onOpenNewInvoice,
-  onSelectResolution,
   onOpenQuickAgenda,
 }) => {
-  // Pending votes for current member
-    const [expandedResId, setExpandedResId] = useState<string | null>(null);
-
-  const openResolutions = resolutions
-    .filter((res) => !res.isArchived && res.status === 'in_abstimmung')
-    .sort((a, b) => new Date(b.createdAt || "").getTime() - new Date(a.createdAt || "").getTime());
-
   const pendingResolutionsForMember = resolutions.filter((res) => {
     if (res.isArchived) return false;
     const isEligible = !res.eligibleVoterIds || res.eligibleVoterIds.length === 0 || res.eligibleVoterIds.includes(currentMember.id);
@@ -70,84 +87,48 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   });
 
   /**
-   * Handlungsbedarf auf einen Blick: was liegt gerade zur Pruefung, was
-   * wartet auf eine Ueberweisung, wo laeuft noch eine Abstimmung. Jede Kachel
-   * springt direkt in den passenden Reiter.
+   * Module unter der Vorstandssitzung: nur Zaehler, nichts bearbeitbar.
+   * Beschluesse stehen immer oben, darunter Zuschuesse und Auslagen.
    */
-  const countOpen = (list: Subsidy[]) =>
-    list.filter((s) => s.status === 'beantragt' || s.status === 'nicht_stattgefunden').length;
-  const countPayable = (list: Subsidy[]) =>
-    list.filter((s) => s.status === 'zur_zahlung_freigegeben').length;
+  const resolutionRows: DashboardModuleRow[] = RESOLUTION_SECTIONS
+    .filter((section) => section.key !== 'alle')
+    .map((section) => ({
+      key: section.key,
+      label: section.label,
+      count: countResolutionSection(resolutions, section.key),
+      dotClass: RESOLUTION_DOT[section.key],
+      onClick: () => onNavigateTo({ tab: 'resolutions', section: section.key }),
+    }));
 
-  const zuschuesse = ofKind(subsidies, 'zuschuss');
-  const auslagen = ofKind(subsidies, 'auslage');
-
-  type ActionTile = {
-    key: string;
-    label: string;
-    hint: string;
-    count: number;
-    tab: ActiveTab;
-    tone: 'amber' | 'teal' | 'blue';
-  };
-
-  const actionTiles: ActionTile[] = ([
-    {
-      key: 'res-open',
-      label: 'Beschlüsse in Abstimmung',
-      hint: 'noch nicht vollständig abgestimmt',
-      count: openResolutions.length,
-      tab: 'resolutions',
-      tone: 'blue',
-    },
-    {
-      key: 'sub-open',
-      label: 'Zuschüsse zu prüfen',
-      hint: 'eingereicht, noch nicht geprüft',
-      count: countOpen(zuschuesse),
-      tab: 'subsidies',
-      tone: 'amber',
-    },
-    {
-      key: 'sub-pay',
-      label: 'Zuschüsse zur Zahlung',
-      hint: 'beschlossen, noch nicht überwiesen',
-      count: countPayable(zuschuesse),
-      tab: 'subsidies',
-      tone: 'teal',
-    },
-    {
-      key: 'exp-open',
-      label: 'Auslagen zu prüfen',
-      hint: 'eingereicht, noch nicht geprüft',
-      count: countOpen(auslagen),
-      tab: 'expenses',
-      tone: 'amber',
-    },
-    {
-      key: 'exp-pay',
-      label: 'Auslagen zur Zahlung',
-      hint: 'beschlossen, noch nicht überwiesen',
-      count: countPayable(auslagen),
-      tab: 'expenses',
-      tone: 'teal',
-    },
-  ] as ActionTile[]).filter((t) => t.count > 0);
-
-  const toneClass: Record<'amber' | 'teal' | 'blue', string> = {
-    amber: 'bg-amber-50 border-amber-200 text-amber-900 hover:bg-amber-100',
-    teal: 'bg-teal-50 border-teal-200 text-teal-900 hover:bg-teal-100',
-    blue: 'bg-blue-50 border-blue-200 text-[#003594] hover:bg-blue-100',
+  /**
+   * Gezaehlt wird ueber alle Jahre, damit ein Antrag vom Dezember im Januar
+   * nicht verschwindet. Beim Sprung wird das neueste betroffene Jahr
+   * vorausgewaehlt, weil die Zuschuss-Ansicht immer ein Jahr zeigt.
+   */
+  const subsidyRows = (kind: SubsidyKind): DashboardModuleRow[] => {
+    const tab = kind === 'auslage' ? 'expenses' : 'subsidies';
+    const list = ofKind(subsidies, kind);
+    return SUBSIDY_STAGES.filter((stage) => stage.key !== 'erledigt').map((stage) => {
+      const items = list.filter((s) => stage.statuses.includes(s.status));
+      const newestYear = items.reduce<number | undefined>(
+        (max, s) => (max === undefined || s.year > max ? s.year : max),
+        undefined
+      );
+      return {
+        key: stage.key,
+        label: stage.label,
+        count: items.length,
+        dotClass: STAGE_DOT[stage.key],
+        onClick: () => onNavigateTo({ tab, stage: stage.key, year: newestYear }),
+      };
+    });
   };
 
   return (
     <div className="space-y-4 max-w-4xl mx-auto">
-      
-
-      
       {/* 1. HINWEIS WENN STIMME OFFEN */}
       {pendingResolutionsForMember.length > 0 && (
-        <div 
+        <div
           onClick={() => onNavigate('resolutions')}
           className="bg-amber-500/10 border border-amber-300/80 rounded-2xl p-3 sm:p-4 flex items-center justify-between gap-3 cursor-pointer hover:bg-amber-500/15 transition-all shadow-2xs active:scale-99"
         >
@@ -168,30 +149,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       )}
 
-      {/* 1b. HANDLUNGSBEDARF: offene Prüfungen, fällige Überweisungen,
-           laufende Abstimmungen - jede Kachel springt in den Reiter. */}
-      {actionTiles.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {actionTiles.map((tile) => (
-            <button
-              key={tile.key}
-              type="button"
-              onClick={() => onNavigate(tile.tab)}
-              className={`text-left rounded-2xl border p-3 transition-colors cursor-pointer active:scale-99 ${
-                toneClass[tile.tone]
-              }`}
-            >
-              <div className="text-xl font-black leading-none">{tile.count}</div>
-              <div className="text-[11px] font-bold mt-1 leading-tight">{tile.label}</div>
-              <div className="text-[10px] opacity-70 leading-tight mt-0.5">{tile.hint}</div>
-            </button>
-          ))}
-        </div>
-      )}
-
       {/* 2. SCHNELLE HAUPTAKTIONEN: BESCHLUSS FASSEN & RECHNUNG HOCHLADEN */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-        
+
         {/* BUTTON 1: BESCHLUSS FASSEN */}
         <div className="bg-white rounded-2xl border border-slate-200 p-3 shadow-2xs space-y-2">
           <button
@@ -236,7 +196,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       </div>
 
-      {/* 3. MICROSOFT TEAMS LINK (ONLINE-SITZUNG) */}
+      {/* 3. NAECHSTE VORSTANDSSITZUNG (MICROSOFT TEAMS) */}
       {nextMeeting && (
         <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center space-x-3 min-w-0">
@@ -286,77 +246,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       )}
 
-
-
-      {/* 4. LAUFENDE BESCHLÜSSE (MINIMALISTISCHE LISTE) */}
-      {openResolutions.length > 0 && (
-        <div className="space-y-2">
-          <h2 className="text-sm font-bold text-slate-700 px-1 uppercase tracking-wider">
-            Offene Beschlüsse ({openResolutions.length})
-          </h2>
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-2xs overflow-hidden divide-y divide-slate-100">
-            {openResolutions.map((res) => {
-              const isExpanded = expandedResId === res.id;
-              // Calculate basic stats
-              const yesVotes = Object.values(res.votes).filter((v: any) => v.vote === 'yes').length;
-              const noVotes = Object.values(res.votes).filter((v: any) => v.vote === 'no').length;
-              
-              return (
-                <div key={res.id} className="flex flex-col transition-all">
-                  <button
-                    type="button"
-                    onClick={() => setExpandedResId(isExpanded ? null : res.id)}
-                    className="w-full px-4 py-3 sm:py-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors focus:outline-none"
-                  >
-                    <div className="flex items-center space-x-3 min-w-0 pr-2">
-                      <div className="w-8 h-8 rounded-full bg-blue-50 text-[#003594] flex items-center justify-center shrink-0">
-                        <Vote className="w-4 h-4" strokeWidth={2} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-bold text-slate-900 truncate">
-                          {res.title}</p></div>
-                    </div>
-                    <div className="flex items-center space-x-3 shrink-0">
-                      <div className="hidden sm:flex items-center space-x-2 mr-2">
-                         <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">{yesVotes} Ja</span>
-                         <span className="text-xs font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md">{noVotes} Nein</span>
-                      </div>
-                      <div className="text-slate-400">
-                        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                      </div>
-                    </div>
-                  </button>
-                  
-                  {isExpanded && (
-                    <div className="px-4 pb-4 pt-1 border-t border-slate-50 bg-slate-50/50 animate-in fade-in slide-in-from-top-2">
-                      <p className="text-xs text-slate-600 mb-4 line-clamp-3 leading-relaxed">
-                        {res.description}</p><div className="flex items-center justify-between">
-                         <div className="sm:hidden flex items-center space-x-2">
-                           <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md">{yesVotes} Ja</span>
-                           <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-md">{noVotes} Nein</span>
-                         </div>
-                         <button
-                           type="button"
-                           onClick={(e) => {
-                             e.stopPropagation();
-                             onSelectResolution(res.id);
-                             // If App.tsx supports it, we might also want to set it active
-                           }}
-                           className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-lg hover:bg-slate-100 transition-colors ml-auto flex items-center space-x-1 shadow-sm"
-                         >
-                           <span>Zum Beschluss</span>
-                           <ArrowRight className="w-3 h-3" />
-                         </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* 4. MODULE: Beschluesse, Zuschuesse, Auslagen - untereinander. Ein
+           Modul ohne offene Eintraege wird nicht angezeigt. */}
+      <DashboardModule
+        icon={<Vote className="w-4 h-4" strokeWidth={2} />}
+        title="Beschlüsse"
+        rows={resolutionRows}
+      />
+      <DashboardModule
+        icon={<HandCoins className="w-4 h-4" strokeWidth={2} />}
+        title="Zuschüsse"
+        rows={subsidyRows('zuschuss')}
+      />
+      <DashboardModule
+        icon={<Wallet className="w-4 h-4" strokeWidth={2} />}
+        title="Auslagen"
+        rows={subsidyRows('auslage')}
+      />
     </div>
   );
 };
-

@@ -70,6 +70,13 @@ import { prepareFileForStorage, formatBytes } from '../utils/fileStorage';
 import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
 import { RevisionHistoryModal } from './RevisionHistoryModal';
 import { RequestInvoiceLinkModal } from './RequestInvoiceLinkModal';
+import {
+  RESOLUTION_SECTIONS,
+  ResolutionSectionKey,
+  isInResolutionSection,
+  countResolutionSection,
+  defaultResolutionSection
+} from '../utils/resolutionSections';
 
 interface ResolutionsViewProps {
   currentMember: BoardMember;
@@ -97,6 +104,8 @@ interface ResolutionsViewProps {
   /** Festschreibung aufheben - der Admin-Code wird hier in der Ansicht geprueft. */
   onLiftResolutionLock?: (resolutionId: string) => void;
   securitySettings?: SecuritySettings;
+  /** Vorausgewaehlter Bereich beim Sprung aus der Uebersicht. */
+  initialSection?: ResolutionSectionKey;
 }
 
 const MONTH_OPTIONS = [
@@ -138,6 +147,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
   onDeleteResolution,
   onLiftResolutionLock,
   securitySettings,
+  initialSection,
 }) => {
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
   const [isExportingBundle, setIsExportingBundle] = useState(false);
@@ -163,6 +173,24 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
 
   // Archiv: standardmaessig ausgeblendet, damit die laufende Liste kurz bleibt
   const [showArchived, setShowArchived] = useState<boolean>(false);
+
+  /**
+   * Bereich der Liste: Offen / Abgestimmt · Buchhaltung offen / Alle. Ist
+   * beim Aufbau schon ein Beschluss ausgewaehlt (z. B. aus einer
+   * Benachrichtigung), startet die Liste in dessen Bereich.
+   */
+  const [section, setSection] = useState<ResolutionSectionKey>(() => {
+    if (initialSection) return initialSection;
+    const selected = resolutions.find((r) => r.id === selectedResolutionId);
+    if (selected && !selected.isArchived) {
+      return (
+        (['offen', 'buchhaltung'] as ResolutionSectionKey[]).find((key) =>
+          isInResolutionSection(selected, key)
+        ) ?? 'alle'
+      );
+    }
+    return defaultResolutionSection(resolutions);
+  });
 
   /** Welcher Listeneintrag zeigt gerade seine Kurzinfo? */
   const [expandedListId, setExpandedListId] = useState<string | null>(null);
@@ -292,6 +320,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
     return resolutions.filter((res) => {
       // 0. Archiv: nur zeigen, wenn ausdruecklich gewuenscht
       if (!!res.isArchived !== showArchived) return false;
+      if (!showArchived && !isInResolutionSection(res, section)) return false;
 
       // 1. Status Filter
       if (filterStatus !== 'all' && res.status !== filterStatus) return false;
@@ -415,7 +444,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
 
       return false;
     });
-  }, [resolutions, filterStatus, filterYear, filterMonth, filterBookkeeping, query, members, invoices, showArchived]);
+  }, [resolutions, filterStatus, filterYear, filterMonth, filterBookkeeping, query, members, invoices, showArchived, section]);
 
   // Selected resolution (defaults to first if selectedResolutionId is set, or active one)
   /**
@@ -530,6 +559,30 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
           <span>Beschluss fassen</span>
         </button>
       </div>
+
+      {/* Bereiche: Offen / Abgestimmt · Buchhaltung offen / Alle ("Alle"
+          bewusst am Ende). Im Archiv ausgeblendet - dort gibt es nur eine Liste. */}
+      {!showArchived && (
+        <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+          {RESOLUTION_SECTIONS.map((s) => (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => {
+                setSection(s.key);
+                onSelectResolution(null);
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors cursor-pointer shrink-0 ${
+                section === s.key
+                  ? 'bg-[#003594] text-white'
+                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              {s.label} ({countResolutionSection(resolutions, s.key)})
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Archiv-Umschalter + Filter */}
       <div className="flex justify-end items-center gap-2">
@@ -767,7 +820,17 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
 
           {filteredResolutions.length === 0 ? (
             <div className="bg-white p-8 text-center rounded-2xl border border-slate-200 text-slate-500 text-xs space-y-2">
-              <p>Keine Beschlüsse für die Suchkriterien gefunden.</p>
+              <p>
+                {hasActiveFilters
+                  ? 'Keine Beschlüsse für die Suchkriterien gefunden.'
+                  : showArchived
+                  ? 'Keine archivierten Beschlüsse.'
+                  : section === 'offen'
+                  ? 'Keine offenen Beschlüsse.'
+                  : section === 'buchhaltung'
+                  ? 'Keine angenommenen Beschlüsse mit offener Buchhaltung.'
+                  : 'Noch keine Beschlüsse.'}
+              </p>
               {searchQuery && (
                 <button
                   type="button"
@@ -859,6 +922,12 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                       </div>
                       <div className="text-sm font-bold text-slate-900 truncate mt-0.5">
                         {res.title}
+                      </div>
+                      <div className="flex flex-wrap gap-x-2.5 text-[11px] text-slate-500 mt-0.5">
+                        <span className="whitespace-nowrap">Erstellt {formatDate(res.createdAt)}</span>
+                        {res.passedAt && (
+                          <span className="whitespace-nowrap">Beschlossen {formatDate(res.passedAt)}</span>
+                        )}
                       </div>
                     </div>
 

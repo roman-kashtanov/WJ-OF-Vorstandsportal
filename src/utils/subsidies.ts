@@ -108,6 +108,19 @@ export const SUBSIDY_STAGES: SubsidyStage[] = [
   { key: 'erledigt', label: 'Erledigt', statuses: ['bezahlt', 'abgelehnt'] },
 ];
 
+/**
+ * Mit welcher Phase ein Reiter startet: die erste noch nicht erledigte Phase
+ * mit Eintraegen im gewaehlten Jahr, sonst "Offen". "Alle" steht bewusst am
+ * Ende der Reiter und ist nie die Vorauswahl.
+ */
+export function defaultSubsidyStage(list: Subsidy[], year: number): string {
+  const ofYear = list.filter((s) => s.year === year);
+  const first = SUBSIDY_STAGES.find(
+    (stage) => stage.key !== 'erledigt' && ofYear.some((s) => stage.statuses.includes(s.status))
+  );
+  return first?.key ?? 'offen';
+}
+
 export const PERSON_TYPE_LABEL: Record<SubsidyPerson['type'], string> = {
   mitglied: 'Mitglied',
   foerdermitglied: 'Fördermitglied',

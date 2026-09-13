@@ -17,7 +17,7 @@ import { auth } from './lib/firebase';
 import { CURRENT_APP_VERSION, DEFAULT_VERSION_CONFIG } from './constants/version';
 import { normalizeSecuritySettings } from './utils/security';
 import { Header } from './components/Header';
-import { DashboardView } from './components/DashboardView';
+import { DashboardView, OverviewTarget } from './components/DashboardView';
 import { ResolutionsView } from './components/ResolutionsView';
 import { InvoicesView } from './components/InvoicesView';
 import { MeetingsView } from './components/MeetingsView';
@@ -474,6 +474,17 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
 
   /**
+   * Sprung aus der Uebersicht: welche Phase bzw. welcher Beschluss-Bereich im
+   * Zielreiter vorausgewaehlt ist. Die Ansicht liest das nur beim Aufbau;
+   * danach wird es geleert, damit ein spaeterer Wechsel ueber die Navigation
+   * wieder mit der normalen Vorauswahl startet.
+   */
+  const [overviewTarget, setOverviewTarget] = useState<OverviewTarget | null>(null);
+  useEffect(() => {
+    setOverviewTarget(null);
+  }, [activeTab]);
+
+  /**
    * Zuschuesse und Auslagen teilen sich denselben Ablauf und damit auch
    * dieselben Dialoge (Erfassen, Buendeln, Auszahlen). Welche Vorgangsart
    * gemeint ist, ergibt sich aus dem gerade offenen Reiter - waehrend ein
@@ -910,6 +921,12 @@ export default function App() {
             invoices={invoices}
             nextMeeting={nextMeeting}
             onNavigate={setActiveTab}
+            onNavigateTo={(target) => {
+              if (target.tab === 'resolutions') setSelectedResolutionId(null);
+              else if (target.year) setSubsidyYear(target.year);
+              setOverviewTarget(target);
+              setActiveTab(target.tab);
+            }}
             onOpenNewResolution={() => setIsNewResolutionOpen(true)}
             onOpenNewInvoice={() => setIsNewInvoiceOpen(true)}
             onSelectResolution={(resId) => {
@@ -945,6 +962,7 @@ export default function App() {
             onArchiveResolution={handleArchiveResolution}
             onDeleteResolution={handleDeleteResolution}
             securitySettings={securitySettings}
+            initialSection={overviewTarget?.tab === 'resolutions' ? overviewTarget.section : undefined}
           />
         )}
 
@@ -1021,6 +1039,9 @@ export default function App() {
             onOpenPayout={() => setIsPayoutOpen(true)}
             onOpenBundle={() => setIsBundleModalOpen(true)}
             onImportCsv={handleImportSubsidyCsv}
+            initialStage={
+              overviewTarget && overviewTarget.tab !== 'resolutions' ? overviewTarget.stage : undefined
+            }
           />
         )}
 
