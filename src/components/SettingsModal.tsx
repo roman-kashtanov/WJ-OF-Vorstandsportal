@@ -375,6 +375,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     e.preventDefault();
     if (!newName.trim() || !newEmail.trim()) return;
 
+    // Jede Adresse gehoert zu genau einer Person - sonst ist bei der Anmeldung
+    // nicht eindeutig, wer sich anmeldet (die erste passende Person gewinnt).
+    const emailClean = newEmail.trim().toLowerCase();
+    const duplicate = members.find((m) => (m.email || '').trim().toLowerCase() === emailClean);
+    if (duplicate) {
+      setMemberError(
+        `${emailClean} ist bereits bei „${duplicate.name}" hinterlegt. Jede E-Mail-Adresse kann nur zu einer Person gehören.`
+      );
+      return;
+    }
+
     const initials = newName
       .trim()
       .split(' ')
@@ -415,6 +426,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setNewEmail('');
     setNewRole('');
     setNewIsVoting(true);
+    setIsPermanentStaff(false);
     setIsAddingMember(false);
   };
 
@@ -433,10 +445,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       return;
     }
 
+    const normEmail = (value?: string) => (value || '').trim().toLowerCase();
+    // Altbestand kann doppelte Adressen enthalten: dann bleibt die Freigabe,
+    // sonst verloere die andere Person mit derselben Adresse ihren Zugang.
+    const emailSharedWithOthers =
+      !!removed?.email &&
+      members.some((m) => m.id !== memberId && normEmail(m.email) === normEmail(removed.email));
+
     if (
       removed &&
       !confirm(
-        `${removed.name} entfernen?\n\nDamit entfällt auch der Zugang zum Portal (${removed.email}).`
+        `${removed.name} entfernen?\n\n${
+          emailSharedWithOthers
+            ? `Die Adresse ${removed.email} bleibt freigegeben, weil sie auch bei einer anderen Person hinterlegt ist.`
+            : `Damit entfällt auch der Zugang zum Portal (${removed.email}).`
+        }`
       )
     ) {
       return;
@@ -446,7 +469,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     onUpdateMembers(updated);
     await FirebaseSync.deleteMember(memberId);
     // Zugang gezielt entziehen - die Freigabeliste raeumt sich sonst nie auf
-    if (removed?.email) {
+    if (removed?.email && !emailSharedWithOthers) {
       await FirebaseSync.removeFromAllowlist(removed.email);
     }
   };

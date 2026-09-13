@@ -5,7 +5,6 @@ import {
   Receipt,
   LayoutDashboard,
   ChevronDown,
-  UserCheck,
   LogOut,
   KeyRound,
   Download,
@@ -20,8 +19,6 @@ import { PwaNotificationService } from '../utils/pwaNotifications';
 
 interface HeaderProps {
   currentMember: BoardMember;
-  members: BoardMember[];
-  onSelectMember: (memberId: string) => void;
   activeTab: ActiveTab;
   onSelectTab: (tab: ActiveTab) => void;
   pendingVotesCount: number;
@@ -42,8 +39,6 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({
   currentMember,
-  members,
-  onSelectMember,
   activeTab,
   onSelectTab,
   pendingVotesCount,
@@ -213,39 +208,6 @@ export const Header: React.FC<HeaderProps> = ({
                           📞 {currentMember.phone}
                         </p>
                       )}
-                    </div>
-
-                    {/* Member switcher */}
-                    <div className="px-2 py-1.5">
-                      <p className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        Vorstandsmitglied wechseln:
-                      </p>
-                      <div className="max-h-40 overflow-y-auto space-y-0.5">
-                        {members.map((member) => (
-                          <button
-                            key={member.id}
-                            onClick={() => {
-                              onSelectMember(member.id);
-                              setIsMemberDropdownOpen(false);
-                            }}
-                            className={`w-full px-2.5 py-1.5 rounded-lg flex items-center space-x-2.5 text-left transition-colors cursor-pointer ${
-                              member.id === currentMember.id 
-                                ? 'bg-blue-50 text-[#003594] font-bold' 
-                                : 'hover:bg-slate-50 text-slate-700'
-                            }`}
-                          >
-                            <div className={`w-6 h-6 rounded-full ${member.avatarColor} text-white flex items-center justify-center font-bold text-[10px] shrink-0`}>
-                              {member.initials}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-xs">{member.name}</p>
-                            </div>
-                            {member.id === currentMember.id && (
-                              <UserCheck className="w-3.5 h-3.5 text-[#003594] shrink-0" />
-                            )}
-                          </button>
-                        ))}
-                      </div>
                     </div>
 
                     {/* Actions */}

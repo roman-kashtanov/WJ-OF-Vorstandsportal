@@ -78,7 +78,6 @@ export default function App() {
     currentMember,
     handleAuthSuccess,
     handleLogout,
-    handleSelectMember,
     handleUpdateMembers,
     handleUpdateSecuritySettings,
     handleSaveRoleCatalogue,
@@ -696,8 +695,6 @@ export default function App() {
       {/* Top Header with Agenda Instant Popup & Next Meeting Widget */}
       <Header
         currentMember={currentMember}
-        members={members}
-        onSelectMember={handleSelectMember}
         activeTab={activeTab}
         onSelectTab={handleSelectTab}
         pendingVotesCount={pendingVotesCount}

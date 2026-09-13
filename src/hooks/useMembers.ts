@@ -157,18 +157,10 @@ export function useMembers() {
     setIsAuthModalOpen(true);
   };
 
-  const handleSelectMember = (memberId: string) => {
-    const member = members.find((m) => m.id === memberId);
-    if (member) {
-      const isExempt = AppStorage.isExemptFromCode(member, securitySettings);
-      setCurrentMemberId(memberId);
-      setAuthSession({
-        isAuthenticated: true,
-        isCodeVerified: isExempt || (authSession?.isCodeVerified ?? true),
-        user: member,
-      });
-    }
-  };
+  // Frueher gab es hier handleSelectMember ("Vorstandsmitglied wechseln" im
+  // Kopfbereich): damit konnte jeder Angemeldete zu einem anderen Mitglied
+  // werden und in dessen Namen abstimmen. Ersatzlos entfernt - jede Person
+  // ist ausschliesslich ueber ihre eigene Anmeldung im Portal.
 
   const handleUpdateMembers = (newMembers: BoardMember[]) => {
     setMembers(newMembers);
@@ -203,7 +195,6 @@ export function useMembers() {
     currentMember,
     handleAuthSuccess,
     handleLogout,
-    handleSelectMember,
     handleUpdateMembers,
     handleUpdateSecuritySettings,
     handleSaveRoleCatalogue,

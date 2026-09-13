@@ -1621,3 +1621,21 @@ Dokumentpfad unmaskiert in die REST-URL, ein "+" im Pfad wurde als Leerzeichen
 gelesen. Jetzt maskiert `encodeDocumentPath()` jedes Pfadstueck
 (`encodeURIComponent`). Betrifft alle Server-Zugriffe; Adressen ohne
 Sonderzeichen waren vorher schon korrekt.
+
+## v3.17.4 - Sicherheitsluecke "Vorstandsmitglied wechseln" geschlossen, doppelte Adressen
+
+**Sicherheitsluecke (vom Nutzer gefunden):** Im Menue oben rechts gab es aus
+der urspruenglichen AI-Studio-Vorlage die Liste "Vorstandsmitglied wechseln"
+(`Header.tsx` → `useMembers.handleSelectMember`). Ein Tipp setzte
+`authSession.user` auf ein anderes Mitglied - danach liefen Stimmen,
+Kommentare und Aenderungen in dessen Namen. Die Firestore-Regeln verhindern
+das nicht (jedes freigegebene Mitglied darf alles schreiben). Liste und
+Funktion ersatzlos entfernt.
+
+**Doppelte E-Mail-Adressen:** "WJ OF" und "Entwickler (lokal)" hatten beide
+`offenbachwj@gmail.com`. Folgen: die Anmeldung nahm die erste passende Person
+(`AuthModal.handleSignedInUser` → `find`), und das Loeschen einer der beiden
+haette die Freigabe fuer beide entfernt. Jetzt: Anlegen weist eine schon
+vergebene Adresse ab; Loeschen entfernt die Freigabe nur, wenn keine andere
+Person die Adresse nutzt. "Festangestellt" wird nach dem Anlegen
+zurueckgesetzt (blieb vorher fuer die naechste Person angehakt).
