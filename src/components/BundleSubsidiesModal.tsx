@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import {
   BoardMember,
@@ -15,6 +15,7 @@ import { getAttachmentType } from '../utils/fileHelpers';
 import { X, Landmark, AlertTriangle, Vote } from 'lucide-react';
 import { ResolutionPicker } from './ResolutionPicker';
 import { Collapse } from './Collapse';
+import { ResolutionDraftModal, ResolutionDraft } from './ResolutionDraftModal';
 
 interface Props {
   isOpen: boolean;
@@ -69,6 +70,26 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
   const [mode, setMode] = useState<'new' | 'existing'>('new');
   const [existingResolutionId, setExistingResolutionId] = useState('');
 
+  /**
+   * Zwei Schritte in einem Fenster-Platz: erst Positionen waehlen, dann den
+   * erzeugten Beschluss im Entwurfsfenster pruefen und anpassen. `draftKey`
+   * merkt sich, fuer welche Auswahl der Entwurf gilt - angepasster Text bleibt
+   * beim Zurueckgehen erhalten, solange dieselben Positionen gewaehlt sind.
+   */
+  const [step, setStep] = useState<'select' | 'preview'>('select');
+  const [draft, setDraft] = useState<ResolutionDraft | null>(null);
+  const [draftKey, setDraftKey] = useState('');
+
+  // Das Fenster bleibt dauerhaft eingebunden: beim Schliessen alles
+  // zuruecksetzen, damit es beim naechsten Oeffnen wieder bei der Auswahl beginnt.
+  useEffect(() => {
+    if (!isOpen) {
+      setStep('select');
+      setDraft(null);
+      setDraftKey('');
+    }
+  }, [isOpen]);
+
   const effectiveSelected = useMemo(() => {
     if (Object.keys(selected).length > 0) return selected;
     return Object.fromEntries(eligible.map((s) => [s.id, true]));
@@ -91,13 +112,35 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
   const currentYear = new Date().getFullYear();
   const autoNumber = `VB-${currentYear}-${String(existingResolutionCount + 1).padStart(2, '0')}`;
 
-  const handleCreate = () => {
-    if (chosen.length === 0) return;
-
+  /** Automatischer Vorschlag fuer Bezeichnung und Text - im Entwurfsfenster anpassbar. */
+  const buildSuggestion = (): ResolutionDraft => {
     const lines = chosen.map((s) => {
       const person = personById[s.personId];
       return `- ${person?.name || s.personName}: ${s.eventName} – ${formatCurrency(s.amount)}`;
     });
+    return {
+      title: `${texts.resolutionTitle} ${year} (${chosen.length})`,
+      description: '',
+      motionText: `Der Vorstand beschließt die ${
+        kind === 'auslage' ? 'Erstattung folgender geprüfter Auslagen' : 'Auszahlung folgender geprüfter Zuschüsse'
+      }:\n\n${lines.join('\n')}\n\nGesamtsumme: ${formatCurrency(sum)}`,
+      category: 'Finanzen & Budget',
+    };
+  };
+
+  const selectionKey = chosen.map((s) => s.id).join(',');
+
+  const openPreview = () => {
+    if (chosen.length === 0) return;
+    if (!draft || draftKey !== selectionKey) {
+      setDraft(buildSuggestion());
+      setDraftKey(selectionKey);
+    }
+    setStep('preview');
+  };
+
+  const handleCreate = () => {
+    if (chosen.length === 0 || !draft) return;
 
     const attachments: ResolutionAttachment[] = chosen
       .filter((s) => !!proofOf(s))
@@ -118,14 +161,10 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
       chosen.map((s) => s.id),
       {
         number: autoNumber,
-        title: `${texts.resolutionTitle} ${year} (${chosen.length})`,
-        description: '',
-        motionText: `Der Vorstand beschließt die ${
-          kind === 'auslage' ? 'Erstattung folgender geprüfter Auslagen' : 'Auszahlung folgender geprüfter Zuschüsse'
-        }:\n\n${lines.join(
-          '\n'
-        )}\n\nGesamtsumme: ${formatCurrency(sum)}`,
-        category: 'Finanzen & Budget',
+        title: draft.title.trim(),
+        description: draft.description.trim(),
+        motionText: draft.motionText.trim(),
+        category: draft.category,
         applicant: {
           id: currentMember.id,
           name: currentMember.name,
@@ -149,6 +188,28 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
     setSelected({});
     onClose();
   };
+
+  // Schritt 2: Das Entwurfsfenster ersetzt die Auswahl (kein Fenster ueber
+  // dem anderen - die Auswahl blendet aus, der Entwurf blendet ein).
+  if (step === 'preview' && draft) {
+    return (
+      <ResolutionDraftModal
+        number={autoNumber}
+        contextLabel={`${texts.plural} ${year} · neuer Beschluss`}
+        draft={draft}
+        suggestion={buildSuggestion()}
+        onChange={setDraft}
+        applicantName={currentMember.name}
+        requestedBudget={sum}
+        summary={`${chosen.length} ${chosen.length === 1 ? texts.singular : texts.plural} · ${formatCurrency(sum)}`}
+        attachmentCount={chosen.filter((s) => !!proofOf(s)).length}
+        voterNames={members.filter((m) => eligibleVoterIds.includes(m.id)).map((m) => m.name)}
+        onBack={() => setStep('select')}
+        onClose={onClose}
+        onConfirm={handleCreate}
+      />
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center wj-overlay animate-in fade-in">
@@ -285,7 +346,7 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
             </div>
             <button
               type="button"
-              onClick={mode === 'new' ? handleCreate : handleAssignExisting}
+              onClick={mode === 'new' ? openPreview : handleAssignExisting}
               disabled={chosen.length === 0 || (mode === 'existing' && !existingResolutionId)}
               className="px-5 py-2.5 rounded-xl bg-[#003594] hover:bg-[#00266B] disabled:opacity-40 font-bold text-white text-xs flex items-center gap-2 transition-all cursor-pointer"
             >
@@ -294,7 +355,7 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
                   viele Positionen tatsaechlich in den Beschluss wandern. */}
               {mode === 'new' ? 'Beschluss über' : 'Zuordnen:'} {chosen.length}{' '}
               {chosen.length === 1 ? texts.singular : texts.plural}
-              {mode === 'new' ? ' erstellen' : ''}
+              {mode === 'new' ? ' prüfen' : ''}
             </button>
           </div>
         )}

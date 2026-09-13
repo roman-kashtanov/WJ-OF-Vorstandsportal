@@ -33,13 +33,14 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
 
 ## Aktueller Stand (13.09.2026)
 
-- Version **v3.23.0**, lokal committet; noch nicht gepusht: v3.19.0
+- Version **v3.24.0**, lokal committet; noch nicht gepusht: v3.19.0
   (Übersicht-Module, Beschlussbereiche), v3.20.0 (Personen: Vor-/Nachname,
   Zuordnung über den Namen, Personenübersicht), v3.21.0 (Buchhaltungs-Schalter
   mit Archiv, Archiv nach Jahr/Monat/Art), v3.22.0 (Archiv als Reiter, weiche
   Übergänge überall), v3.23.0 (große Knöpfe aus der Übersicht entfernt,
-  Nachweis-Link kopieren). Bis einschließlich Doku-Commit „Arbeitsregeln" ist
-  alles veröffentlicht.
+  Nachweis-Link kopieren), v3.24.0 (Beschluss-Entwurf vor dem Anlegen,
+  archivierte Beschlüsse in der Auswahl einblendbar). Bis einschließlich
+  Doku-Commit „Arbeitsregeln" ist alles veröffentlicht.
 - Weiche Übergänge nur im Chrome-Vorschaufenster geprüft – auf dem iPhone
   (Safari ab iOS 18) noch vom Nutzer zu testen.
 - Offen beim Nutzer: doppelte Personen (Roman Kashtanov 7×, Diana Sajzew 2×)
@@ -1965,3 +1966,32 @@ auch für Personen ohne E-Mail, zum Weiterleiten per WhatsApp.
 Historie, beide Nachweise da 400, unbekannt 404, Senden ohne Anmeldung 401).
 Echtes Kopieren auf dem iPhone erst nach dem Deploy prüfbar (lokal fehlen
 Dienstkonto und Link-Schlüssel).
+
+## v3.24.0 - Beschluss-Entwurf vor dem Anlegen, Archiv in der Beschlussauswahl
+
+**Beschlussauswahl** (`ResolutionPicker.tsx`, beim Zuordnen von Zuschüssen/
+Auslagen): zeigt wie bisher nur Beschlüsse außerhalb des Archivs
+(`resolutionSectionOf`), darunter jetzt „N archivierte Beschlüsse einblenden".
+Archivierte tragen dann ein Etikett „Archiv" und einen Hinweis, dass die
+Buchhaltung dort erneut geprüft werden sollte. Abgelehnte kommen weiterhin nie
+in Frage (`statuses`).
+
+**Beschluss-Entwurf** (`ResolutionDraftModal.tsx`, wiederverwendbar): Beim
+Bündeln wird der Beschluss nicht mehr sofort angelegt. „Beschluss über N …
+prüfen" öffnet ein Entwurfsfenster mit
+- **Vorschau** – sieht aus wie die Beschluss-Detailansicht (Nummer, Entwurf,
+  Kategorie, Bezeichnung, Erläuterung, Antragswortlaut, Budget, angehängte
+  Nachweise); statt Abstimmknöpfen nur ein Hinweis, dass sie nach dem Anlegen
+  erscheinen (mit den Namen der Stimmberechtigten),
+- **Bearbeiten** – Bezeichnung, Kategorie, Antragswortlaut, Erläuterung,
+  „Auf den automatischen Vorschlag zurücksetzen",
+- Fuß: „Zurück" zur Auswahl, „Beschluss anlegen".
+
+**Kein Fenster über dem anderen:** `BundleSubsidiesModal` hat zwei Schritte
+(`step`); im Schritt „preview" gibt es statt der Auswahl das Entwurfsfenster
+zurück. Die Auswahl blendet dadurch über `overlayExit` aus, der Entwurf ein.
+Angepasster Text bleibt beim Zurückgehen erhalten, solange dieselben Positionen
+gewählt sind (`draftKey`); beim Schließen wird alles zurückgesetzt (das Fenster
+ist in App.tsx dauerhaft eingebunden). Die Beschlusserkennung aus dem
+Protokolltext (`ProtocolScanResultsModal`) hatte schon bearbeitbare Felder und
+ist unverändert.

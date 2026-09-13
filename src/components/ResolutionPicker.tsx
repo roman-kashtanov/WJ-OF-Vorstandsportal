@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { Search, Check } from 'lucide-react';
+import { Search, Check, Archive } from 'lucide-react';
 import { Resolution, ResolutionStatus } from '../types';
 import { formatCurrency, formatDate } from '../utils/formatters';
+import { resolutionSectionOf } from '../utils/resolutionSections';
+import { Collapse } from './Collapse';
 
 interface Props {
   resolutions: Resolution[];
@@ -18,28 +20,28 @@ const STATUS_LABEL: Partial<Record<ResolutionStatus, string>> = {
   angenommen: 'Angenommen',
 };
 
-/** Buchhaltung erledigt oder nicht noetig = der Beschluss ist abgeschlossen. */
-const isBookkeepingDone = (r: Resolution) =>
-  r.bookkeepingStatus === 'bearbeitet' || r.bookkeepingStatus === 'nicht_notwendig';
-
 const decisionDate = (r: Resolution) => r.passedAt || r.createdAt;
+
+/** Steht der Beschluss im Reiter "Archiv" (archiviert oder Buchhaltung erledigt)? */
+const isInArchive = (r: Resolution) => resolutionSectionOf(r) === 'archiv';
 
 /**
  * Auswahl eines bestehenden Beschlusses (Zuschuss/Auslage zuordnen).
  *
  * Statt einer Klappliste: durchsuchbar und mit Budget und Datum, weil es
- * ueber die Jahre hunderte Beschluesse werden. Beschluesse mit erledigter
- * Buchhaltung werden nicht mehr vorgeschlagen - wer die Buchhaltung pflegt,
- * sieht so automatisch nur noch die offenen.
+ * ueber die Jahre hunderte Beschluesse werden. Vorgeschlagen werden nur
+ * offene Beschluesse; archivierte lassen sich auf Wunsch einblenden, z. B.
+ * wenn eine Auslage zu einem laengst gebuchten Beschluss gehoert.
  */
 export const ResolutionPicker: React.FC<Props> = ({ resolutions, value, onChange, statuses, noneLabel }) => {
   const [query, setQuery] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
 
-  const { shown, hiddenCount } = useMemo(() => {
-    const candidates = resolutions.filter((r) => !r.isArchived && statuses.includes(r.status));
-    const open = candidates.filter((r) => !isBookkeepingDone(r) || r.id === value);
+  const { shown, archivedCount } = useMemo(() => {
+    const candidates = resolutions.filter((r) => statuses.includes(r.status));
+    const pool = candidates.filter((r) => showArchived || !isInArchive(r) || r.id === value);
     const q = query.trim().toLowerCase();
-    const matches = open
+    const matches = pool
       .filter((r) => {
         if (!q) return true;
         return [
@@ -55,8 +57,11 @@ export const ResolutionPicker: React.FC<Props> = ({ resolutions, value, onChange
           .includes(q);
       })
       .sort((a, b) => decisionDate(b).localeCompare(decisionDate(a)));
-    return { shown: matches, hiddenCount: candidates.length - open.length };
-  }, [resolutions, statuses, value, query]);
+    return {
+      shown: matches,
+      archivedCount: candidates.filter((r) => isInArchive(r) && r.id !== value).length,
+    };
+  }, [resolutions, statuses, value, query, showArchived]);
 
   const optionClass = (selected: boolean) =>
     `w-full text-left p-2.5 rounded-xl border transition-colors cursor-pointer ${
@@ -99,7 +104,11 @@ export const ResolutionPicker: React.FC<Props> = ({ resolutions, value, onChange
 
         {shown.length === 0 ? (
           <p className="text-[11px] text-slate-400 text-center py-3">
-            {query.trim() ? 'Kein passender Beschluss gefunden.' : 'Keine offenen Beschlüsse vorhanden.'}
+            {query.trim()
+              ? 'Kein passender Beschluss gefunden.'
+              : showArchived
+              ? 'Keine Beschlüsse vorhanden.'
+              : 'Keine offenen Beschlüsse vorhanden.'}
           </p>
         ) : (
           shown.map((r) => {
@@ -122,6 +131,12 @@ export const ResolutionPicker: React.FC<Props> = ({ resolutions, value, onChange
                   >
                     {STATUS_LABEL[r.status] || r.status}
                   </span>
+                  {isInArchive(r) && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 bg-slate-100 text-slate-600 inline-flex items-center gap-0.5">
+                      <Archive className="w-2.5 h-2.5" strokeWidth={2} />
+                      Archiv
+                    </span>
+                  )}
                   {selected && <Check className="w-3.5 h-3.5 text-[#003594] ml-auto shrink-0" strokeWidth={2.5} />}
                 </span>
                 <span className="block text-xs font-bold text-slate-900 truncate mt-0.5">{r.title}</span>
@@ -140,12 +155,25 @@ export const ResolutionPicker: React.FC<Props> = ({ resolutions, value, onChange
         )}
       </div>
 
-      {hiddenCount > 0 && (
-        <p className="text-[11px] text-slate-400">
-          {hiddenCount} {hiddenCount === 1 ? 'Beschluss' : 'Beschlüsse'} mit erledigter Buchhaltung
-          ausgeblendet.
-        </p>
+      {archivedCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowArchived((v) => !v)}
+          className="w-full py-1.5 rounded-lg text-[11px] font-semibold text-slate-500 hover:text-[#003594] hover:bg-slate-50 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+        >
+          <Archive className="w-3 h-3" strokeWidth={2} />
+          {showArchived
+            ? 'Archivierte Beschlüsse wieder ausblenden'
+            : `${archivedCount} ${archivedCount === 1 ? 'archivierten Beschluss' : 'archivierte Beschlüsse'} einblenden`}
+        </button>
       )}
+
+      <Collapse open={showArchived && archivedCount > 0}>
+        <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-2">
+          Archivierte Beschlüsse sind in der Buchhaltung bereits erledigt. Wird ihnen etwas
+          zugeordnet, bitte die Buchhaltung dort erneut prüfen.
+        </p>
+      </Collapse>
     </div>
   );
 };
