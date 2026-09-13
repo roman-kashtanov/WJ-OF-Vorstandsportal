@@ -151,6 +151,40 @@ export const FirestoreAdmin = {
   },
 
   /**
+   * Liest alle Dokumente einer Sammlung, seitenweise. Nur fuer kleine
+   * Sammlungen gedacht - z. B. die Zuschuss-Personen beim Namensabgleich.
+   * `fieldPaths` begrenzt die gelieferten Felder.
+   */
+  async listDocuments(collection: string, fieldPaths?: string[]): Promise<Record<string, any>[]> {
+    const sa = loadServiceAccount();
+    if (!sa) throw new Error('Kein Dienstkonto hinterlegt (FIREBASE_SERVICE_ACCOUNT).');
+    const token = await getAccessToken(sa);
+
+    const out: Record<string, any>[] = [];
+    let pageToken = '';
+    do {
+      const params = new URLSearchParams({ pageSize: '300' });
+      if (pageToken) params.set('pageToken', pageToken);
+      for (const f of fieldPaths || []) params.append('mask.fieldPaths', f);
+      const url = `https://firestore.googleapis.com/v1/projects/${sa.project_id}/databases/(default)/documents/${encodeDocumentPath(collection)}?${params}`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const data: any = await res.json();
+      if (!res.ok) throw new Error(data?.error?.message || 'Lesen fehlgeschlagen.');
+
+      for (const doc of data.documents || []) {
+        const fields: Record<string, any> = {};
+        for (const [k, v] of Object.entries(doc.fields || {})) fields[k] = fromFirestoreValue(v);
+        // Dokument-ID aus dem Pfad, falls das Feld "id" fehlt
+        if (!fields.id && typeof doc.name === 'string') fields.id = doc.name.split('/').pop();
+        out.push(fields);
+      }
+      pageToken = data.nextPageToken || '';
+    } while (pageToken);
+
+    return out;
+  },
+
+  /**
    * Schreibt einzelne Felder. Dank updateMask bleiben alle uebrigen Felder
    * unangetastet - wichtig, damit parallele Aenderungen nicht verloren gehen.
    */

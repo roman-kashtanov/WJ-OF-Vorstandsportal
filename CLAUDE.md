@@ -33,9 +33,13 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
 
 ## Aktueller Stand (13.09.2026)
 
-- Version **v3.18.0**, lokal committet; noch nicht gepusht: v3.17.7 (Namen
-  änderbar), v3.17.8 (Einstellungen lokal ohne Code), v3.17.9
-  (Rollen-Auswahl), v3.18.0 (Start-Hänger/leere Daten).
+- Version **v3.20.0**, lokal committet; noch nicht gepusht: Doku-Commit
+  (Arbeitsregeln oben), v3.19.0 (Übersicht-Module, „Alle" am Ende,
+  Beschlussbereiche), v3.20.0 (Personen: Vor-/Nachname, Zuordnung über den
+  Namen, Personenübersicht). v3.17.7–v3.18.0 sind veröffentlicht.
+- Nach dem Deploy prüfen: öffentlichen Antrag mit bereits vorhandenem Namen
+  einreichen → wird derselben Person zugeordnet, bei abweichender IBAN steht
+  ein Hinweis in der Notiz.
 - Mitglieder: Roman Kashtanov (Schatzmeister), Roman Test, WJ OF (Entwickler)
   = `offenbachwj@gmail.com`, Rolle „Tester/Entwickler", festangestellt, ohne
   Stimmrecht – offen: ob „festangestellt" entfernt werden soll.
@@ -1775,3 +1779,64 @@ half.
 **Lokal getestet:** Neuladen zeigt Daten; Abmelden → Entwickler-Login zeigt
 Daten ohne Neustart; keine abgelehnten Abos in der Konsole. Nicht simulierbar:
 haengende Leitung auf dem iPhone (5-s-Neuladen) - nur im Feld pruefbar.
+
+## v3.19.0 - Übersicht mit Modulen, „Alle" am Ende, Beschlussbereiche
+
+**Übersicht** (`DashboardView.tsx`, Baustein `DashboardModule.tsx`): unter der
+Vorstandssitzung untereinander drei Module – Beschlüsse, Zuschüsse, Auslagen.
+Nur Zähler, nichts bearbeitbar. Zeilen mit 0 und leere Module werden
+ausgeblendet. Ein Tipp springt in den Reiter mit vorausgewählter Phase bzw.
+Bereich (`OverviewTarget`; in `App.tsx` als `overviewTarget`, wird nach dem
+Reiterwechsel wieder geleert, damit die normale Navigation mit der
+Standard-Vorauswahl startet). Zuschüsse zählen über alle Jahre, beim Sprung
+wird das neueste betroffene Jahr gewählt. Ersetzt die Handlungsbedarf-Kacheln
+(v3.15.0) und die aufklappbare Liste offener Beschlüsse; der Hinweis „wartet
+auf deine Stimme" oben bleibt.
+
+**Zuschüsse/Auslagen:** „Alle" steht hinter „Erledigt" und zeigt jetzt
+wirklich alle (vorher ohne Erledigte). Vorauswahl ist die erste nicht
+erledigte Phase mit Einträgen (`defaultSubsidyStage`).
+
+**Beschlüsse:** Reiter Offen / Abgestimmt · Buchhaltung offen / Alle
+(`utils/resolutionSections.ts`). „Buchhaltung offen" = angenommen, Buchhaltung
+weder „bearbeitet" noch „nicht notwendig"; abgelehnte stehen nur unter
+„Alle". Im Archiv keine Reiter. Jede Zeile zeigt Erstell- und Beschlussdatum
+(`passedAt` wird nur bei angenommenen gesetzt).
+
+## v3.20.0 - Personen: Vor-/Nachname, Zuordnung über den Namen, Personenübersicht
+
+**Warum die Grenze je Person nie griff:** Der Server legte bei **jedem**
+öffentlichen Antrag (`/antrag`, `/auslage`) eine neue Person an. Außerdem war
+die Personenliste nur über ein kleines Symbol erreichbar.
+
+**Jetzt:**
+- Formulare und Personenfenster fragen Vor- und Nachname getrennt ab.
+  `SubsidyPerson.firstName/lastName` sind optional, `name` bleibt der
+  Anzeigename; ältere Einträge über `splitPersonName()`.
+- `findOrCreatePublicPerson()` (`api/subsidy.ts`) liest die Personen über das
+  neue `FirestoreAdmin.listDocuments()` und sucht denselben `normalizeNameKey`
+  – Reihenfolge, Groß-/Kleinschreibung, Umlaute (ü = ue), Akzente und
+  Bindestriche egal. Treffer → Vorgang wird dieser Person zugeordnet.
+  **Bestehende E-Mail/IBAN werden nie überschrieben** – sonst könnte jeder mit
+  dem Zugangscode unter fremdem Namen die IBAN eines Mitglieds austauschen.
+  Fehlende Angaben werden ergänzt, Abweichungen stehen als „Hinweis: Im
+  Formular abweichend angegeben …" in der Notiz des Vorgangs. Ist die Liste
+  nicht lesbar, wird wie früher neu angelegt (Antrag geht nicht verloren).
+  Ältere Formulare, die nur `personName` schicken, funktionieren weiter.
+- Restrisiko: zwei verschiedene Menschen mit gleichem Namen landen bei
+  derselben Person – dann den Vorgang über „Bearbeiten" umhängen.
+- CSV-Import ordnet ebenfalls nur über den Namen zu (vorher Name + IBAN). Die
+  Sicherungsdatei enthält zusätzlich Vorname/Nachname, alte Dateien bleiben
+  lesbar.
+- **Personenübersicht** (`SubsidyPeopleModal.tsx`; als Zeile im Budget-Kasten
+  der Zuschüsse, mit Zähler „über Grenze"): sortiert nach Nachname, je Person
+  Balken gegen `perPersonPerYear`, aufgeklappt Kategorien, Vorgänge des Jahres
+  und „Anderen Eintrag zuordnen" (manuelles Zusammenführen, z. B. bei anderer
+  E-Mail-Adresse). Beim Zusammenführen werden fehlende Kontakt- und Bankdaten
+  vom entfernten Eintrag übernommen.
+
+**Getestet:** Namensfunktionen und Sicherungsdatei per Skript; Server-Zuordnung
+mit nachgestellter Datenbank (gleicher Name mit abweichenden Daten, neuer Name,
+altes Formular, fehlender Nachname, Datenbank nicht lesbar). Im Browser:
+Personenübersicht und die neuen Namensfelder. Echter Antrag erst nach dem
+Deploy möglich.

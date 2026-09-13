@@ -299,17 +299,42 @@ export function checkSubsidy(
 /**
  * Vergleichsschlüssel für Namen, unabhängig von der Reihenfolge der
  * Wortteile ("Max Mustermann" und "Mustermann Max" ergeben denselben
- * Schlüssel) - erkennt so einen häufigen Tippfehler beim öffentlichen
- * Formular als wahrscheinliches Personen-Duplikat.
+ * Schlüssel), von Groß-/Kleinschreibung, Umlaut-Schreibweise ("Müller" =
+ * "Mueller") und Bindestrichen. Daran ordnet der Server öffentlich
+ * eingereichte Vorgänge einer bestehenden Person zu (api/subsidy.ts), und
+ * die Personenübersicht erkennt darüber Duplikate.
  */
 export function normalizeNameKey(name: string): string {
   return name
     .toLowerCase()
+    .replace(/ä/g, 'ae')
+    .replace(/ö/g, 'oe')
+    .replace(/ü/g, 'ue')
+    .replace(/ß/g, 'ss')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[-_.,]+/g, ' ')
     .trim()
     .split(/\s+/)
     .filter(Boolean)
     .sort()
     .join(' ');
+}
+
+/** "Vorname Nachname" - der Anzeigename einer Person. */
+export function joinPersonName(firstName: string, lastName: string): string {
+  return `${firstName.trim()} ${lastName.trim()}`.trim().replace(/\s+/g, ' ');
+}
+
+/**
+ * Trennt einen zusammengesetzten Namen am letzten Leerzeichen - für ältere
+ * Einträge, die nur `name` haben. Ein einzelnes Wort gilt als Nachname.
+ */
+export function splitPersonName(name: string): { firstName: string; lastName: string } {
+  const clean = name.trim().replace(/\s+/g, ' ');
+  const idx = clean.lastIndexOf(' ');
+  if (idx < 0) return { firstName: '', lastName: clean };
+  return { firstName: clean.slice(0, idx), lastName: clean.slice(idx + 1) };
 }
 
 /** Verwendungszweck für die Überweisung. */

@@ -1,4 +1,5 @@
 import { saveFile } from './fileHelpers';
+import { joinPersonName, splitPersonName } from './subsidies';
 
 /**
  * Format der Sicherungsdatei fuers oeffentliche Zuschuss-Antragsformular
@@ -6,11 +7,16 @@ import { saveFile } from './fileHelpers';
  * nicht erreicht. Als schlichte "Feld;Wert"-Paare statt einer echten
  * Tabellenzeile, damit Kommentare/Namen mit Sonderzeichen das Format nicht
  * verwirren und ein spaeterer CSV-Import (useSubsidies.ts) robust bleibt.
+ *
+ * Seit v3.20.0 stehen Vor- und Nachname getrennt drin. "Name" bleibt
+ * zusaetzlich erhalten, damit aeltere Sicherungsdateien weiter einlesbar sind.
  */
 
 const CSV_VERSION = 'WJOF-Zuschuss-Sicherung/1';
 
 export interface SubsidyBackupFields {
+  firstName: string;
+  lastName: string;
   personName: string;
   personEmail: string;
   iban: string;
@@ -24,6 +30,8 @@ export interface SubsidyBackupFields {
 }
 
 export interface ParsedSubsidyBackup {
+  firstName: string;
+  lastName: string;
   personName: string;
   personEmail: string;
   iban: string;
@@ -42,6 +50,8 @@ export function buildSubsidyBackupCsv(fields: SubsidyBackupFields): string {
   const rows: [string, string][] = [
     ['Format', CSV_VERSION],
     ['Erstellt am', new Date().toISOString()],
+    ['Vorname', fields.firstName],
+    ['Nachname', fields.lastName],
     ['Name', fields.personName],
     ['E-Mail', fields.personEmail],
     ['IBAN', fields.iban],
@@ -82,12 +92,21 @@ export function parseSubsidyBackupCsv(text: string): ParsedSubsidyBackup | null 
   }
 
   if (map['Format'] !== CSV_VERSION) return null;
-  if (!map['Name']?.trim() || !map['Veranstaltung (Schlüssel)']?.trim()) return null;
+
+  // Neue Dateien: Vorname/Nachname; alte Dateien: nur Name
+  const fromName = splitPersonName(map['Name'] || '');
+  const firstName = (map['Vorname'] ?? fromName.firstName).trim();
+  const lastName = (map['Nachname'] ?? fromName.lastName).trim();
+  const personName = (map['Name'] || '').trim() || joinPersonName(firstName, lastName);
+
+  if (!personName || !map['Veranstaltung (Schlüssel)']?.trim()) return null;
 
   const actualCost = Number((map['Tatsächliche Kosten'] || '').replace(',', '.'));
 
   return {
-    personName: map['Name'].trim(),
+    firstName,
+    lastName,
+    personName,
     personEmail: (map['E-Mail'] || '').trim(),
     iban: (map['IBAN'] || '').trim(),
     bic: (map['BIC'] || '').trim(),

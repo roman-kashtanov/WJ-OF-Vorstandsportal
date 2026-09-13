@@ -43,7 +43,10 @@ export const SubsidyApplicationPage: React.FC = () => {
   const [catalogue, setCatalogue] = useState<SubsidyCatalogueEntry[]>([]);
   const [catalogueError, setCatalogueError] = useState<string | null>(null);
 
-  const [personName, setPersonName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  /** Anzeige- und Sicherungsname; zugeordnet wird serverseitig über Vor- und Nachname. */
+  const personName = `${firstName.trim()} ${lastName.trim()}`.trim();
   const [personEmail, setPersonEmail] = useState('');
   const [iban, setIban] = useState('');
   const [bic, setBic] = useState('');
@@ -127,7 +130,8 @@ export const SubsidyApplicationPage: React.FC = () => {
   const ibanValid = !iban || isValidIban(iban);
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(personEmail.trim());
   const canSubmit =
-    personName.trim().length > 1 &&
+    !!firstName.trim() &&
+    !!lastName.trim() &&
     emailValid &&
     iban.trim().length > 0 &&
     isValidIban(iban) &&
@@ -138,7 +142,9 @@ export const SubsidyApplicationPage: React.FC = () => {
   const downloadBackupCsv = () => {
     downloadSubsidyBackupCsv(
       {
-        personName: personName.trim(),
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        personName,
         personEmail: personEmail.trim(),
         iban: iban.trim(),
         bic: bic.trim(),
@@ -161,7 +167,9 @@ export const SubsidyApplicationPage: React.FC = () => {
     try {
       const { ok, data } = await postJson('subsidy/submit', {
         accessCode: code,
-        personName: personName.trim(),
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        personName,
         personEmail: personEmail.trim(),
         iban: iban.trim(),
         bic: bic.trim() || undefined,
@@ -242,14 +250,27 @@ export const SubsidyApplicationPage: React.FC = () => {
             <form onSubmit={handleSubmit} className="p-6 space-y-4 text-sm">
               <h1 className="font-bold text-slate-900 text-base text-center">Zuschuss beantragen</h1>
 
-              <div>
-                <label className="font-bold text-slate-900 text-xs block mb-1.5">Name *</label>
-                <input
-                  required
-                  value={personName}
-                  onChange={(e) => setPersonName(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-[#003594]"
-                />
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="min-w-0">
+                  <label className="font-bold text-slate-900 text-xs block mb-1.5">Vorname *</label>
+                  <input
+                    required
+                    autoComplete="given-name"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    className="w-full min-w-0 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-[#003594]"
+                  />
+                </div>
+                <div className="min-w-0">
+                  <label className="font-bold text-slate-900 text-xs block mb-1.5">Nachname *</label>
+                  <input
+                    required
+                    autoComplete="family-name"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    className="w-full min-w-0 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-[#003594]"
+                  />
+                </div>
               </div>
 
               <div>

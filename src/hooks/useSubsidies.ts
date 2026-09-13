@@ -494,7 +494,31 @@ export function useSubsidies({
         return updated;
       })
     );
-    setSubsidyPeople((prev) => prev.filter((p) => p.id !== mergeId));
+    // Fehlende Kontakt- und Bankdaten der behaltenen Person aus dem Duplikat
+    // uebernehmen - vorhandene werden nicht ueberschrieben. Innerhalb des
+    // Updaters, weil beim Zusammenfuehren mehrerer Duplikate direkt
+    // nacheinander sonst mit einem veralteten Stand gerechnet wuerde.
+    setSubsidyPeople((prev) => {
+      const keep = prev.find((p) => p.id === keepId);
+      const merge = prev.find((p) => p.id === mergeId);
+      if (!keep) return prev.filter((p) => p.id !== mergeId);
+      const completed: SubsidyPerson = {
+        ...keep,
+        email: keep.email || merge?.email,
+        iban: keep.iban || merge?.iban,
+        bic: keep.bic || merge?.bic,
+        accountHolder: keep.accountHolder || merge?.accountHolder,
+      };
+      const changed =
+        completed.email !== keep.email ||
+        completed.iban !== keep.iban ||
+        completed.bic !== keep.bic ||
+        completed.accountHolder !== keep.accountHolder;
+      if (changed) FirebaseSync.saveSubsidyPerson(completed).catch(() => {});
+      return prev
+        .filter((p) => p.id !== mergeId)
+        .map((p) => (p.id === keepId ? completed : p));
+    });
     FirebaseSync.deleteSubsidyPerson(mergeId).catch(() => {});
   };
 
@@ -515,15 +539,17 @@ export function useSubsidies({
       return { ok: false, error: 'Unbekannte Veranstaltung in der Sicherungsdatei.' };
     }
 
+    // Zuordnung wie beim oeffentlichen Formular (api/subsidy.ts): allein ueber
+    // Vor- und Nachname, damit die Jahresgrenze je Person greift.
     const nameKey = normalizeNameKey(parsed.personName);
-    let person = subsidyPeople.find(
-      (p) => normalizeNameKey(p.name) === nameKey && (!parsed.iban || p.iban === parsed.iban)
-    );
+    let person = subsidyPeople.find((p) => normalizeNameKey(p.name) === nameKey);
     const now = new Date().toISOString();
     if (!person) {
       person = {
         id: `csv_${Date.now()}`,
         name: parsed.personName,
+        firstName: parsed.firstName || undefined,
+        lastName: parsed.lastName || undefined,
         type: 'interessent',
         email: parsed.personEmail || undefined,
         iban: parsed.iban || undefined,

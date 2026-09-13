@@ -16,6 +16,7 @@ import {
   SUBSIDY_STAGES,
   defaultSubsidyStage,
   budgetOverview,
+  personBudget,
   isPayable,
   paymentReference,
   ofKind,
@@ -273,6 +274,13 @@ export const SubsidiesView: React.FC<Props> = ({
   }, [scoped, year, filterPerson, filterType, activeStage, stageOf, search, personById]);
 
   const overview = budgetOverview(subsidies, year, limits);
+  /** Fuer den Hinweis an der Personenuebersicht: wer liegt ueber der Jahresgrenze? */
+  const peopleOverLimit =
+    kind === 'zuschuss'
+      ? people.filter(
+          (p) => personBudget(subsidies, p.id, year, limits).used > limits.perPersonPerYear
+        ).length
+      : 0;
   const payable = scoped.filter((s) => s.year === year && isPayable(s));
   const bundlable = scoped.filter((s) => s.year === year && s.status === 'bestaetigt');
   const notYetHappened = scoped.filter(
@@ -455,6 +463,32 @@ export const SubsidiesView: React.FC<Props> = ({
             Mitgliedern unverzüglich mitzuteilen.
           </div>
         )}
+
+        {/* Personenübersicht: Jahresgrenze je Person. Bewusst hier sichtbar -
+            der Knopf oben ist auf dem Handy nur ein Symbol und wurde übersehen. */}
+        <button
+          type="button"
+          onClick={onManagePeople}
+          className="mt-3 pt-3 w-full border-t border-slate-100 flex items-center justify-between gap-2 text-left cursor-pointer group"
+        >
+          <span className="flex items-center gap-2 min-w-0">
+            <Users className="w-4 h-4 text-[#003594] shrink-0" strokeWidth={1.75} />
+            <span className="min-w-0">
+              <span className="block text-xs font-bold text-slate-800">Personenübersicht</span>
+              <span className="block text-[11px] text-slate-500 truncate">
+                Grenze je Person {formatCurrency(limits.perPersonPerYear)} im Jahr
+              </span>
+            </span>
+          </span>
+          <span className="flex items-center gap-1.5 shrink-0">
+            {peopleOverLimit > 0 && (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700">
+                {peopleOverLimit} über Grenze
+              </span>
+            )}
+            <span className="text-[#003594] font-bold text-xs group-hover:underline">Öffnen →</span>
+          </span>
+        </button>
       </div>
       )}
 

@@ -7,6 +7,7 @@ import { SUBSIDY_CATALOGUE, SubsidyCatalogueEntry } from '../src/data/subsidyCat
 import { isValidIban } from '../src/utils/sepa';
 import { dataUrlBytes, formatBytes, MAX_STORED_BYTES } from '../src/utils/fileStorage';
 import { writeNotification, writeAuditLogEntry } from './notify';
+import { normalizeNameKey, joinPersonName, splitPersonName } from '../src/utils/subsidies';
 
 /**
  * Oeffentliches Zuschuss-Antragsformular (/antrag) und Nachweis-Nachreichen
@@ -24,6 +25,119 @@ interface ProofFileInput {
 
 function newId(prefix: string): string {
   return `${prefix}_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+}
+
+/**
+ * Vor- und Nachname aus der Anfrage. Aeltere, noch zwischengespeicherte
+ * Formulare schicken nur `personName` - dann wird am letzten Leerzeichen
+ * getrennt.
+ */
+function readPersonName(input: { firstName?: string; lastName?: string; personName?: string }) {
+  const firstName = (input?.firstName || '').trim();
+  const lastName = (input?.lastName || '').trim();
+  if (firstName || lastName) return { firstName, lastName };
+  return splitPersonName(input?.personName || '');
+}
+
+interface PublicPersonInput {
+  firstName: string;
+  lastName: string;
+  email: string;
+  iban: string;
+  bic?: string;
+  accountHolder?: string;
+}
+
+const compactIban = (iban?: string) => (iban || '').replace(/\s+/g, '').toUpperCase();
+
+/**
+ * Ordnet einen oeffentlich eingereichten Vorgang einer Person zu. Massgeblich
+ * sind Vor- und Nachname (Reihenfolge, Gross-/Kleinschreibung und Umlaute
+ * egal, siehe normalizeNameKey) - NICHT die E-Mail-Adresse. Nur so greift die
+ * Jahresgrenze je Person, auch wenn jemand eine andere Adresse benutzt.
+ * Frueher wurde fuer jeden Antrag eine neue Person angelegt.
+ *
+ * Bestehende Kontakt- und Bankdaten werden bewusst NIE ueberschrieben: sonst
+ * koennte jeder mit dem Zugangscode unter fremdem Namen die IBAN eines
+ * Mitglieds austauschen. Fehlende Angaben werden ergaenzt; Abweichungen
+ * landen als Hinweis am Vorgang, damit der Vorstand sie bewusst prueft.
+ */
+async function findOrCreatePublicPerson(
+  person: PublicPersonInput,
+  createdNote: string,
+  now: string
+): Promise<{ personId: string; personName: string; hint?: string }> {
+  const name = joinPersonName(person.firstName, person.lastName);
+  const key = normalizeNameKey(name);
+
+  let existing: Record<string, any> | undefined;
+  try {
+    const all = await FirestoreAdmin.listDocuments('subsidyPeople', [
+      'id',
+      'name',
+      'firstName',
+      'lastName',
+      'email',
+      'iban',
+      'bic',
+      'accountHolder',
+      'createdAt',
+    ]);
+    existing = all
+      .filter((p) => typeof p.name === 'string' && normalizeNameKey(p.name) === key)
+      .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')))[0];
+  } catch {
+    // Abgleich nicht moeglich - lieber eine neue Person anlegen (in der
+    // Personenuebersicht zusammenfuehrbar) als den Antrag abzulehnen.
+  }
+
+  if (!existing?.id) {
+    const personId = newId('pub');
+    await FirestoreAdmin.patchDocument(`subsidyPeople/${personId}`, {
+      id: personId,
+      name,
+      firstName: person.firstName,
+      lastName: person.lastName,
+      type: 'interessent',
+      email: person.email,
+      iban: person.iban,
+      bic: person.bic || undefined,
+      accountHolder: person.accountHolder || undefined,
+      isActive: true,
+      note: createdNote,
+      createdAt: now,
+    });
+    return { personId, personName: name };
+  }
+
+  const fill: Record<string, any> = {};
+  if (!existing.email && person.email) fill.email = person.email;
+  if (!existing.iban && person.iban) fill.iban = person.iban;
+  if (!existing.bic && person.bic) fill.bic = person.bic;
+  if (!existing.accountHolder && person.accountHolder) fill.accountHolder = person.accountHolder;
+  if (!existing.firstName && !existing.lastName) {
+    fill.firstName = person.firstName;
+    fill.lastName = person.lastName;
+  }
+  if (Object.keys(fill).length > 0) {
+    await FirestoreAdmin.patchDocument(`subsidyPeople/${existing.id}`, fill);
+  }
+
+  const differences: string[] = [];
+  if (existing.email && person.email && String(existing.email).toLowerCase() !== person.email.toLowerCase()) {
+    differences.push(`E-Mail ${person.email}`);
+  }
+  if (existing.iban && person.iban && compactIban(existing.iban) !== compactIban(person.iban)) {
+    differences.push(`IBAN ${person.iban}`);
+  }
+
+  return {
+    personId: existing.id,
+    personName: existing.name,
+    hint: differences.length
+      ? `Hinweis: Im Formular abweichend angegeben – ${differences.join(', ')}. Bei der Person bleiben die bisherigen Daten hinterlegt.`
+      : undefined,
+  };
 }
 
 function validateProofFile(file?: ProofFileInput): string | null {
@@ -88,7 +202,10 @@ export async function handleVerifySubsidyCode(code: string): Promise<{ status: n
 
 export interface SubmitSubsidyInput {
   accessCode: string;
-  personName: string;
+  firstName?: string;
+  lastName?: string;
+  /** Nur noch von aelteren, zwischengespeicherten Formularen. */
+  personName?: string;
   personEmail: string;
   iban: string;
   bic?: string;
@@ -119,14 +236,16 @@ export async function handleSubmitSubsidy(
     return { status: 401, body: { error: 'Zugangscode ist falsch oder abgelaufen.' } };
   }
 
-  const personName = (input?.personName || '').trim();
+  const { firstName, lastName } = readPersonName(input);
   const personEmail = (input?.personEmail || '').trim();
   const iban = (input?.iban || '').trim();
   const eventKey = (input?.eventKey || '').trim();
   const eventDate = (input?.eventDate || '').trim();
   const actualCost = Number(input?.actualCost);
 
-  if (!personName) return { status: 400, body: { error: 'Bitte einen Namen angeben.' } };
+  if (!firstName || !lastName) {
+    return { status: 400, body: { error: 'Bitte Vor- und Nachnamen angeben.' } };
+  }
   if (!personEmail || !EMAIL_PATTERN.test(personEmail)) {
     return { status: 400, body: { error: 'Bitte eine gültige E-Mail-Adresse angeben.' } };
   }
@@ -151,21 +270,19 @@ export async function handleSubmitSubsidy(
   if (costProofError) return { status: 400, body: { error: costProofError } };
 
   try {
-    const personId = newId('pub');
     const now = new Date().toISOString();
-
-    await FirestoreAdmin.patchDocument(`subsidyPeople/${personId}`, {
-      id: personId,
-      name: personName,
-      type: 'interessent',
-      email: personEmail,
-      iban,
-      bic: input.bic || undefined,
-      accountHolder: input.accountHolder || undefined,
-      isActive: true,
-      note: 'Über öffentliches Formular angelegt',
-      createdAt: now,
-    });
+    const { personId, personName, hint } = await findOrCreatePublicPerson(
+      {
+        firstName,
+        lastName,
+        email: personEmail,
+        iban,
+        bic: input.bic,
+        accountHolder: input.accountHolder,
+      },
+      'Über öffentliches Formular angelegt',
+      now
+    );
 
     const subsidyId = newId('sub');
     const hasAttendanceProof = !!input.attendanceProofFile;
@@ -211,7 +328,7 @@ export async function handleSubmitSubsidy(
             uploadedAt: now,
           }
         : undefined,
-      note: input.comment || undefined,
+      note: [input.comment, hint].filter(Boolean).join('\n\n') || undefined,
       year: new Date().getFullYear(),
       createdAt: now,
     });
@@ -483,7 +600,10 @@ export async function handleUploadProof(
 
 export interface SubmitExpenseInput {
   accessCode: string;
-  personName: string;
+  firstName?: string;
+  lastName?: string;
+  /** Nur noch von aelteren, zwischengespeicherten Formularen. */
+  personName?: string;
   personEmail: string;
   iban: string;
   bic?: string;
@@ -514,7 +634,7 @@ export async function handleSubmitExpense(
     return { status: 401, body: { error: 'Zugangscode ist falsch oder abgelaufen.' } };
   }
 
-  const personName = (input?.personName || '').trim();
+  const { firstName, lastName } = readPersonName(input);
   const personEmail = (input?.personEmail || '').trim();
   const iban = (input?.iban || '').trim();
   const purpose = (input?.purpose || '').trim();
@@ -522,7 +642,9 @@ export async function handleSubmitExpense(
   const expenseDate = (input?.expenseDate || '').trim();
   const amount = Number(input?.amount);
 
-  if (!personName) return { status: 400, body: { error: 'Bitte einen Namen angeben.' } };
+  if (!firstName || !lastName) {
+    return { status: 400, body: { error: 'Bitte Vor- und Nachnamen angeben.' } };
+  }
   if (!personEmail || !EMAIL_PATTERN.test(personEmail)) {
     return { status: 400, body: { error: 'Bitte eine gültige E-Mail-Adresse angeben.' } };
   }
@@ -548,21 +670,19 @@ export async function handleSubmitExpense(
   if (receiptError) return { status: 400, body: { error: receiptError } };
 
   try {
-    const personId = newId('pub');
     const now = new Date().toISOString();
-
-    await FirestoreAdmin.patchDocument(`subsidyPeople/${personId}`, {
-      id: personId,
-      name: personName,
-      type: 'interessent',
-      email: personEmail,
-      iban,
-      bic: input.bic || undefined,
-      accountHolder: input.accountHolder || undefined,
-      isActive: true,
-      note: 'Über das Auslagen-Formular angelegt',
-      createdAt: now,
-    });
+    const { personId, personName, hint } = await findOrCreatePublicPerson(
+      {
+        firstName,
+        lastName,
+        email: personEmail,
+        iban,
+        bic: input.bic,
+        accountHolder: input.accountHolder,
+      },
+      'Über das Auslagen-Formular angelegt',
+      now
+    );
 
     const expenseId = newId('exp');
     const label = eventName ? `${purpose} (${eventName})` : purpose;
@@ -591,7 +711,7 @@ export async function handleSubmitExpense(
         dataUrl: input.receiptFile.dataUrl,
         uploadedAt: now,
       },
-      note: input.comment || undefined,
+      note: [input.comment, hint].filter(Boolean).join('\n\n') || undefined,
       year: new Date().getFullYear(),
       createdAt: now,
     });

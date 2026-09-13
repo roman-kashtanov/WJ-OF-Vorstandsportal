@@ -440,7 +440,14 @@ export type SubsidyPersonType = 'mitglied' | 'foerdermitglied' | 'interessent';
 
 export interface SubsidyPerson {
   id: string;
+  /** Anzeigename ("Vorname Nachname") - daran haengen alle Listen. */
   name: string;
+  /**
+   * Seit v3.20.0 getrennt erfasst (oeffentliche Formulare, Personenfenster).
+   * Aeltere Eintraege haben nur `name`, siehe splitPersonName().
+   */
+  firstName?: string;
+  lastName?: string;
   type: SubsidyPersonType;
   email?: string;
   /** Bankverbindung für die Auszahlung */

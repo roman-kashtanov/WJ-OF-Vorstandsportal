@@ -34,7 +34,8 @@ export const ExpenseSubmissionPage: React.FC = () => {
   const [codeError, setCodeError] = useState<string | null>(null);
   const [checkingCode, setCheckingCode] = useState(false);
 
-  const [personName, setPersonName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [personEmail, setPersonEmail] = useState('');
   const [iban, setIban] = useState('');
   const [bic, setBic] = useState('');
@@ -92,7 +93,8 @@ export const ExpenseSubmissionPage: React.FC = () => {
   };
 
   const canSubmit =
-    !!personName.trim() &&
+    !!firstName.trim() &&
+    !!lastName.trim() &&
     !!personEmail.trim() &&
     isValidIban(iban) &&
     !!purpose.trim() &&
@@ -109,7 +111,8 @@ export const ExpenseSubmissionPage: React.FC = () => {
     try {
       const { ok, data } = await postJson('subsidy/submit-expense', {
         accessCode: code,
-        personName: personName.trim(),
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
         personEmail: personEmail.trim(),
         iban: iban.trim(),
         bic: bic.trim() || undefined,
@@ -190,14 +193,28 @@ export const ExpenseSubmissionPage: React.FC = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="block text-xs font-bold text-slate-700">Dein Name *</label>
-                <input
-                  required
-                  value={personName}
-                  onChange={(e) => setPersonName(e.target.value)}
-                  placeholder="Vor- und Nachname"
-                  className={inputClass}
-                />
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="min-w-0 space-y-2">
+                    <label className="block text-xs font-bold text-slate-700">Vorname *</label>
+                    <input
+                      required
+                      autoComplete="given-name"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+                  <div className="min-w-0 space-y-2">
+                    <label className="block text-xs font-bold text-slate-700">Nachname *</label>
+                    <input
+                      required
+                      autoComplete="family-name"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+                </div>
                 <label className="block text-xs font-bold text-slate-700 pt-1">
                   E-Mail-Adresse *
                 </label>
