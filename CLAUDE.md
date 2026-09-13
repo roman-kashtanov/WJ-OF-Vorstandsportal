@@ -1691,3 +1691,11 @@ trotzdem lokal testbar sind, starten beide Sperren in `SettingsModal` bei
 bei `false`. **Bewusst weiter geschuetzt, auch lokal:** Admin-Code vor dem
 endgueltigen Loeschen, vor dem Aufheben einer Festschreibung und beim Aendern
 des Admin-Codes - lokal wird mit echten Daten gearbeitet.
+
+## v3.17.9 - Rollen-Auswahl zeigt Rollen ausserhalb des Katalogs
+
+Beim lokalen Test gefunden: "WJ OF" hat die Rolle "Schriftfuehrer /
+Protokoll", die nicht im Rollen-Katalog steht - die Auswahl im
+Bearbeiten-Bereich zeigte deshalb "noch keine", ein Tippen haette die Rolle
+still ueberschrieben. Die bisherige Rolle erscheint jetzt als eigene Option
+"(nicht im Rollen-Katalog)".

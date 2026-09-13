@@ -1173,6 +1173,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#003594] text-base sm:text-sm"
                           >
                             <option value="">— noch keine —</option>
+                            {/* Rolle, die (nicht mehr) im Katalog steht: trotzdem anzeigen.
+                                Sonst zeigt die Auswahl "noch keine", und ein Tippen
+                                ueberschreibt die bisherige Rolle unbemerkt. */}
+                            {m.role && !roleCatalogue.roles.includes(m.role) && (
+                              <option value={m.role}>{m.role} (nicht im Rollen-Katalog)</option>
+                            )}
                             {roleCatalogue.roles.map((r) => (
                               <option key={r} value={r}>{r}</option>
                             ))}
