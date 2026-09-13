@@ -246,11 +246,9 @@ export default function App() {
         session?.isAuthenticated &&
         session.user &&
         Date.now() - authSinceRef.current > 8000 &&
-        !remote.some(
-          (m) =>
-            m.id === session.user!.id ||
-            (m.email || '').toLowerCase() === (session.user!.email || '').toLowerCase()
-        )
+        // Nur ueber die Kennung: bei doppelt vergebener Adresse blieb eine
+        // geloeschte Person sonst angemeldet, solange die andere existierte.
+        !remote.some((m) => m.id === session.user!.id)
       ) {
         handleLogout();
       }

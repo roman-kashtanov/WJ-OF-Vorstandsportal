@@ -640,7 +640,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setCloudSyncMsg(null);
     try {
       await FirebaseSync.saveSecuritySettings(securitySettings);
-      await FirebaseSync.syncAllMembers(members);
+      // Bewusst KEIN Abgleich der Mitgliederliste mehr: er schrieb den Stand
+      // dieses Geraets komplett zurueck und stellte geloeschte Personen wieder
+      // her (siehe handleUpdateMembers in useMembers.ts).
       setCloudSyncMsg('Cloud-Daten erfolgreich synchronisiert.');
       setTimeout(() => setCloudSyncMsg(null), 3000);
     } catch (err: any) {

@@ -429,33 +429,9 @@ export const FirebaseSync = {
     }
   },
 
-  // Sync entire members list
-  async syncAllMembers(membersList: BoardMember[]) {
-    this.syncAllowlist(membersList).catch(() => {});
-    try {
-      updateStatus({ isSyncing: true });
-      const snap = await getDocs(collection(db, 'members'));
-      const currentRemoteIds = snap.docs.map((d) => d.id);
-      const newIds = new Set(membersList.map((m) => m.id));
-
-      // Remove deleted members from Firestore
-      for (const remId of currentRemoteIds) {
-        if (!newIds.has(remId)) {
-          await deleteDoc(doc(db, 'members', remId));
-        }
-      }
-
-      // Upsert new/updated members
-      for (const m of membersList) {
-        const payload = cleanData(m);
-        await setDoc(doc(db, 'members', m.id), payload, { merge: true });
-      }
-      updateStatus({ isSyncing: false, lastSyncedAt: new Date().toISOString(), isConnected: true, error: null });
-    } catch (err: any) {
-      console.warn('Failed to syncAllMembers:', err.message);
-      updateStatus({ isSyncing: false, error: err.message });
-    }
-  },
+  // syncAllMembers() entfernt (v3.17.6): schrieb die komplette Mitgliederliste
+  // eines Geraets zurueck und loeschte alles, was dort fehlte - veraltete
+  // Geraete haben so geloeschte Personen wiederhergestellt.
 
   // Listen to InvoiceRequests collection in realtime
   subscribeInvoiceRequests(callback: (requests: InvoiceRequest[]) => void) {

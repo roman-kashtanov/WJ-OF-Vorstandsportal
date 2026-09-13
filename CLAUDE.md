@@ -1649,3 +1649,25 @@ noetig)" - vorher nur beim Anlegen setzbar. Beim Umschalten wird
 Altbestand ohne eigenes Feld das Stimmrecht aus `isPermanentStaff` ableitet.
 Hinweis: `securitySettings.exemptMemberIds`/`exemptEmails` befreien ebenfalls
 vom Code, werden aber von keiner Stelle der App mehr geschrieben.
+
+## v3.17.6 - Geloeschte Mitglieder kamen wieder (ganze Liste wurde zurueckgeschrieben)
+
+**Beobachtung (13.09.2026):** "Entwickler (lokal)" im Portal geloescht, kurz
+darauf existierte `members/mem_1789290504769` wieder - mit **derselben
+Kennung**. Also kein erneutes Anlegen, sondern ein Zurueckschreiben.
+
+**Ursache:** `useMembers.handleUpdateMembers` (jede Aenderung an einer Person:
+Rolle, Stimmrecht, Einladung gesendet) und der Knopf "Cloud synchronisieren"
+riefen `FirebaseSync.syncAllMembers(liste)` auf: die komplette Liste des
+Geraets per `setDoc(merge)` hochladen und alles loeschen, was lokal fehlt.
+Jedes Geraet mit veraltetem Stand (anderer Browser, lokale Testsitzung)
+stellte so Geloeschtes wieder her bzw. haette Neues geloescht. Welches Geraet
+es konkret war, laesst sich nicht mehr feststellen.
+
+**Behoben:** `handleUpdateMembers` speichert nur noch Mitglieder, deren Inhalt
+sich gegenueber dem vorigen Stand geaendert hat (`saveMember`). Loeschen nur
+gezielt ueber `deleteMember`, Freigaben nur beim Anlegen/Entfernen.
+`syncAllMembers` ist entfernt, der Sync-Knopf fasst die Mitglieder nicht mehr
+an. Die automatische Abmeldung entfernter Personen vergleicht nur noch die
+Kennung (vorher auch die Adresse - bei doppelter Adresse blieb die geloeschte
+Person angemeldet).

@@ -162,9 +162,23 @@ export function useMembers() {
   // werden und in dessen Namen abstimmen. Ersatzlos entfernt - jede Person
   // ist ausschliesslich ueber ihre eigene Anmeldung im Portal.
 
+  /**
+   * Speichert NUR die Mitglieder, die sich tatsaechlich geaendert haben.
+   *
+   * Frueher schrieb syncAllMembers() die komplette Liste DIESES Geraets in die
+   * Datenbank und loeschte dort alles, was lokal fehlte. Ein Geraet mit
+   * veraltetem Stand hat so eine geloeschte Person mit derselben Kennung wieder
+   * angelegt (13.09.2026) - und haette umgekehrt frisch angelegte Personen
+   * loeschen koennen. Geloescht wird jetzt ausschliesslich gezielt ueber
+   * FirebaseSync.deleteMember (Einstellungen → Person entfernen), Freigaben
+   * ausschliesslich beim Anlegen/Entfernen.
+   */
   const handleUpdateMembers = (newMembers: BoardMember[]) => {
+    const before = new Map(members.map((m) => [m.id, JSON.stringify(m)]));
     setMembers(newMembers);
-    FirebaseSync.syncAllMembers(newMembers).catch(() => {});
+    newMembers
+      .filter((m) => before.get(m.id) !== JSON.stringify(m))
+      .forEach((m) => FirebaseSync.saveMember(m).catch(() => {}));
   };
 
   const handleUpdateSecuritySettings = (newSettings: SecuritySettings) => {
