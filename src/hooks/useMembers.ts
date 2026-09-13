@@ -44,6 +44,8 @@ export function useMembers() {
   // sessionStorage = pro geoeffneter App-Sitzung.
   const [isDeviceLocked, setIsDeviceLocked] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
+    // Lokal (npm run dev) keine Sperre - stoert nur beim Testen.
+    if (import.meta.env.DEV) return false;
     const session = AppStorage.getAuthSession();
     if (!session?.isAuthenticated || !session.isCodeVerified) return false;
     return sessionStorage.getItem('wjof_unlocked') !== '1';
@@ -86,6 +88,8 @@ export function useMembers() {
    */
   const hiddenAtRef = useRef<number | null>(null);
   useEffect(() => {
+    // Lokal (npm run dev) keine erneute Sperre beim Zurueckkehren.
+    if (import.meta.env.DEV) return;
     const handleVisibility = () => {
       if (document.visibilityState === 'hidden') {
         const isUnlocked =

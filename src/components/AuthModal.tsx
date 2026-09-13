@@ -110,7 +110,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const proceedWith = (user: BoardMember) => {
     setPendingUser(user);
     setError(null);
-    if (AppStorage.isExemptFromCode(user, securitySettings)) {
+    // Lokal (npm run dev) ohne Vorstandscode - im veroeffentlichten Portal
+    // ist import.meta.env.DEV fest false und dieser Teil faellt weg.
+    if (import.meta.env.DEV || AppStorage.isExemptFromCode(user, securitySettings)) {
       onSuccess({ isAuthenticated: true, isCodeVerified: true, user });
     } else {
       setStep('code');
@@ -269,6 +271,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
+  /** Nur lokal: echte Anmeldung mit dem Entwickler-Konto (siehe server.ts). */
+  const handleDevLogin = async () => {
+    setIsSigningIn(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/dev/login');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.email || !data?.password) {
+        setError(data?.error || 'Der Entwickler-Zugang ist auf diesem Rechner nicht eingerichtet.');
+        return;
+      }
+      const cred = await signInWithEmailAndPassword(auth, data.email, data.password);
+      await handleSignedInUser(cred.user);
+    } catch (err: any) {
+      const msg = describeAuthError(err?.code || '', err?.message || '');
+      if (msg) setError(msg);
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
+
   const handleRequestReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setResetError(null);
@@ -408,26 +431,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               Nur mit dem Google-Konto, dessen E-Mail-Adresse im Portal hinterlegt ist.
             </p>
 
-            {/* Nur im lokalen Entwicklungsmodus - im Produktions-Build entfernt der
-                Bundler diesen Block vollstaendig. */}
-            {(import.meta as any).env?.DEV && (
+            {/* Nur bei `npm run dev`: meldet sich echt bei Firebase an, mit dem
+                Entwickler-Konto aus .env.local (liefert der lokale server.ts).
+                Im veroeffentlichten Portal ist import.meta.env.DEV fest false,
+                der Bundler entfernt diesen Block. */}
+            {import.meta.env.DEV && (
               <button
                 type="button"
-                onClick={() =>
-                  proceedWith(
-                    members[0] ||
-                      ({
-                        id: 'mem_dev',
-                        name: 'Entwicklung',
-                        role: 'Kreissprecher / Vorsitzender',
-                        email: 'dev@localhost',
-                        initials: 'DV',
-                        avatarColor: 'bg-[#003594]',
-                        isAdmin: true,
-                      } as BoardMember)
-                  )
-                }
-                className="w-full py-2 text-[11px] font-semibold text-slate-400 hover:text-slate-600"
+                onClick={handleDevLogin}
+                disabled={isSigningIn}
+                className="w-full py-2 text-[11px] font-semibold text-slate-400 hover:text-slate-600 disabled:opacity-50"
               >
                 Entwickler-Login (nur lokal)
               </button>

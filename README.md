@@ -42,6 +42,19 @@ und den Regelstand aus `firestore.rules` – dort ist eine **bestätigte**
 E-Mail-Adresse Pflicht, sonst könnte sich jemand selbst ein Konto mit der
 Adresse eines Vorstandsmitglieds anlegen.
 
+### 1.1a Lokal testen (vor dem Veröffentlichen)
+
+```bash
+npm run dev
+```
+
+Dann <http://localhost:3007> öffnen und **„Entwickler-Login (nur lokal)"**
+tippen – ohne Passwort, ohne Vorstandscode. Voraussetzung ist die Datei
+`.env.local` mit `DEV_LOGIN_EMAIL` und `DEV_LOGIN_PASSWORD` (liegt nur auf dem
+Entwicklungsrechner, nie in Git) und ein im Portal angelegtes Konto dazu.
+Lokal wird mit den **echten Daten** gearbeitet; Mails gehen lokal nicht raus.
+Veröffentlicht wird erst mit `git push`.
+
 ### 1.2 E-Mail-Versand ueber das Vereins-Postfach
 
 Die Mails aus dem Portal gehen ueber das vorhandene Gmail-Konto des Vereins

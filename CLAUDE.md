@@ -1580,3 +1580,34 @@ und beide Auswege, und Einladungs-Mail sowie Einstellungen erwaehnen es.
 Der Google-Anbieter nutzt `prompt: 'select_account'`, nach dem Fehlversuch
 wird abgemeldet - beim naechsten Versuch erscheint also wieder die
 Kontoauswahl.
+
+## v3.17.2 - Entwickler-Login fuer lokale Tests (echte Daten)
+
+**Problem:** Lokal (`npm run dev`) kam nach dem alten "Entwickler-Login" nur
+"Keine Verbindung": der Knopf meldete sich nie bei Firebase an, die
+Datenbankregeln liessen nichts durch.
+
+**Loesung:** Ein eigenes Firebase-Konto "Entwickler (lokal)" (Adresse
+`offenbachwj+entwickler@gmail.com`, **ohne Stimmrecht**). Die Zugangsdaten
+stehen in `.env.local` (`DEV_LOGIN_EMAIL`, `DEV_LOGIN_PASSWORD`, per
+`.gitignore` ausgeschlossen). Der Knopf holt sie ueber `GET /api/dev/login` -
+diese Route gibt es **nur in `server.ts`** (nie in `api/router.ts`, also nie
+auf Netlify), sie antwortet nur an Loopback-Adressen mit Host `localhost` und
+nicht bei `NODE_ENV=production`. Bewusst keine `VITE_`-Variablen:
+`src/lib/firebase.ts` liest `import.meta.env` als Ganzes, Vite wuerde sonst
+alle `VITE_`-Werte in das Bundle schreiben.
+
+Lokal (`import.meta.env.DEV`) entfallen Vorstandscode (`proceedWith`) und
+App-Sperre (`useMembers`). Im Produktions-Build ist `DEV` fest `false`, die
+Zweige werden entfernt.
+
+**Einmalige Einrichtung des Kontos:** Im Live-Portal *Einstellungen → Vorstand
+→ Person freigeben* (Name "Entwickler (lokal)", Stimmrecht aus), Einladung
+senden, Mail im Portal-Postfach oeffnen, auf /passwort das Passwort aus
+`.env.local` eintragen.
+
+**Achtung:** Lokale Aenderungen landen in der echten Datenbank. Mails und
+Einladungen funktionieren lokal nicht (kein SMTP, kein Dienstkonto).
+
+**Arbeitsablauf ab jetzt:** Claude committet nur. Der Nutzer testet lokal und
+pusht selbst (`git push`).
