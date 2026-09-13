@@ -71,13 +71,16 @@ import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
 import { RevisionHistoryModal } from './RevisionHistoryModal';
 import { RequestInvoiceLinkModal } from './RequestInvoiceLinkModal';
 import { ResolutionArchiveTree } from './ResolutionArchiveTree';
+import { smooth, supportsSmooth, transitionName } from '../utils/smooth';
 import {
   RESOLUTION_SECTIONS,
   ResolutionSectionKey,
+  resolutionSectionOf,
   isInResolutionSection,
   countResolutionSection,
   defaultResolutionSection
 } from '../utils/resolutionSections';
+import { Collapse } from './Collapse';
 
 interface ResolutionsViewProps {
   currentMember: BoardMember;
@@ -172,8 +175,6 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
   // ueberhaupt Knoepfe zum Abstimmen bzw. Aendern erscheinen.
   const [voteBoxOpenFor, setVoteBoxOpenFor] = useState<string | null>(null);
 
-  // Archiv: standardmaessig ausgeblendet, damit die laufende Liste kurz bleibt
-  const [showArchived, setShowArchived] = useState<boolean>(false);
 
   /**
    * Buchhaltung mit sanftem Uebergang: Der Schalter gleitet sofort um, ein
@@ -190,22 +191,39 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
   const [irrelevantTargetId, setIrrelevantTargetId] = useState<string | null>(null);
 
   const changeBookkeeping = (res: Resolution, status: BookkeepingStatus) => {
-    if (!onUpdateResolutionBookkeepingStatus || bookkeepingTransition) return;
-    const moves = (status !== 'nicht_bearbeitet') !== !!res.isArchived;
-    if (!moves) {
-      onUpdateResolutionBookkeepingStatus(res.id, status);
+    const update = onUpdateResolutionBookkeepingStatus;
+    if (!update || bookkeepingTransition) return;
+
+    // Wechselt der Beschluss dadurch den Reiter? (Speichern setzt das
+    // Archiv-Kennzeichen passend zum Status, siehe useResolutions.)
+    const archive = status !== 'nicht_bearbeitet';
+    const changesSection =
+      resolutionSectionOf({ ...res, bookkeepingStatus: status, isArchived: archive }) !==
+      resolutionSectionOf(res);
+    if (!changesSection) {
+      smooth(() => update(res.id, status));
       return;
     }
+
+    // 1. Schalter gleitet um, Hinweis erscheint
     setBookkeepingTransition({ id: res.id, status, leaving: false });
-    window.setTimeout(
-      () => setBookkeepingTransition((t) => (t && t.id === res.id ? { ...t, leaving: true } : t)),
-      600
-    );
-    window.setTimeout(() => {
-      onUpdateResolutionBookkeepingStatus(res.id, status);
+    const finish = () => {
+      update(res.id, status);
       onSelectResolution(null);
       setBookkeepingTransition(null);
-    }, 900);
+    };
+
+    if (supportsSmooth()) {
+      // 2. Der Browser blendet die Detailansicht weich in die Liste ueber
+      window.setTimeout(() => smooth(finish), 650);
+    } else {
+      // Aeltere Browser: Detailansicht selbst ausblenden, dann umschalten
+      window.setTimeout(
+        () => setBookkeepingTransition((t) => (t && t.id === res.id ? { ...t, leaving: true } : t)),
+        450
+      );
+      window.setTimeout(finish, 750);
+    }
   };
 
   /**
@@ -216,15 +234,12 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
   const [section, setSection] = useState<ResolutionSectionKey>(() => {
     if (initialSection) return initialSection;
     const selected = resolutions.find((r) => r.id === selectedResolutionId);
-    if (selected && !selected.isArchived) {
-      return (
-        (['offen', 'buchhaltung'] as ResolutionSectionKey[]).find((key) =>
-          isInResolutionSection(selected, key)
-        ) ?? 'alle'
-      );
-    }
+    if (selected) return resolutionSectionOf(selected);
     return defaultResolutionSection(resolutions);
   });
+
+  /** Das Archiv ist seit v3.22.0 ein eigener Reiter statt eines Schalters. */
+  const showArchived = section === 'archiv';
 
   /** Welcher Listeneintrag zeigt gerade seine Kurzinfo? */
   const [expandedListId, setExpandedListId] = useState<string | null>(null);
@@ -353,8 +368,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
   const filteredResolutions = useMemo(() => {
     return resolutions.filter((res) => {
       // 0. Archiv: nur zeigen, wenn ausdruecklich gewuenscht
-      if (!!res.isArchived !== showArchived) return false;
-      if (!showArchived && !isInResolutionSection(res, section)) return false;
+      if (!isInResolutionSection(res, section)) return false;
 
       // 1. Status Filter
       if (filterStatus !== 'all' && res.status !== filterStatus) return false;
@@ -478,7 +492,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
 
       return false;
     });
-  }, [resolutions, filterStatus, filterYear, filterMonth, filterBookkeeping, query, members, invoices, showArchived, section]);
+  }, [resolutions, filterStatus, filterYear, filterMonth, filterBookkeeping, query, members, invoices, section]);
 
   // Selected resolution (defaults to first if selectedResolutionId is set, or active one)
   /**
@@ -594,47 +608,33 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
         </button>
       </div>
 
-      {/* Bereiche: Offen / Abgestimmt · Buchhaltung offen / Alle ("Alle"
-          bewusst am Ende). Im Archiv ausgeblendet - dort gibt es nur eine Liste. */}
-      {!showArchived && (
-        <div className="flex gap-1.5 overflow-x-auto pb-0.5">
-          {RESOLUTION_SECTIONS.map((s) => (
-            <button
-              key={s.key}
-              type="button"
-              onClick={() => {
+      {/* Bereiche: Offen / Abgestimmt · Buchhaltung offen / Archiv. Jeder
+          Beschluss gehoert genau einem Bereich an (utils/resolutionSections). */}
+      <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+        {RESOLUTION_SECTIONS.map((s) => (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() =>
+              smooth(() => {
                 setSection(s.key);
                 onSelectResolution(null);
-              }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors cursor-pointer shrink-0 ${
-                section === s.key
-                  ? 'bg-[#003594] text-white'
-                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              {s.label} ({countResolutionSection(resolutions, s.key)})
-            </button>
-          ))}
-        </div>
-      )}
+              })
+            }
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors duration-200 cursor-pointer shrink-0 flex items-center gap-1.5 ${
+              section === s.key
+                ? 'bg-[#003594] text-white'
+                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            {s.key === 'archiv' && <Archive className="w-3.5 h-3.5" strokeWidth={1.75} />}
+            {s.label} ({countResolutionSection(resolutions, s.key)})
+          </button>
+        ))}
+      </div>
 
-      {/* Archiv-Umschalter + Filter */}
+      {/* Filter */}
       <div className="flex justify-end items-center gap-2">
-        <button
-          type="button"
-          onClick={() => {
-            setShowArchived(!showArchived);
-            onSelectResolution(null);
-          }}
-          className={`flex items-center space-x-2 px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer ${
-            showArchived
-              ? 'bg-slate-800 text-white border border-slate-800'
-              : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
-          }`}
-        >
-          <Archive className="w-4 h-4" strokeWidth={1.75} />
-          <span>{showArchived ? 'Archiv' : 'Archiv'}</span>
-        </button>
 
         <button
           type="button"
@@ -652,8 +652,8 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
       </div>
 
       {/* Filter & Full-Text Search Bar with Year, Month, Status & Search */}
-      {isFiltersExpanded && (
-      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-3 animate-in fade-in zoom-in-95 duration-200">
+      <Collapse open={!!(isFiltersExpanded)}>{isFiltersExpanded && (
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
         {/* Row 1: Status Filters + Search Box */}
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
           {/* Status Filters */}
@@ -833,7 +833,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
           )}
         </div>
       </div>
-      )}
+      )}</Collapse>
 
       {/* Main Split Layout: List on Left (1 Col), Selected Details on Right (2 Cols) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -895,6 +895,8 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
               return (
                 <div
                   key={res.id}
+                  // Eigener Uebergangs-Name: die Karte gleitet bei smooth() an ihren neuen Platz
+                  style={{ viewTransitionName: transitionName('res', res.id) }}
                   className={`rounded-xl border transition-all duration-200 wj-view-enter ${
                     isSelected
                       ? 'bg-blue-50/40 border-[#003594] ring-1 ring-[#003594]/20'
@@ -1000,8 +1002,8 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                   </div>
 
                   {/* Kurzinfo - nur auf Wunsch */}
-                  {isExpanded && (
-                    <div className="px-3 pb-3 pt-0 space-y-2.5 text-[11px] wj-expand">
+                  <Collapse open={!!(isExpanded)}>{isExpanded && (
+                    <div className="px-3 pb-3 pt-0 space-y-2.5 text-[11px]">
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-500">
                         <span>{formatDate(res.createdAt)}</span>
                         <span>·</span>
@@ -1081,7 +1083,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                         Beschluss öffnen →
                       </button>
                     </div>
-                  )}
+                  )}</Collapse>
                 </div>
               );
               };
@@ -1424,8 +1426,8 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                           </span>
                         </button>
 
-                        {isOpen && (
-                          <div className="p-2.5 border-t border-slate-200 bg-white space-y-2 wj-expand">
+                        <Collapse open={!!(isOpen)}>{isOpen && (
+                          <div className="p-2.5 border-t border-slate-200 bg-white space-y-2">
                             <div className="grid grid-cols-3 gap-2">
                               <button
                                 onClick={() => handleVoteClick('yes')}
@@ -1492,7 +1494,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                               </div>
                             )}
                           </div>
-                        )}
+                        )}</Collapse>
                       </div>
                     );
                   })}
@@ -2000,7 +2002,9 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                 <button
                   type="button"
                   onClick={() =>
-                    onArchiveResolution?.(activeResolution.id, !activeResolution.isArchived)
+                    smooth(() =>
+                      onArchiveResolution?.(activeResolution.id, !activeResolution.isArchived)
+                    )
                   }
                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
                 >

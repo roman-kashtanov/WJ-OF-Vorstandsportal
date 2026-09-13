@@ -46,6 +46,7 @@ import {
   RotateCcw,
   AlertTriangle,
 } from 'lucide-react';
+import { Collapse } from './Collapse';
 
 /** Vorlage, die dem Vorstand zeigt, wie Copilot Beschlüsse im Protokolltext
  *  formatieren soll, damit parseResolutionsFromProtocolText() sie erkennt. */
@@ -467,8 +468,8 @@ export const MeetingDetailModal: React.FC<MeetingDetailModalProps> = ({
                     }`}
                   />
                 </button>
-                {isFormatHintExpanded && (
-                  <div className="p-3 space-y-2 bg-white wj-expand">
+                <Collapse open={!!(isFormatHintExpanded)}>{isFormatHintExpanded && (
+                  <div className="p-3 space-y-2 bg-white">
                     <p className="text-[11px] text-slate-500 leading-relaxed">
                       Bringt Copilot bei, jeden Beschluss im Sitzungsprotokoll in diesem
                       festen Format auszugeben. Jeder Beschluss beginnt mit einer Zeile{' '}
@@ -504,7 +505,7 @@ export const MeetingDetailModal: React.FC<MeetingDetailModalProps> = ({
                       )}
                     </button>
                   </div>
-                )}
+                )}</Collapse>
               </div>
             )}
 

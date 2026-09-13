@@ -1,6 +1,10 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
+import { installOverlayExitAnimations } from './utils/overlayExit';
+
+// Fenster und Menues blenden beim Schliessen weich aus - fuer alle Seiten
+installOverlayExitAnimations();
 
 /**
  * Pinch-Zoom auf iOS unterbinden, damit sich die installierte App wie eine

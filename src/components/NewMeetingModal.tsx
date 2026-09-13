@@ -21,6 +21,7 @@ import {
   FileText,
   Repeat
 } from 'lucide-react';
+import { Collapse } from './Collapse';
 
 interface NewMeetingModalProps {
   isOpen: boolean;
@@ -306,8 +307,8 @@ export const NewMeetingModal: React.FC<NewMeetingModalProps> = ({
               </span>
             </label>
 
-            {isRecurring && (
-              <div className="bg-blue-50/70 p-3.5 rounded-xl border border-blue-200 space-y-3 wj-expand">
+            <Collapse open={!!(isRecurring)}>{isRecurring && (
+              <div className="bg-blue-50/70 p-3.5 rounded-xl border border-blue-200 space-y-3">
                 <div className="grid grid-cols-2 gap-2.5">
                   <div>
                     <label className="block font-semibold text-slate-600 mb-1">Häufigkeit</label>
@@ -519,7 +520,7 @@ export const NewMeetingModal: React.FC<NewMeetingModalProps> = ({
                   {describeRecurrence(buildRecurrenceRule())}
                 </p>
               </div>
-            )}
+            )}</Collapse>
           </div>
 
           {/* Location & MS Teams Link */}

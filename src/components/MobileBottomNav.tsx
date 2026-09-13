@@ -77,7 +77,11 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   );
 
   return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 w-full max-w-full overflow-hidden z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-lg pb-[env(safe-area-inset-bottom)]">
+    <div
+      // Eigener Uebergangs-Name: bleibt bei smooth() stehen und liegt ueber gleitenden Karten
+      style={{ viewTransitionName: 'wj-bottom-nav' }}
+      className="md:hidden fixed bottom-0 left-0 right-0 w-full max-w-full overflow-hidden z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-lg pb-[env(safe-area-inset-bottom)]"
+    >
       {/* Main Tab Buttons */}
       <nav className="relative flex items-center justify-around h-14 px-1">
         {/* Aktiv-Indikator gleitet zum neuen Tab, statt abrupt zu springen -

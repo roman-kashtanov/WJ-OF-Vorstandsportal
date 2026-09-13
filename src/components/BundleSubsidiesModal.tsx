@@ -14,6 +14,7 @@ import { isVotingMember } from '../utils/formatters';
 import { getAttachmentType } from '../utils/fileHelpers';
 import { X, Landmark, AlertTriangle, Vote } from 'lucide-react';
 import { ResolutionPicker } from './ResolutionPicker';
+import { Collapse } from './Collapse';
 
 interface Props {
   isOpen: boolean;
@@ -204,8 +205,8 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
             </button>
           </div>
 
-          {mode === 'existing' && (
-            <div className="space-y-1.5 wj-expand">
+          <Collapse open={!!(mode === 'existing')}>{mode === 'existing' && (
+            <div className="space-y-1.5">
               <label className="block text-[11px] font-bold text-slate-700">
                 Welcher Beschluss?
               </label>
@@ -216,7 +217,7 @@ export const BundleSubsidiesModal: React.FC<Props> = ({
                 statuses={['in_abstimmung', 'angenommen']}
               />
             </div>
-          )}
+          )}</Collapse>
 
           {eligible.length === 0 ? (
             <p className="text-slate-400 py-6 text-center">

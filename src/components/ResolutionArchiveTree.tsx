@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Resolution } from '../types';
 import { ChevronDown } from 'lucide-react';
+import { Collapse } from './Collapse';
 
 /**
  * Archiv der Beschluesse als aufklappbarer Baum: Jahr → Monat → Art
@@ -132,8 +133,8 @@ export const ResolutionArchiveTree: React.FC<Props> = ({ resolutions, linkCounts
               {chevron(yearOpen)}
             </button>
 
-            {yearOpen && (
-              <div className="px-2.5 pb-2.5 space-y-1.5 wj-expand">
+            <Collapse open={!!(yearOpen)}>{yearOpen && (
+              <div className="px-2.5 pb-2.5 space-y-1.5">
                 {months.map(({ month, kinds }) => {
                   const monthKey = `m:${year}-${month}`;
                   const monthDefault = `${year}-${month}` === newestMonthKey;
@@ -155,8 +156,8 @@ export const ResolutionArchiveTree: React.FC<Props> = ({ resolutions, linkCounts
                         {chevron(monthOpen)}
                       </button>
 
-                      {monthOpen && (
-                        <div className="px-2 pb-2 space-y-1.5 wj-expand">
+                      <Collapse open={!!(monthOpen)}>{monthOpen && (
+                        <div className="px-2 pb-2 space-y-1.5">
                           {kinds.map(({ kind, items }) => {
                             const kindKey = `k:${year}-${month}-${kind}`;
                             const kindOpen = isOpen(kindKey, true);
@@ -179,21 +180,21 @@ export const ResolutionArchiveTree: React.FC<Props> = ({ resolutions, linkCounts
                                   {chevron(kindOpen)}
                                 </button>
 
-                                {kindOpen && (
-                                  <div className="mt-1 space-y-1.5 wj-expand">
+                                <Collapse open={!!(kindOpen)}>{kindOpen && (
+                                  <div className="mt-1 space-y-1.5">
                                     {items.map((res) => renderCard(res))}
                                   </div>
-                                )}
+                                )}</Collapse>
                               </div>
                             );
                           })}
                         </div>
-                      )}
+                      )}</Collapse>
                     </div>
                   );
                 })}
               </div>
-            )}
+            )}</Collapse>
           </div>
         );
       })}

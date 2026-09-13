@@ -14,6 +14,7 @@ import {
 import { SubsidyLimits, CATEGORY_LABEL } from '../data/subsidyCatalogue';
 import { isValidIban, formatIban } from '../utils/sepa';
 import { X, UserPlus, Trash2, Pencil, Check, Users2, ChevronDown, Search } from 'lucide-react';
+import { Collapse } from './Collapse';
 
 /**
  * Personenuebersicht fuer Zuschuesse und Auslagen: je Person der Verbrauch
@@ -471,8 +472,8 @@ export const SubsidyPeopleModal: React.FC<Props> = ({
                     )}
                   </button>
 
-                  {isExpanded && (
-                    <div className="px-3 pb-3 space-y-3 wj-expand">
+                  <Collapse open={!!(isExpanded)}>{isExpanded && (
+                    <div className="px-3 pb-3 space-y-3">
                       {(p.email || p.iban) && (
                         <div className="text-[11px] text-slate-500 space-y-0.5">
                           {p.email && <div>{p.email}</div>}
@@ -596,7 +597,7 @@ export const SubsidyPeopleModal: React.FC<Props> = ({
                         </button>
                       </div>
                     </div>
-                  )}
+                  )}</Collapse>
                 </div>
               );
             })}

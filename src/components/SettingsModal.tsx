@@ -48,6 +48,7 @@ import { Biometric } from '../utils/biometric';
 import { isVotingMember, formatDate } from '../utils/formatters';
 import { firebaseConfig } from '../lib/firebase';
 import { RoleCatalogueSettings } from '../data/roleCatalogue';
+import { Collapse } from './Collapse';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -973,8 +974,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               {/* Add Member Form */}
-              {isAddingMember && (
-                <form onSubmit={handleAddMember} className="p-3.5 bg-blue-50/60 rounded-xl border border-blue-200 space-y-3 animate-in fade-in">
+              <Collapse open={!!(isAddingMember)}>{isAddingMember && (
+                <form onSubmit={handleAddMember} className="p-3.5 bg-blue-50/60 rounded-xl border border-blue-200 space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <div>
                       <label className="block font-bold text-slate-700 mb-1">
@@ -1065,7 +1066,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </button>
                   </div>
                 </form>
-              )}
+              )}</Collapse>
 
               {/* Members List */}
               <div className="space-y-2">
@@ -1123,8 +1124,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                     </div>
 
-                    {isEditing && (
-                      <div className="mt-3 pt-3 border-t border-slate-200 space-y-2.5 wj-expand">
+                    <Collapse open={!!(isEditing)}>{isEditing && (
+                      <div className="mt-3 pt-3 border-t border-slate-200 space-y-2.5">
                         <div>
                           <label className="block font-bold text-slate-700 text-[11px] mb-1">
                             Name
@@ -1257,7 +1258,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           )}
                         </div>
                       </div>
-                    )}
+                    )}</Collapse>
                   </div>
                   );
                 })}
@@ -1615,12 +1616,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <span>{isForcingUpdate ? 'Aktualisierung wird gesendet...' : `Version ${CURRENT_APP_VERSION} für alle erzwingen`}</span>
                 </button>
 
-                {forceUpdateSuccess && (
-                  <div className="p-2.5 bg-emerald-100 border border-emerald-300 rounded-xl text-emerald-900 text-xs font-bold flex items-center space-x-2 animate-in fade-in">
+                <Collapse open={!!(forceUpdateSuccess)}>{forceUpdateSuccess && (
+                  <div className="p-2.5 bg-emerald-100 border border-emerald-300 rounded-xl text-emerald-900 text-xs font-bold flex items-center space-x-2">
                     <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-700" />
                     <span>Aktualisierung sofort im Netzwerk aktiviert! Alle Geräte erhalten den Update-Dialog.</span>
                   </div>
-                )}
+                )}</Collapse>
 
                 {/* Aktueller Zustand + Not-Aus. Vorher gab es keine Moeglichkeit,
                     eine einmal ausgeloeste Pflicht wieder zurueckzunehmen - wer in
@@ -1954,8 +1955,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               }`}
                             />
                           </button>
-                          {isExpanded && (
-                            <div className="p-3 pt-0 space-y-3 wj-expand">
+                          <Collapse open={!!(isExpanded)}>{isExpanded && (
+                            <div className="p-3 pt-0 space-y-3">
                               <div>
                                 <div className="font-semibold text-slate-600 mb-1">
                                   Abstimmung ({votes.length})
@@ -1986,7 +1987,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 />
                               </div>
                             </div>
-                          )}
+                          )}</Collapse>
                         </div>
                       );
                     })}

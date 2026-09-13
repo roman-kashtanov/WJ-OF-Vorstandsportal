@@ -66,7 +66,7 @@ const STAGE_DOT: Record<string, string> = {
 const RESOLUTION_DOT: Record<ResolutionSectionKey, string> = {
   offen: 'bg-amber-400',
   buchhaltung: 'bg-emerald-500',
-  alle: 'bg-slate-300',
+  archiv: 'bg-slate-300',
 };
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -91,7 +91,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
    * Beschluesse stehen immer oben, darunter Zuschuesse und Auslagen.
    */
   const resolutionRows: DashboardModuleRow[] = RESOLUTION_SECTIONS
-    .filter((section) => section.key !== 'alle')
+    .filter((section) => section.key !== 'archiv')
     .map((section) => ({
       key: section.key,
       label: section.label,

@@ -159,6 +159,48 @@
   );
 }
 
+/* ---------------------------------------------------------------------------
+ * Ausblenden geschlossener Fenster und Menues (utils/overlayExit.ts)
+ *
+ * Die nicht bedienbare Kopie blendet aus: der Hintergrund verblasst, das
+ * Fenster selbst schrumpft dabei leicht und sinkt ab - das Spiegelbild zur
+ * Einblendung. Ausserhalb von @layer, damit nichts es ueberstimmt.
+ * ------------------------------------------------------------------------- */
+.wj-ghost {
+  pointer-events: none !important;
+  animation: wj-exit 200ms cubic-bezier(0.4, 0, 1, 1) both;
+  --wj-exit-opacity: 0;
+}
+
+.wj-ghost .wj-overlay-panel {
+  animation: wj-exit 200ms cubic-bezier(0.4, 0, 1, 1) both;
+  --wj-exit-opacity: 1;
+  --wj-exit-scale: 0.96;
+  --wj-exit-y: 0.5rem;
+}
+
+[data-wj-exit].wj-ghost {
+  --wj-exit-scale: 0.97;
+  --wj-exit-y: -0.25rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * Weiche Uebergaenge beim Umbau des Bildes (View Transitions, utils/smooth.ts)
+ *
+ * Standard: altes und neues Bild blenden ineinander. Elemente mit eigenem
+ * view-transition-name (z. B. Listenkarten) gleiten an ihre neue Position.
+ * ------------------------------------------------------------------------- */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 260ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+::view-transition-group(*) {
+  animation-duration: 300ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 /* Wer im Betriebssystem reduzierte Bewegung eingestellt hat, bekommt keine.
    Das ist keine Kosmetik: Bewegung kann Uebelkeit und Schwindel ausloesen. */
 @media (prefers-reduced-motion: reduce) {

@@ -109,7 +109,11 @@ export const Header: React.FC<HeaderProps> = ({
   ];
 
   return (
-    <header className="bg-white border-b border-slate-200 sticky top-0 z-40 pt-[env(safe-area-inset-top)]">
+    <header
+      // Eigener Uebergangs-Name: bleibt bei smooth() stehen und liegt ueber gleitenden Karten
+      style={{ viewTransitionName: 'wj-header' }}
+      className="bg-white border-b border-slate-200 sticky top-0 z-40 pt-[env(safe-area-inset-top)]"
+    >
 
       {/* Main Header Bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -183,7 +187,10 @@ export const Header: React.FC<HeaderProps> = ({
                     className="fixed inset-0 z-40" 
                     onClick={() => setIsMemberDropdownOpen(false)}
                   />
-                  <div className="absolute right-0 mt-2 w-72 max-w-[calc(100vw-1.5rem)] bg-white rounded-2xl shadow-xl border border-slate-200 z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-150 text-xs">
+                  <div
+                    data-wj-exit
+                    className="absolute right-0 mt-2 w-72 max-w-[calc(100vw-1.5rem)] bg-white rounded-2xl shadow-xl border border-slate-200 z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-150 text-xs"
+                  >
                     
                     {/* User info details */}
                     <div className="px-4 py-3 border-b border-slate-100">

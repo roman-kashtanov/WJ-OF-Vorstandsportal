@@ -17,6 +17,7 @@ import {
   ChevronRight,
   ChevronDown
 } from 'lucide-react';
+import { Collapse } from './Collapse';
 
 interface MeetingsViewProps {
   currentMember: BoardMember;
@@ -237,11 +238,11 @@ export const MeetingsView: React.FC<MeetingsViewProps> = ({
               />
             </button>
 
-            {isAllExpanded && (
-              <div className="space-y-3 mt-3 wj-expand">
+            <Collapse open={!!(isAllExpanded)}>{isAllExpanded && (
+              <div className="space-y-3 mt-3">
                 {sortedMeetings.map(renderMeetingCard)}
               </div>
-            )}
+            )}</Collapse>
           </div>
         </div>
       )}

@@ -52,6 +52,8 @@ import {
   History as HistoryIcon,
   QrCode,
 } from 'lucide-react';
+import { Collapse } from './Collapse';
+import { smooth, transitionName } from '../utils/smooth';
 
 interface Props {
   subsidies: Subsidy[];
@@ -586,7 +588,7 @@ export const SubsidiesView: React.FC<Props> = ({
           <button
             key={stage.key}
             type="button"
-            onClick={() => setActiveStage(stage.key)}
+            onClick={() => smooth(() => setActiveStage(stage.key))}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors cursor-pointer shrink-0 ${
               activeStage === stage.key
                 ? 'bg-[#003594] text-white'
@@ -598,7 +600,7 @@ export const SubsidiesView: React.FC<Props> = ({
         ))}
         <button
           type="button"
-          onClick={() => setActiveStage('all')}
+          onClick={() => smooth(() => setActiveStage('all'))}
           className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors cursor-pointer shrink-0 ${
             activeStage === 'all'
               ? 'bg-[#003594] text-white'
@@ -655,8 +657,8 @@ export const SubsidiesView: React.FC<Props> = ({
         </button>
       </div>
 
-      {showFilters && (
-        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 space-y-2.5 text-xs wj-expand">
+      <Collapse open={!!(showFilters)}>{showFilters && (
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 space-y-2.5 text-xs">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -707,7 +709,7 @@ export const SubsidiesView: React.FC<Props> = ({
             </button>
           )}
         </div>
-      )}
+      )}</Collapse>
 
       {/* Liste */}
       <div className="flex items-baseline justify-between px-1 text-[11px] text-slate-500">
@@ -731,6 +733,8 @@ export const SubsidiesView: React.FC<Props> = ({
           return (
             <div
               key={s.id}
+              // Eigener Uebergangs-Name: die Karte gleitet bei smooth() an ihren neuen Platz
+              style={{ viewTransitionName: transitionName('sub', s.id) }}
               className="bg-white rounded-xl border border-slate-200 wj-view-enter"
             >
               {/* Die GANZE Kopfzeile klappt auf - nicht nur der kleine Pfeil,
@@ -779,8 +783,8 @@ export const SubsidiesView: React.FC<Props> = ({
                 />
               </div>
 
-              {isExpanded && (
-                <div className="px-3 pb-3 space-y-2.5 text-[11px] wj-expand">
+              <Collapse open={!!(isExpanded)}>{isExpanded && (
+                <div className="px-3 pb-3 space-y-2.5 text-[11px]">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-500">
                     <span>{CATEGORY_LABEL[s.category]}</span>
                     {person && (
@@ -1176,7 +1180,7 @@ export const SubsidiesView: React.FC<Props> = ({
                     )}
                   </div>
                 </div>
-              )}
+              )}</Collapse>
             </div>
           );
         })}

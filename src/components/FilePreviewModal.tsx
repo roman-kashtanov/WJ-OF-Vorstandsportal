@@ -61,7 +61,10 @@ export const FilePreviewModal: React.FC<Props> = ({ file, onClose }) => {
   );
 
   return (
-    <div className="fixed inset-0 z-100 bg-slate-950/90 animate-in fade-in duration-150 overscroll-contain">
+    <div
+      data-wj-exit
+      className="fixed inset-0 z-100 bg-slate-950/90 animate-in fade-in duration-150 overscroll-contain"
+    >
       {isImage && file.dataUrl ? (
         <ZoomableImage key={file.dataUrl} src={file.dataUrl} alt={file.name} onClose={onClose} actions={actions} />
       ) : (

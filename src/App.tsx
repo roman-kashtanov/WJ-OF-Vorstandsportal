@@ -18,6 +18,8 @@ import { CURRENT_APP_VERSION, DEFAULT_VERSION_CONFIG } from './constants/version
 import { normalizeSecuritySettings } from './utils/security';
 import { Header } from './components/Header';
 import { DashboardView, OverviewTarget } from './components/DashboardView';
+import { Collapse } from './components/Collapse';
+import { smooth, smoothly } from './utils/smooth';
 import { ResolutionsView } from './components/ResolutionsView';
 import { InvoicesView } from './components/InvoicesView';
 import { MeetingsView } from './components/MeetingsView';
@@ -499,10 +501,11 @@ export default function App() {
    * angesehen hat. Sprünge aus einer Benachrichtigung heraus setzen die
    * Auswahl selbst und laufen bewusst nicht ueber diesen Weg.
    */
-  const handleSelectTab = (tab: ActiveTab) => {
-    if (tab === 'resolutions') setSelectedResolutionId(null);
-    setActiveTab(tab);
-  };
+  const handleSelectTab = (tab: ActiveTab) =>
+    smooth(() => {
+      if (tab === 'resolutions') setSelectedResolutionId(null);
+      setActiveTab(tab);
+    });
   
   // Modals state
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -861,8 +864,8 @@ export default function App() {
 
       {/* Nur im Fehlerfall: Ohne Datenbankzugriff arbeitet die App still nur
           lokal weiter - das darf nicht unbemerkt bleiben. */}
-      {syncBlocked && !isAuthModalOpen && (
-        <div className="bg-amber-500 text-amber-950 px-4 py-2.5 text-xs animate-in fade-in slide-in-from-top">
+      <Collapse open={!!(syncBlocked && !isAuthModalOpen)}>{syncBlocked && !isAuthModalOpen && (
+        <div className="bg-amber-500 text-amber-950 px-4 py-2.5 text-xs">
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
             <span className="font-semibold">
               Keine Verbindung zur Vereinsdatenbank – Änderungen bleiben nur auf diesem Gerät.
@@ -879,11 +882,11 @@ export default function App() {
             </button>
           </div>
         </div>
-      )}
+      )}</Collapse>
 
       {/* Global System Banner Notification */}
-      {systemBanner && (
-        <div className={`px-4 py-3 shadow-md text-white animate-in fade-in slide-in-from-top ${
+      <Collapse open={!!systemBanner}>{systemBanner && (
+        <div className={`px-4 py-3 shadow-md text-white ${
           systemBanner.type === 'error' ? 'bg-rose-700' : systemBanner.type === 'info' ? 'bg-[#003594]' : 'bg-emerald-700'
         }`}>
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 text-xs">
@@ -902,7 +905,7 @@ export default function App() {
             </button>
           </div>
         </div>
-      )}
+      )}</Collapse>
 
       {/* Main Content Area */}
       {/* key auf dem Tab: React baut den Bereich beim Wechsel neu auf, dadurch
@@ -920,13 +923,15 @@ export default function App() {
             resolutions={resolutions}
             invoices={invoices}
             nextMeeting={nextMeeting}
-            onNavigate={setActiveTab}
-            onNavigateTo={(target) => {
-              if (target.tab === 'resolutions') setSelectedResolutionId(null);
-              else if (target.year) setSubsidyYear(target.year);
-              setOverviewTarget(target);
-              setActiveTab(target.tab);
-            }}
+            onNavigate={(tab) => smooth(() => setActiveTab(tab))}
+            onNavigateTo={(target) =>
+              smooth(() => {
+                if (target.tab === 'resolutions') setSelectedResolutionId(null);
+                else if (target.year) setSubsidyYear(target.year);
+                setOverviewTarget(target);
+                setActiveTab(target.tab);
+              })
+            }
             onOpenNewResolution={() => setIsNewResolutionOpen(true)}
             onOpenNewInvoice={() => setIsNewInvoiceOpen(true)}
             onSelectResolution={(resId) => {
@@ -978,12 +983,12 @@ export default function App() {
             folders={folders}
             onOpenNewInvoice={() => setIsNewInvoiceOpen(true)}
             onSelectInvoice={(invId) => setSelectedInvoiceId(invId)}
-            onUpdateInvoiceStatus={handleUpdateInvoiceStatus}
-            onToggleBookkeepingRecorded={handleToggleBookkeepingRecorded}
-            onUpdateInvoiceBookkeepingStatus={handleUpdateInvoiceBookkeepingStatus}
+            onUpdateInvoiceStatus={smoothly(handleUpdateInvoiceStatus)}
+            onToggleBookkeepingRecorded={smoothly(handleToggleBookkeepingRecorded)}
+            onUpdateInvoiceBookkeepingStatus={smoothly(handleUpdateInvoiceBookkeepingStatus)}
             onCreateFolder={handleCreateFolder}
-            onDeleteFolder={handleDeleteFolder}
-            onUpdateInvoiceFolder={handleUpdateInvoiceFolder}
+            onDeleteFolder={smoothly(handleDeleteFolder)}
+            onUpdateInvoiceFolder={smoothly(handleUpdateInvoiceFolder)}
             onOpenInvoiceRequestModal={() => setIsInvoiceRequestModalOpen(true)}
           />
         )}
@@ -1004,7 +1009,7 @@ export default function App() {
             onUpdateMeetingTeamsLink={handleUpdateMeetingTeamsLink}
             onUpdateMeetingFile={handleUpdateMeetingFile}
             onCreateResolution={handleCreateResolution}
-            onToggleMeetingCancelled={handleToggleMeetingCancelled}
+            onToggleMeetingCancelled={smoothly(handleToggleMeetingCancelled)}
             onOpenTeamsSettings={() => setIsTeamsSettingsOpen(true)}
             defaultTeamsUrl={defaultTeamsUrl}
             showProtocolFormatHint={showProtocolFormatHint}
@@ -1032,9 +1037,9 @@ export default function App() {
               setEditingSubsidy(s);
               setIsSubsidyModalOpen(true);
             }}
-            onDelete={handleDeleteSubsidy}
-            onUpdateStatus={handleUpdateSubsidyStatus}
-            onReassignResolution={handleReassignSubsidyResolution}
+            onDelete={smoothly(handleDeleteSubsidy)}
+            onUpdateStatus={smoothly(handleUpdateSubsidyStatus)}
+            onReassignResolution={smoothly(handleReassignSubsidyResolution)}
             onManagePeople={() => setIsSubsidyPeopleOpen(true)}
             onManageCatalogue={() => setIsSubsidyCatalogueOpen(true)}
             onOpenPayout={() => setIsPayoutOpen(true)}
@@ -1226,8 +1231,8 @@ export default function App() {
         year={subsidyYear}
         limits={catalogueSettings.limits}
         onSave={handleSaveSubsidyPerson}
-        onDelete={handleDeleteSubsidyPerson}
-        onMerge={handleMergeSubsidyPeople}
+        onDelete={smoothly(handleDeleteSubsidyPerson)}
+        onMerge={smoothly(handleMergeSubsidyPeople)}
       />
 
       <SubsidyCatalogueModal
@@ -1408,8 +1413,8 @@ export default function App() {
         resolutions={resolutions}
         folders={folders}
         auditLog={auditLog}
-        onUpdateStatus={handleUpdateInvoiceStatus}
-        onToggleBookkeepingRecorded={handleToggleBookkeepingRecorded}
+        onUpdateStatus={smoothly(handleUpdateInvoiceStatus)}
+        onToggleBookkeepingRecorded={smoothly(handleToggleBookkeepingRecorded)}
         onUpdateBookkeepingStatus={handleUpdateInvoiceBookkeepingStatus}
         onSelectResolution={(resId) => {
           setSelectedResolutionId(resId);

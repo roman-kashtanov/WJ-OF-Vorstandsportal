@@ -18,6 +18,7 @@ import {
   UploadCloud,
   Sparkles
 } from 'lucide-react';
+import { Collapse } from './Collapse';
 
 interface InvoiceRequestModalProps {
   isOpen: boolean;
@@ -198,12 +199,12 @@ export const InvoiceRequestModal: React.FC<InvoiceRequestModalProps> = ({
           </button>
         </div>
 
-        {sentFeedback && (
-          <div className="bg-emerald-600 text-white px-6 py-2.5 text-xs font-bold flex items-center space-x-2 animate-in slide-in-from-top duration-200">
+        <Collapse open={!!(sentFeedback)}>{sentFeedback && (
+          <div className="bg-emerald-600 text-white px-6 py-2.5 text-xs font-bold flex items-center space-x-2">
             <CheckCircle2 className="w-4 h-4" />
             <span>{sentFeedback}</span>
           </div>
-        )}
+        )}</Collapse>
 
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto p-5 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 bg-slate-50">

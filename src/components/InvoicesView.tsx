@@ -40,6 +40,7 @@ import {
   Wallet,
   Paperclip
 } from 'lucide-react';
+import { Collapse } from './Collapse';
 
 interface InvoicesViewProps {
   currentMember: BoardMember;
@@ -310,8 +311,8 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
         </div>
 
         {/* Add Folder Inline Input */}
-        {isAddingFolder && (
-          <div className="flex items-center space-x-2 pt-1 pb-1 animate-in fade-in">
+        <Collapse open={!!(isAddingFolder)}>{isAddingFolder && (
+          <div className="flex items-center space-x-2 pt-1 pb-1">
             <input
               type="text"
               value={newFolderName}
@@ -330,7 +331,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
               Erstellen
             </button>
           </div>
-        )}
+        )}</Collapse>
 
         {/* Folder Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">

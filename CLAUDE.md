@@ -33,11 +33,14 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
 
 ## Aktueller Stand (13.09.2026)
 
-- Version **v3.21.0**, lokal committet; noch nicht gepusht: v3.19.0
-  (Übersicht-Module, „Alle" am Ende, Beschlussbereiche), v3.20.0 (Personen:
-  Vor-/Nachname, Zuordnung über den Namen, Personenübersicht), v3.21.0
-  (Buchhaltungs-Schalter mit Archiv, Archiv nach Jahr/Monat/Art).
-  Bis einschließlich Doku-Commit „Arbeitsregeln" ist alles veröffentlicht.
+- Version **v3.22.0**, lokal committet; noch nicht gepusht: v3.19.0
+  (Übersicht-Module, Beschlussbereiche), v3.20.0 (Personen: Vor-/Nachname,
+  Zuordnung über den Namen, Personenübersicht), v3.21.0 (Buchhaltungs-Schalter
+  mit Archiv, Archiv nach Jahr/Monat/Art), v3.22.0 (Archiv als Reiter, weiche
+  Übergänge überall). Bis einschließlich Doku-Commit „Arbeitsregeln" ist alles
+  veröffentlicht.
+- Weiche Übergänge nur im Chrome-Vorschaufenster geprüft – auf dem iPhone
+  (Safari ab iOS 18) noch vom Nutzer zu testen.
 - Offen beim Nutzer: doppelte Personen (Roman Kashtanov 7×, Diana Sajzew 2×)
   in der Personenübersicht zusammenführen.
 - Nach dem Deploy prüfen: öffentlichen Antrag mit bereits vorhandenem Namen
@@ -1877,4 +1880,55 @@ verknüpften Vorgängen (`linkCountsByResolution`). Liste und Archiv nutzen
 dieselbe Karte (`renderCard`). Filter und Suche wirken auch im Archiv.
 
 **Bewusst nicht automatisch:** Ältere Beschlüsse, die schon „bearbeitet" sind,
-aber nicht archiviert, bleiben, wo sie sind (unter „Alle").
+aber nicht archiviert, bleiben, wo sie sind (unter „Alle"; seit v3.22.0 im
+Reiter „Archiv").
+
+## v3.22.0 - Archiv als Reiter, weiche Übergänge überall
+
+**Beschlüsse:** Reiter Offen / Abgestimmt · Buchhaltung offen / **Archiv**, der
+Reiter „Alle" und der Archiv-Knopf entfallen. Weil es kein „Alle" mehr gibt,
+ordnet `resolutionSectionOf()` (`utils/resolutionSections.ts`) jeden Beschluss
+genau einem Bereich zu: **Archiv = archiviert ODER abgelehnt ODER Buchhaltung
+erledigt** – sonst wären abgelehnte Beschlüsse nirgends mehr zu sehen.
+Endgültig löschen geht weiterhin nur bei tatsächlich archivierten
+(`isArchived`).
+
+**Weiche Übergänge – vier Bausteine. Bei neuen Funktionen verwenden:**
+
+1. **`smooth(fn)` / `smoothly(handler)`** (`utils/smooth.ts`): View Transitions
+   API mit `flushSync` – der Browser blendet vom alten ins neue Bild über.
+   Genutzt für alles, was der Nutzer selbst auslöst und das Bild umbaut:
+   Reiterwechsel (`handleSelectTab`, Sprünge aus der Übersicht, Bereichs- und
+   Phasenreiter), Aktionen, die Einträge verschieben (in `App.tsx` als
+   `smoothly(...)` an die Ansichten übergeben: Zuschuss-Status/-Zuordnung/
+   -Löschen, Rechnungsstatus/-Ordner/-Buchhaltung, Sitzung absagen, Personen
+   zusammenführen/löschen, Archivieren). **Nie für Firestore-Live-Updates** –
+   während des Übergangs liegt kurz ein Standbild über der Seite, das stört
+   beim Tippen. Beschluss- und Zuschusskarten haben einen
+   `viewTransitionName` (`transitionName('res'|'sub', id)`) und gleiten an ihren
+   neuen Platz; Kopfzeile (`wj-header`) und untere Navigation (`wj-bottom-nav`)
+   haben eigene Namen, damit Karten nicht über sie malen. Namen müssen auf der
+   Seite eindeutig sein. Ohne Browser-Unterstützung (iOS vor 18) oder bei
+   „Bewegung reduzieren" passiert die Änderung sofort ohne Animation.
+2. **`<Collapse open>`** (`components/Collapse.tsx`): Auf- UND Zuklappen über
+   `grid-template-rows`, der Rest der Seite gleitet mit. Ersetzt das alte
+   `{x && <div className="wj-expand">}` an 24 Stellen (Filter, Kurzinfos,
+   Personen- und Zuschusszeilen, Archiv-Baum, Formularteile, Hinweisleisten).
+   Merkt sich beim Zuklappen den letzten Inhalt, `{banner && …}` darin
+   funktioniert also.
+3. **Fenster und Menüs blenden beim Schließen aus** (`utils/overlayExit.ts`,
+   gestartet in `main.tsx`): Ein MutationObserver setzt für entfernte
+   `.wj-overlay`- bzw. `[data-wj-exit]`-Elemente kurz eine nicht bedienbare
+   Kopie ein (`.wj-ghost`, 200 ms, Scroll-Position übernommen). **Neue Fenster
+   brauchen dafür nichts**; schwebende Menüs/Klappen außerhalb des
+   Seitenflusses bekommen `data-wj-exit` (Profilmenü, Mitteilungen,
+   Bildvorschau). Nie für Elemente im Seitenfluss – die Kopie würde Platz
+   einnehmen. Fenster mit eigener Schließ-Animation (`animate-out`,
+   SettingsModal) werden übersprungen.
+4. **Buchhaltungs-Schalter → Archiv:** Schalter gleitet, Hinweis „Wird ins
+   Archiv verschoben …", nach 0,65 s blendet `smooth()` die Detailansicht in die
+   Liste über (ältere Browser: eigene Ausblendung).
+
+**Bewusst nicht umgebaut:** Wechsel zwischen zwei Inhalten per `? :` (z. B.
+„Beschluss zuordnen" ↔ Auswahl) und die Reiter in den Einstellungen behalten
+ihre kurze Einblendung (`wj-expand` mit `key`).

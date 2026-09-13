@@ -29,6 +29,7 @@ import { SpeechToTextHelper } from '../utils/speechToText';
 import { getAttachmentType } from '../utils/fileHelpers';
 import { prepareFileForStorage, formatBytes } from '../utils/fileStorage';
 import { isVotingMember } from '../utils/formatters';
+import { Collapse } from './Collapse';
 
 interface NewResolutionModalProps {
   isOpen: boolean;
@@ -267,8 +268,8 @@ export const NewResolutionModal: React.FC<NewResolutionModalProps> = ({
               </button>
             </div>
 
-            {showTemplates && (
-              <div className="p-2.5 bg-blue-50/60 rounded-xl border border-blue-100 flex flex-wrap gap-1.5 animate-in fade-in">
+            <Collapse open={!!(showTemplates)}>{showTemplates && (
+              <div className="p-2.5 bg-blue-50/60 rounded-xl border border-blue-100 flex flex-wrap gap-1.5">
                 {STANDARD_RESOLUTION_TEMPLATES.map((tmpl) => (
                   <button
                     key={tmpl.id}
@@ -280,7 +281,7 @@ export const NewResolutionModal: React.FC<NewResolutionModalProps> = ({
                   </button>
                 ))}
               </div>
-            )}
+            )}</Collapse>
           </div>
 
           {/* Stimmberechtigung: nicht mehr hier einstellbar, sondern je
@@ -306,8 +307,8 @@ export const NewResolutionModal: React.FC<NewResolutionModalProps> = ({
               </button>
             </div>
 
-            {showCopilotImport && (
-              <div className="p-2.5 bg-blue-50/60 rounded-xl border border-blue-100 space-y-2 animate-in fade-in">
+            <Collapse open={!!(showCopilotImport)}>{showCopilotImport && (
+              <div className="p-2.5 bg-blue-50/60 rounded-xl border border-blue-100 space-y-2">
                 <textarea
                   value={copilotText}
                   onChange={(e) => setCopilotText(e.target.value)}
@@ -324,7 +325,7 @@ export const NewResolutionModal: React.FC<NewResolutionModalProps> = ({
                   Felder daraus füllen
                 </button>
               </div>
-            )}
+            )}</Collapse>
 
             {copilotHint && (
               <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-2">

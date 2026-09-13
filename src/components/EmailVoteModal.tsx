@@ -23,6 +23,7 @@ import {
   ChevronDown,
   ChevronRight
 } from 'lucide-react';
+import { Collapse } from './Collapse';
 
 interface EmailVoteModalProps {
   isOpen: boolean;
@@ -228,8 +229,8 @@ export const EmailVoteModal: React.FC<EmailVoteModalProps> = ({
         )}
 
         {/* Action Alert Message */}
-        {sentFeedback && (
-          <div className="bg-emerald-600 text-white px-6 py-2.5 text-xs font-bold flex items-center justify-between animate-in slide-in-from-top duration-200">
+        <Collapse open={!!(sentFeedback)}>{sentFeedback && (
+          <div className="bg-emerald-600 text-white px-6 py-2.5 text-xs font-bold flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <CheckCircle2 className="w-4 h-4" />
               <span>{sentFeedback}</span>
@@ -238,7 +239,7 @@ export const EmailVoteModal: React.FC<EmailVoteModalProps> = ({
               ✕
             </button>
           </div>
-        )}
+        )}</Collapse>
 
         {/* Modal Body: Split view */}
         <div className={`flex-1 overflow-y-auto p-5 sm:p-6 grid grid-cols-1 gap-6 bg-slate-50 ${showPreview ? 'lg:grid-cols-12' : ''}`}>
@@ -496,8 +497,8 @@ export const EmailVoteModal: React.FC<EmailVoteModalProps> = ({
         </div>
 
         {/* Optional Collapsible Technical Architecture Info */}
-        {showTechGuide && (
-          <div className="bg-slate-900 text-slate-200 px-6 py-4 border-t border-slate-800 text-xs space-y-2 animate-in slide-in-from-bottom duration-150">
+        <Collapse open={!!(showTechGuide)}>{showTechGuide && (
+          <div className="bg-slate-900 text-slate-200 px-6 py-4 border-t border-slate-800 text-xs space-y-2 slide-in-from-bottom">
             <div className="flex items-center space-x-2 text-emerald-400 font-bold">
               <ShieldCheck className="w-4 h-4" />
               <span>Produktivbetrieb: Was wird für den echten automatisierten E-Mail-Versand benötigt?</span>
@@ -517,7 +518,7 @@ export const EmailVoteModal: React.FC<EmailVoteModalProps> = ({
               </div>
             </div>
           </div>
-        )}
+        )}</Collapse>
 
         {/* Modal Footer */}
         <div className="px-6 py-3.5 bg-white border-t border-slate-200 flex items-center justify-between">
