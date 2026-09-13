@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { AuthSession, BoardMember, SecuritySettings } from '../types';
 import { AppStorage } from '../utils/storage';
 import { FirebaseSync } from '../utils/firebaseSync';
+import { signOut } from 'firebase/auth';
+import { auth } from '../lib/firebase';
 import { RoleCatalogueSettings, DEFAULT_ROLE_CATALOGUE } from '../data/roleCatalogue';
 
 /**
@@ -151,6 +153,9 @@ export function useMembers() {
 
   const handleLogout = () => {
     setAuthSession(null);
+    // Auch bei Firebase abmelden: sonst liefen die Datenbank-Abos im
+    // Hintergrund weiter, und die naechste Anmeldung bekaeme keinen frischen Start.
+    signOut(auth).catch(() => {});
     AppStorage.saveAuthSession(null);
     sessionStorage.removeItem('wjof_unlocked');
     setIsDeviceLocked(false);

@@ -846,6 +846,20 @@ export const FirebaseSync = {
 
 
   /**
+   * Nur Lesen pruefen - fuer den Start der App. Ohne den Schreibtest aus
+   * checkConnection(), der bei wackliger Verbindung auf die Bestaetigung des
+   * Servers wartet und dadurch haengen kann.
+   */
+  async checkRead(): Promise<boolean> {
+    try {
+      await getDocs(collection(db, 'members'));
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  /**
    * Prueft konkret, ob Lesen UND Schreiben in Firestore moeglich ist.
    * Nur so faellt auf, wenn die Sicherheitsregeln alles blockieren - sonst
    * arbeitet die App still nur lokal weiter und nichts synchronisiert sich.

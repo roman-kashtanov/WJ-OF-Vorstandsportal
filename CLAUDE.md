@@ -1699,3 +1699,43 @@ Protokoll", die nicht im Rollen-Katalog steht - die Auswahl im
 Bearbeiten-Bereich zeigte deshalb "noch keine", ein Tippen haette die Rolle
 still ueberschrieben. Die bisherige Rolle erscheint jetzt als eigene Option
 "(nicht im Rollen-Katalog)".
+
+## v3.18.0 - Start haengt nicht mehr, "verbunden aber keine Daten" abgefangen
+
+**Anlass:** Bei der Vorstellung im Vorstand blieb die App auf "Verbindung wird
+geprueft" haengen bzw. zeigte trotz Verbindung keine Daten - nur ein Neustart
+half.
+
+**Ursachen:**
+1. Der Sync-Effekt in `App.tsx` lief einmal beim Mount (`[]`) und abonnierte
+   sofort alle Sammlungen - ohne auf die asynchron wiederhergestellte
+   Firebase-Anmeldung zu warten. War er schneller, lehnten die Regeln die Abos
+   ab; ein abgelehntes `onSnapshot` beendet Firebase endgueltig. Die spaetere
+   Pruefung meldete "ok", Daten kamen trotzdem nie. Nach einer frischen
+   Anmeldung wurden die Abos ebenfalls nie neu aufgebaut.
+2. `checkConnection()` hatte keine Zeitgrenze, und der Schreibtest wartet bei
+   wackliger Verbindung auf die Server-Bestaetigung - endloses Warten.
+
+**Loesung:**
+- `onAuthStateChanged` → `firebaseUid`; der Sync-Effekt haengt an
+  `[firebaseUid, syncEpoch]` und startet erst mit Anmeldung.
+- Lokal gemerkte Sitzung ohne Firebase-Anmeldung → `handleLogout()` (statt
+  ewig "Keine Verbindung"). `handleLogout` meldet jetzt auch bei Firebase ab.
+- Gate: eigener Effekt, einmal je Anmeldung, nur Lesetest (`checkRead`),
+  **5 s Zeitgrenze** → einmal automatisch neu laden (`reloadOnce`, hoechstens
+  alle 2 Minuten per `sessionStorage`), sonst Meldung mit "Erneut versuchen"
+  (baut Pruefung + Abos neu auf) und "App neu laden". Schreibtest nur noch im
+  Hintergrund fuer den "Sync blockiert"-Hinweis.
+- Watchdog: kommt 8 s nach dem Abonnieren keine Mitgliederliste (nie leer),
+  Abos neu aufbauen (`syncEpoch`), beim zweiten Mal einmal neu laden. Nicht
+  waehrend der Anmeldung (Code-Schritt). Eine angekommene Mitgliederliste
+  setzt das Gate auf "ok".
+- Nach > 5 Minuten im Hintergrund werden die Abos neu aufgebaut (abgerissene
+  Verbindungen auf dem iPhone).
+- `applyRemote` laedt bei leerer Cloud-Sammlung **nicht** mehr den lokalen
+  Stand hoch - mit dem haeufigeren Neuaufbau haette das Geloeschtes
+  wiederhergestellt (gleiche Fehlerklasse wie `syncAllMembers`).
+
+**Lokal getestet:** Neuladen zeigt Daten; Abmelden → Entwickler-Login zeigt
+Daten ohne Neustart; keine abgelehnten Abos in der Konsole. Nicht simulierbar:
+haengende Leitung auf dem iPhone (5-s-Neuladen) - nur im Feld pruefbar.

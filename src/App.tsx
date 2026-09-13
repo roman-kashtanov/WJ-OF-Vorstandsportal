@@ -12,6 +12,8 @@ import {
 import { AppStorage } from './utils/storage';
 import { PwaNotificationService } from './utils/pwaNotifications';
 import { FirebaseSync, FirebaseSyncStatus } from './utils/firebaseSync';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from './lib/firebase';
 import { CURRENT_APP_VERSION, DEFAULT_VERSION_CONFIG } from './constants/version';
 import { normalizeSecuritySettings } from './utils/security';
 import { Header } from './components/Header';
@@ -49,6 +51,16 @@ import { useResolutions } from './hooks/useResolutions';
 import { useInvoices } from './hooks/useInvoices';
 import { useAuditLog } from './hooks/useAuditLog';
 import { CheckCircle2, AlertCircle, Mail, Sparkles, X, Bell, Settings, Video } from 'lucide-react';
+
+/** Antwortet die Verbindungspruefung nicht in dieser Zeit, wird einmal neu geladen. */
+const CONNECTION_TIMEOUT_MS = 5000;
+/** Kommt so lange keine Mitgliederliste an, werden die Abos neu aufgebaut. */
+const DATA_WATCHDOG_MS = 8000;
+/** Automatisches Neuladen hoechstens so oft - nie in einer Schleife. */
+const AUTO_RELOAD_COOLDOWN_MS = 2 * 60_000;
+const AUTO_RELOAD_KEY = 'wjof_auto_reload_at';
+/** Nach so langer Zeit im Hintergrund werden die Abos neu aufgebaut. */
+const RESUBSCRIBE_AFTER_HIDDEN_MS = 5 * 60_000;
 
 /** Stimme als Wort - fuer Rueckfragen und Meldungen. */
 function voteLabel(v: VoteType): string {
@@ -127,21 +139,119 @@ export default function App() {
    * nicht geprueft werden - also ohne Verbindung auch kein Zugriff.
    */
   const [connectionGate, setConnectionGate] = useState<'checking' | 'ok' | 'blocked'>('checking');
+
+  /**
+   * Firebase stellt die gespeicherte Anmeldung beim Start erst asynchron wieder
+   * her. Frueher wurden die Datenbank-Abos sofort beim Start aufgebaut: war das
+   * schneller als Firebase, wies die Datenbank sie als "nicht angemeldet" ab,
+   * Firebase gab sie endgueltig auf - die Verbindung stand, aber es kamen keine
+   * Daten, bis die App neu gestartet wurde. Nach einer frischen Anmeldung
+   * wurden sie ebenfalls nicht neu aufgebaut. Jetzt wird erst abonniert, wenn
+   * die Anmeldung da ist, und bei jeder neuen Anmeldung neu.
+   */
+  const [firebaseUid, setFirebaseUid] = useState<string | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  useEffect(
+    () =>
+      onAuthStateChanged(auth, (user) => {
+        setFirebaseUid(user?.uid ?? null);
+        setAuthReady(true);
+      }),
+    []
+  );
+
+  // Lokal gemerkte Sitzung, aber keine Firebase-Anmeldung (mehr): damit kaeme
+  // nie ein Datensatz an - statt "Keine Verbindung" direkt zur Anmeldung.
+  useEffect(() => {
+    if (authReady && !firebaseUid && authSession?.isAuthenticated) handleLogout();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authReady, firebaseUid, authSession?.isAuthenticated]);
+
+  /** Einmal automatisch neu laden - hoechstens alle 2 Minuten, nie in einer Schleife. */
+  const reloadOnce = (): boolean => {
+    try {
+      const last = Number(sessionStorage.getItem(AUTO_RELOAD_KEY) || 0);
+      if (Date.now() - last < AUTO_RELOAD_COOLDOWN_MS) return false;
+      sessionStorage.setItem(AUTO_RELOAD_KEY, String(Date.now()));
+    } catch {
+      return false;
+    }
+    window.location.reload();
+    return true;
+  };
+
+  /** Zeitpunkt der letzten angekommenen Mitgliederliste = Beweis, dass Daten fliessen. */
+  const lastMembersAtRef = React.useRef(0);
+  const checkIdRef = React.useRef(0);
+
   const verifyConnection = () => {
+    const checkId = ++checkIdRef.current;
+    const startedAt = Date.now();
     setConnectionGate('checking');
-    FirebaseSync.checkConnection().then((conn) => {
-      setSyncBlocked(!conn.canRead || !conn.canWrite);
-      setConnectionGate(conn.canRead ? 'ok' : 'blocked');
+
+    // Frueher ohne Zeitgrenze: hing die Leitung (z. B. App nach einer Pause
+    // wieder geoeffnet), wartete der Pruef-Bildschirm endlos.
+    const timeout = new Promise<'timeout'>((resolve) =>
+      window.setTimeout(() => resolve('timeout'), CONNECTION_TIMEOUT_MS)
+    );
+    Promise.race([FirebaseSync.checkRead(), timeout]).then((result) => {
+      if (checkId !== checkIdRef.current) return;
+      if (result === true || lastMembersAtRef.current >= startedAt) {
+        setConnectionGate('ok');
+        // Schreibtest nur noch im Hintergrund - fuer den Hinweis "Synchronisation blockiert".
+        FirebaseSync.checkConnection().then((conn) => setSyncBlocked(!conn.canRead || !conn.canWrite));
+        return;
+      }
+      if (result === 'timeout' && reloadOnce()) return;
+      setConnectionGate('blocked');
     });
   };
 
-  // Echtzeit-Synchronisation mit Firestore.
-  //
-  // Wichtig: Die allererste Antwort aus der Cloud darf lokale Daten nicht
-  // loeschen. Ist die Cloud leer, waehrend lokal etwas vorliegt (z.B. weil das
-  // Geraet offline gearbeitet hat oder die Datenbank neu ist), werden die
-  // lokalen Daten stattdessen hochgeladen.
+  /** Erhoehen baut alle Datenbank-Abos neu auf (siehe Sync-Effekt unten). */
+  const [syncEpoch, setSyncEpoch] = useState(0);
+  const gateCheckedUidRef = React.useRef<string | null>(null);
+  const resubscribeAttemptsRef = React.useRef(0);
+
+  /** "Erneut versuchen": Pruefung und alle Abos komplett neu. */
+  const retryConnection = () => {
+    resubscribeAttemptsRef.current = 0;
+    gateCheckedUidRef.current = null;
+    setConnectionGate('checking');
+    setSyncEpoch((e) => e + 1);
+  };
+
+  // Verbindungspruefung einmal je Anmeldung - erst, wenn sie wirklich steht.
   useEffect(() => {
+    if (!firebaseUid || !authSession?.isAuthenticated) return;
+    if (gateCheckedUidRef.current === firebaseUid) return;
+    gateCheckedUidRef.current = firebaseUid;
+    verifyConnection();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firebaseUid, authSession?.isAuthenticated, syncEpoch]);
+
+  // Rueckkehr in die App nach laengerer Pause: auf dem iPhone reissen die
+  // Datenbank-Verbindungen dann oft unbemerkt ab, die Anzeige bliebe auf altem
+  // Stand. Deshalb die Abos neu aufbauen.
+  const hiddenSinceRef = React.useRef<number | null>(null);
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        hiddenSinceRef.current = Date.now();
+        return;
+      }
+      const since = hiddenSinceRef.current;
+      hiddenSinceRef.current = null;
+      if (since && Date.now() - since > RESUBSCRIBE_AFTER_HIDDEN_MS) setSyncEpoch((e) => e + 1);
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, []);
+
+  // Echtzeit-Synchronisation mit Firestore - erst mit Firebase-Anmeldung, neu
+  // bei jeder Anmeldung und bei jedem Neuaufbau (syncEpoch).
+  useEffect(() => {
+    if (!firebaseUid) return;
+
     const local = {
       members,
       resolutions,
@@ -157,10 +267,8 @@ export default function App() {
 
     FirebaseSync.autoInitCloudIfEmpty(local);
 
-    // Aktiv pruefen statt darauf zu warten, dass ein Listener stillschweigend
-    // scheitert - sonst merkt niemand, dass nichts synchronisiert wird. Setzt
-    // nebenbei auch das Verbindungs-Gate (siehe oben).
-    verifyConnection();
+    // Die Verbindungspruefung laeuft jetzt in einem eigenen Effekt (siehe
+    // oben), damit sie nicht bei jedem Neuaufbau der Abos erneut aufblitzt.
 
     const firstSnapshot = {
       resolutions: true,
@@ -174,7 +282,7 @@ export default function App() {
       subsidyPeople: true,
     };
 
-    /** Uebernimmt Cloud-Daten - ausser die Cloud ist beim ersten Mal leer. */
+    /** Uebernimmt Cloud-Daten. Massgeblich ist immer die Cloud. */
     function applyRemote<T>(
       key: keyof typeof firstSnapshot,
       remote: T[] | null,
@@ -183,13 +291,11 @@ export default function App() {
       uploadLocal: (item: T) => void
     ) {
       if (!remote) return;
-      if (firstSnapshot[key]) {
-        firstSnapshot[key] = false;
-        if (remote.length === 0 && localList.length > 0) {
-          localList.forEach(uploadLocal);
-          return;
-        }
-      }
+      // Frueher: war eine Sammlung in der Cloud beim ersten Mal leer, wurde der
+      // lokale Stand hochgeladen. Seit die Abos neu aufgebaut werden (Watchdog,
+      // Rueckkehr in die App), wuerde ein Geraet mit altem Stand so geloeschte
+      // Eintraege wiederherstellen - dieselbe Fehlerklasse wie syncAllMembers.
+      firstSnapshot[key] = false;
       setter(remote);
     }
 
@@ -230,6 +336,11 @@ export default function App() {
     );
 
     const unsubMem = FirebaseSync.subscribeMembers((remote) => {
+      // Daten fliessen - Watchdog zufrieden, Pruef-Bildschirm darf weg.
+      lastMembersAtRef.current = Date.now();
+      resubscribeAttemptsRef.current = 0;
+      setConnectionGate('ok');
+
       applyRemote('members', remote, local.members, setMembers, (m) =>
         FirebaseSync.saveMember(m).catch(() => {})
       );
@@ -321,7 +432,24 @@ export default function App() {
       });
     });
 
+    // Watchdog: Verbindung steht, aber es kommt keine Mitgliederliste (sie ist
+    // nie leer). Erst alle Abos neu aufbauen, beim zweiten Mal einmal neu laden,
+    // danach die Meldung mit "Erneut versuchen" / "App neu laden". Waehrend der
+    // Anmeldung (Vorstandscode) wird nicht neu geladen.
+    const effectStartedAt = Date.now();
+    const watchdog = window.setTimeout(() => {
+      if (lastMembersAtRef.current >= effectStartedAt) return;
+      if (!authSessionRef.current?.isAuthenticated) return;
+      if (resubscribeAttemptsRef.current < 1) {
+        resubscribeAttemptsRef.current += 1;
+        setSyncEpoch((e) => e + 1);
+        return;
+      }
+      if (!reloadOnce()) setConnectionGate('blocked');
+    }, DATA_WATCHDOG_MS);
+
     return () => {
+      window.clearTimeout(watchdog);
       unsubStatus();
       unsubVersion();
       unsubRes();
@@ -340,7 +468,8 @@ export default function App() {
       unsubNotifications();
       unsubAuditLog();
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firebaseUid, syncEpoch]);
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
 
@@ -1152,15 +1281,22 @@ export default function App() {
               <>
                 <h3 className="text-base font-bold text-slate-900">Keine Verbindung</h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Ohne Verbindung zur Vereinsdatenbank kann nicht geprüft werden, ob dieses Konto
-                  noch im Vorstand freigegeben ist. Bitte Internetverbindung prüfen.
+                  Die Vereinsdatenbank antwortet gerade nicht. Bitte die Internetverbindung prüfen
+                  und es erneut versuchen.
                 </p>
                 <button
                   type="button"
-                  onClick={verifyConnection}
+                  onClick={retryConnection}
                   className="mt-5 w-full py-2.5 rounded-xl bg-[#003594] hover:bg-[#00266B] text-white font-bold text-sm transition-colors cursor-pointer"
                 >
                   Erneut versuchen
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="mt-2 w-full py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold text-sm transition-colors cursor-pointer"
+                >
+                  App neu laden
                 </button>
                 <button
                   type="button"
