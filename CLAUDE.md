@@ -1588,7 +1588,7 @@ Kontoauswahl.
 Datenbankregeln liessen nichts durch.
 
 **Loesung:** Ein eigenes Firebase-Konto "Entwickler (lokal)" (Adresse
-`offenbachwj+entwickler@gmail.com`, **ohne Stimmrecht**). Die Zugangsdaten
+`offenbachwj@gmail.com` - das Portal-Postfach, zuerst war `offenbachwj+entwickler@gmail.com` geplant -, **ohne Stimmrecht und nicht festangestellt**, damit das Live-Portal fuer dieses Google-Konto den Vorstandscode verlangt). Die Zugangsdaten
 stehen in `.env.local` (`DEV_LOGIN_EMAIL`, `DEV_LOGIN_PASSWORD`, per
 `.gitignore` ausgeschlossen). Der Knopf holt sie ueber `GET /api/dev/login` -
 diese Route gibt es **nur in `server.ts`** (nie in `api/router.ts`, also nie
