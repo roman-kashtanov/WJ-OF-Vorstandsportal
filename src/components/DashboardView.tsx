@@ -23,10 +23,8 @@ import {
   Wallet,
   Video,
   AlertCircle,
-  Plus,
   Download,
-  FileText,
-  ArrowRight
+  FileText
 } from 'lucide-react';
 
 /**
@@ -48,8 +46,6 @@ interface DashboardViewProps {
   nextMeeting: Meeting | null;
   onNavigate: (tab: ActiveTab) => void;
   onNavigateTo: (target: OverviewTarget) => void;
-  onOpenNewResolution: () => void;
-  onOpenNewInvoice: () => void;
   onSelectResolution: (resId: string) => void;
   onSelectInvoice: (invId: string) => void;
   onOpenQuickAgenda: () => void;
@@ -76,8 +72,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   nextMeeting,
   onNavigate,
   onNavigateTo,
-  onOpenNewResolution,
-  onOpenNewInvoice,
   onOpenQuickAgenda,
 }) => {
   const pendingResolutionsForMember = resolutions.filter((res) => {
@@ -149,54 +143,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       )}
 
-      {/* 2. SCHNELLE HAUPTAKTIONEN: BESCHLUSS FASSEN & RECHNUNG HOCHLADEN */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-
-        {/* BUTTON 1: BESCHLUSS FASSEN */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-3 shadow-2xs space-y-2">
-          <button
-            type="button"
-            onClick={onOpenNewResolution}
-            className="w-full py-3.5 px-4 bg-[#003594] hover:bg-[#00266B] active:scale-98 text-white font-bold text-sm rounded-xl flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs touch-manipulation"
-          >
-            <Plus className="w-4 h-4 text-white" strokeWidth={2.5} />
-            <span>Beschluss fassen</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onNavigate('resolutions')}
-            className="w-full py-1 text-slate-500 hover:text-[#003594] font-semibold text-xs text-center cursor-pointer transition-colors flex items-center justify-center space-x-1"
-          >
-            <span>Beschlüsse ansehen</span>
-            <ArrowRight className="w-3 h-3" />
-          </button>
-        </div>
-
-        {/* BUTTON 2: RECHNUNG HOCHLADEN */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-3 shadow-2xs space-y-2">
-          <button
-            type="button"
-            onClick={onOpenNewInvoice}
-            className="w-full py-3.5 px-4 bg-slate-900 hover:bg-black active:scale-98 text-white font-bold text-sm rounded-xl flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs touch-manipulation"
-          >
-            <Plus className="w-4 h-4 text-white" strokeWidth={2.5} />
-            <span>Rechnung hochladen</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onNavigate('invoices')}
-            className="w-full py-1 text-slate-500 hover:text-slate-900 font-semibold text-xs text-center cursor-pointer transition-colors flex items-center justify-center space-x-1"
-          >
-            <span>Belege ansehen</span>
-            <ArrowRight className="w-3 h-3" />
-          </button>
-        </div>
-
-      </div>
-
-      {/* 3. NAECHSTE VORSTANDSSITZUNG (MICROSOFT TEAMS) */}
+      {/* 2. NAECHSTE VORSTANDSSITZUNG (MICROSOFT TEAMS). Die frueheren grossen Knoepfe
+           "Beschluss fassen"/"Rechnung hochladen" sind entfallen - das geht in den
+           jeweiligen Bereichen. */}
       {nextMeeting && (
         <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center space-x-3 min-w-0">
@@ -246,7 +195,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       )}
 
-      {/* 4. MODULE: Beschluesse, Zuschuesse, Auslagen - untereinander. Ein
+      {/* 3. MODULE: Beschluesse, Zuschuesse, Auslagen - untereinander. Ein
            Modul ohne offene Eintraege wird nicht angezeigt. */}
       <DashboardModule
         icon={<Vote className="w-4 h-4" strokeWidth={2} />}

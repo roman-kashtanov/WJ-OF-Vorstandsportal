@@ -51,6 +51,48 @@ export async function sendMemberInvite(member: BoardMember): Promise<Outcome> {
   return ok ? { ok: true } : { ok: false, error: data?.error || 'Die Einladung ist fehlgeschlagen.' };
 }
 
+/** ID-Token des angemeldeten Mitglieds - damit prueft der Server, dass der Vorstand fragt. */
+async function currentIdToken(): Promise<string | null> {
+  await auth.authStateReady();
+  const user = auth.currentUser;
+  return user ? user.getIdToken() : null;
+}
+
+const NOT_SIGNED_IN = 'Dafür musst du angemeldet sein. Bitte einmal ab- und wieder anmelden.';
+
+/**
+ * Fehlender Nachweis beim Zuschuss: per E-Mail erneut anfordern
+ * (api/subsidy.ts handleResendProofLink, nur fuer den Vorstand).
+ */
+export async function resendSubsidyProofLink(input: {
+  subsidyId: string;
+  email: string;
+  personName: string;
+  eventName: string;
+}): Promise<Outcome> {
+  const idToken = await currentIdToken();
+  if (!idToken) return { ok: false, error: NOT_SIGNED_IN };
+  const { ok, data } = await postJson('subsidy/resend-proof-link', { ...input, idToken });
+  return ok
+    ? { ok: true }
+    : { ok: false, error: data?.error || 'Der Nachweis-Link konnte nicht versendet werden.' };
+}
+
+/**
+ * "Link kopieren": derselbe Nachweis-Link wie in der E-Mail, ohne sie zu
+ * verschicken - zum Weiterleiten z. B. per WhatsApp (api/subsidy.ts
+ * handleGetProofLink, nur fuer den Vorstand).
+ */
+export async function getSubsidyProofLink(
+  subsidyId: string
+): Promise<Outcome<{ url: string; missing: string }>> {
+  const idToken = await currentIdToken();
+  if (!idToken) return { ok: false, error: NOT_SIGNED_IN };
+  const { ok, data } = await postJson('subsidy/proof-link', { subsidyId, idToken });
+  if (ok && data?.url) return { ok: true, url: data.url, missing: data.missing || '' };
+  return { ok: false, error: data?.error || 'Der Nachweis-Link konnte nicht erzeugt werden.' };
+}
+
 /** "Passwort vergessen" - antwortet bewusst gleich, egal ob die Adresse freigegeben ist. */
 export async function requestPasswordReset(email: string): Promise<Outcome> {
   const { ok, data } = await postJson('auth/password-reset', { email });

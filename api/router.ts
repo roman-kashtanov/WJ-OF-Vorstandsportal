@@ -10,6 +10,7 @@ import {
   handleGetProofStatus,
   handleUploadProof,
   handleResendProofLink,
+  handleGetProofLink,
   handleGetSubsidyCatalogue,
 } from './subsidy';
 import {
@@ -146,6 +147,12 @@ export async function handleApiRequest(
 
   if (method === 'POST' && route === 'subsidy/resend-proof-link') {
     const result = await handleResendProofLink(payload || {}, origin || '/');
+    return { status: result.status, body: result.body };
+  }
+
+  // "Link kopieren" beim Zuschuss: Nachweis-Link ohne E-Mail (nur Vorstand)
+  if (method === 'POST' && route === 'subsidy/proof-link') {
+    const result = await handleGetProofLink(payload || {}, origin || '/');
     return { status: result.status, body: result.body };
   }
 

@@ -33,12 +33,13 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
 
 ## Aktueller Stand (13.09.2026)
 
-- Version **v3.22.0**, lokal committet; noch nicht gepusht: v3.19.0
+- Version **v3.23.0**, lokal committet; noch nicht gepusht: v3.19.0
   (Übersicht-Module, Beschlussbereiche), v3.20.0 (Personen: Vor-/Nachname,
   Zuordnung über den Namen, Personenübersicht), v3.21.0 (Buchhaltungs-Schalter
   mit Archiv, Archiv nach Jahr/Monat/Art), v3.22.0 (Archiv als Reiter, weiche
-  Übergänge überall). Bis einschließlich Doku-Commit „Arbeitsregeln" ist alles
-  veröffentlicht.
+  Übergänge überall), v3.23.0 (große Knöpfe aus der Übersicht entfernt,
+  Nachweis-Link kopieren). Bis einschließlich Doku-Commit „Arbeitsregeln" ist
+  alles veröffentlicht.
 - Weiche Übergänge nur im Chrome-Vorschaufenster geprüft – auf dem iPhone
   (Safari ab iOS 18) noch vom Nutzer zu testen.
 - Offen beim Nutzer: doppelte Personen (Roman Kashtanov 7×, Diana Sajzew 2×)
@@ -1932,3 +1933,35 @@ Endgültig löschen geht weiterhin nur bei tatsächlich archivierten
 **Bewusst nicht umgebaut:** Wechsel zwischen zwei Inhalten per `? :` (z. B.
 „Beschluss zuordnen" ↔ Auswahl) und die Reiter in den Einstellungen behalten
 ihre kurze Einblendung (`wj-expand` mit `key`).
+
+## v3.23.0 - Übersicht ohne große Knöpfe, Nachweis-Link kopieren
+
+**Übersicht:** Die großen Knöpfe „Beschluss fassen" und „Rechnung hochladen"
+sind entfernt (Nutzerwunsch: die Module darunter reichen, angelegt wird im
+jeweiligen Bereich). `onOpenNewResolution`/`onOpenNewInvoice` gibt es an
+`DashboardView` nicht mehr.
+
+**Nachweis-Link kopieren** (Zuschüsse/Auslagen, aufgeklappter Vorgang, solange
+ein Nachweis fehlt): neben „Nachweis-Link senden" ein Knopf „Link kopieren" –
+auch für Personen ohne E-Mail, zum Weiterleiten per WhatsApp.
+- Server: `handleGetProofLink` (`api/subsidy.ts`, Route `subsidy/proof-link`)
+  liefert denselben signierten `/nachweis?t=…`-Link wie die Mail, ohne sie zu
+  verschicken, und schreibt einen Historie-Eintrag. Gemeinsamer Baustein
+  `buildProofLink()` für Senden und Kopieren.
+- **Kopieren auf dem iPhone:** Safari erlaubt Zwischenablage nur direkt nach
+  einem Tipp. `copyPendingText()` (`utils/clipboard.ts`) startet deshalb sofort
+  mit einem `ClipboardItem`, dessen Inhalt ein Promise auf den Server-Link ist.
+  Klappt es trotzdem nicht, erscheint der Link zum Markieren plus „Teilen".
+- Senden und Kopieren verlangen jetzt das Firebase-ID-Token eines
+  freigegebenen Vorstandsmitglieds (`verifyBoardCaller()` in `api/auth.ts`,
+  gemeinsam mit der Einladung; Client in `utils/accountService.ts`). Einordnung
+  des Nutzers: Die Zuschuss-Kennung ist intern und nirgends sichtbar, nur der
+  Vorstand hat Portalzugang – das Risiko vorher war also gering; die Prüfung
+  ist zusätzliche Absicherung ohne sichtbare Änderung. Die alte, ungeprüfte
+  `resendSubsidyProofLink` in `emailService.ts` ist entfernt.
+
+**Getestet:** Server mit nachgestellter Anmeldung/Datenbank (ohne Anmeldung
+401, nicht freigegeben 403, Vorstand erhält gültig signierten Link +
+Historie, beide Nachweise da 400, unbekannt 404, Senden ohne Anmeldung 401).
+Echtes Kopieren auf dem iPhone erst nach dem Deploy prüfbar (lokal fehlen
+Dienstkonto und Link-Schlüssel).

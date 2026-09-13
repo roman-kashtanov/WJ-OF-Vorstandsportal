@@ -27,7 +27,9 @@ import { formatIban, buildSepaCreditTransfer, downloadSepaFile, isValidIban } fr
 import { generateGiroCodePaymentsPdf } from '../utils/giroCodePdf';
 import { downloadBlob, openDataUrl } from '../utils/fileHelpers';
 import { ResolutionPicker } from './ResolutionPicker';
-import { EmailService, resendSubsidyProofLink } from '../utils/emailService';
+import { EmailService } from '../utils/emailService';
+import { resendSubsidyProofLink, getSubsidyProofLink } from '../utils/accountService';
+import { copyPendingText, copyText } from '../utils/clipboard';
 import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
 import { RevisionHistoryModal } from './RevisionHistoryModal';
 import {
@@ -51,6 +53,7 @@ import {
   ListTree,
   History as HistoryIcon,
   QrCode,
+  Share2,
 } from 'lucide-react';
 import { Collapse } from './Collapse';
 import { smooth, transitionName } from '../utils/smooth';
@@ -137,6 +140,10 @@ export const SubsidiesView: React.FC<Props> = ({
   const [previewFile, setPreviewFile] = useState<PreviewableFile | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [resendState, setResendState] = useState<Record<string, 'busy' | 'done' | 'error'>>({});
+  /** "Link kopieren" je Vorgang; `manual` = Kopieren klappte nicht, Link wird angezeigt. */
+  const [copyState, setCopyState] = useState<
+    Record<string, { status: 'busy' | 'done' | 'manual' | 'error'; url?: string }>
+  >({});
   const [regeneratingQrId, setRegeneratingQrId] = useState<string | null>(null);
   const [historySubsidyId, setHistorySubsidyId] = useState<string | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -152,6 +159,45 @@ export const SubsidiesView: React.FC<Props> = ({
     });
     setResendState((prev) => ({ ...prev, [s.id]: result.ok ? 'done' : 'error' }));
     if (result.ok === false) alert(result.error);
+  };
+
+  /**
+   * "Link kopieren": holt denselben Nachweis-Link wie die E-Mail und legt ihn
+   * in die Zwischenablage - zum Weiterleiten per WhatsApp, auch fuer Personen
+   * ohne E-Mail-Adresse. Klappt das Kopieren nicht, wird der Link zum
+   * Markieren und Teilen angezeigt.
+   */
+  const handleCopyProofLink = async (s: Subsidy) => {
+    setCopyState((prev) => ({ ...prev, [s.id]: { status: 'busy' } }));
+    const link = getSubsidyProofLink(s.id).then((r) => {
+      if (r.ok === false) throw new Error(r.error);
+      return r.url;
+    });
+    const copied = await copyPendingText(link);
+
+    let url: string;
+    try {
+      url = await link;
+    } catch (err: any) {
+      setCopyState((prev) => ({ ...prev, [s.id]: { status: 'error' } }));
+      alert(err?.message || 'Der Nachweis-Link konnte nicht erzeugt werden.');
+      return;
+    }
+
+    setCopyState((prev) => ({ ...prev, [s.id]: { status: copied ? 'done' : 'manual', url } }));
+    if (copied) {
+      window.setTimeout(
+        () =>
+          setCopyState((prev) => {
+            if (prev[s.id]?.status !== 'done') return prev;
+            // Knopf wieder auf "Link kopieren" zuruecksetzen
+            const next = { ...prev };
+            delete next[s.id];
+            return next;
+          }),
+        3000
+      );
+    }
   };
 
   /**
@@ -858,26 +904,100 @@ export const SubsidiesView: React.FC<Props> = ({
                     )}
                   </div>
 
-                  {person?.email &&
-                    (kind === 'auslage'
-                      ? s.costProofState !== 'hochgeladen'
-                      : s.proofState !== 'hochgeladen' || s.costProofState !== 'hochgeladen') && (
-                      <button
-                        type="button"
-                        onClick={() => handleResendProofLink(s, person.email!)}
-                        disabled={resendState[s.id] === 'busy'}
-                        className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
-                      >
-                        <Send className="w-3 h-3" strokeWidth={1.75} />
-                        {resendState[s.id] === 'busy'
-                          ? 'Wird gesendet…'
-                          : resendState[s.id] === 'done'
-                          ? 'Link erneut gesendet'
-                          : resendState[s.id] === 'error'
-                          ? 'Fehlgeschlagen – erneut versuchen'
-                          : 'Nachweis-Link senden'}
-                      </button>
-                    )}
+                  {(kind === 'auslage'
+                    ? s.costProofState !== 'hochgeladen'
+                    : s.proofState !== 'hochgeladen' || s.costProofState !== 'hochgeladen') && (
+                    <div className="space-y-1.5">
+                      <div className="flex flex-wrap gap-1.5">
+                        {person?.email && (
+                          <button
+                            type="button"
+                            onClick={() => handleResendProofLink(s, person.email!)}
+                            disabled={resendState[s.id] === 'busy'}
+                            className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
+                          >
+                            <Send className="w-3 h-3" strokeWidth={1.75} />
+                            {resendState[s.id] === 'busy'
+                              ? 'Wird gesendet…'
+                              : resendState[s.id] === 'done'
+                              ? 'Link erneut gesendet'
+                              : resendState[s.id] === 'error'
+                              ? 'Fehlgeschlagen – erneut versuchen'
+                              : 'Nachweis-Link senden'}
+                          </button>
+                        )}
+
+                        {/* Link fuer WhatsApp & Co. - ohne E-Mail */}
+                        <button
+                          type="button"
+                          onClick={() => handleCopyProofLink(s)}
+                          disabled={copyState[s.id]?.status === 'busy'}
+                          className={`px-2.5 py-1.5 rounded-lg border font-semibold flex items-center gap-1 transition-colors duration-200 cursor-pointer disabled:opacity-50 ${
+                            copyState[s.id]?.status === 'done'
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                              : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          {copyState[s.id]?.status === 'done' ? (
+                            <Check className="w-3 h-3" strokeWidth={2} />
+                          ) : (
+                            <Copy className="w-3 h-3" strokeWidth={1.75} />
+                          )}
+                          {copyState[s.id]?.status === 'busy'
+                            ? 'Link wird erstellt…'
+                            : copyState[s.id]?.status === 'done'
+                            ? 'Link kopiert'
+                            : 'Link kopieren'}
+                        </button>
+                      </div>
+
+                      {/* Rueckfall, wenn der Browser das Kopieren verweigert */}
+                      <Collapse open={copyState[s.id]?.status === 'manual'}>
+                        {copyState[s.id]?.status === 'manual' && copyState[s.id]?.url && (
+                          <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 space-y-1.5">
+                            <p className="font-semibold text-amber-900">
+                              Automatisch kopieren hat nicht geklappt. Den Link hier markieren
+                              oder direkt teilen:
+                            </p>
+                            <input
+                              readOnly
+                              value={copyState[s.id]!.url}
+                              onFocus={(e) => e.currentTarget.select()}
+                              className="w-full min-w-0 px-2 py-1.5 bg-white border border-amber-200 rounded-md font-mono text-base sm:text-[11px] text-slate-700"
+                            />
+                            <div className="flex flex-wrap gap-1.5">
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const url = copyState[s.id]?.url;
+                                  if (url && (await copyText(url))) {
+                                    setCopyState((prev) => ({ ...prev, [s.id]: { status: 'done', url } }));
+                                  }
+                                }}
+                                className="px-2.5 py-1.5 rounded-lg bg-white border border-amber-200 text-amber-900 font-semibold flex items-center gap-1 cursor-pointer"
+                              >
+                                <Copy className="w-3 h-3" strokeWidth={1.75} />
+                                Kopieren
+                              </button>
+                              {typeof navigator !== 'undefined' && 'share' in navigator && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const url = copyState[s.id]?.url;
+                                    if (url) navigator.share({ url }).catch(() => {});
+                                  }}
+                                  className="px-2.5 py-1.5 rounded-lg bg-white border border-amber-200 text-amber-900 font-semibold flex items-center gap-1 cursor-pointer"
+                                >
+                                  <Share2 className="w-3 h-3" strokeWidth={1.75} />
+                                  Teilen
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </Collapse>
+                    </div>
+                  )}
 
                   {person &&
                     !person.iban &&

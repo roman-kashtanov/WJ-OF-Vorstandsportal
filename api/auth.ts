@@ -45,6 +45,34 @@ function mailError(result: { status: number; body: Record<string, unknown> }): s
   return String(result.body?.error || 'Die E-Mail konnte nicht versendet werden.');
 }
 
+/**
+ * Kommt die Anfrage von einem angemeldeten, freigegebenen Vorstandsmitglied?
+ * Prueft das Firebase-ID-Token (Signatur, Projekt, Ablauf), die bestaetigte
+ * Adresse und die Freigabeliste. Fuer alle Serverfunktionen, die nur der
+ * Vorstand ausloesen darf (Einladung, Nachweis-Links).
+ */
+export async function verifyBoardCaller(
+  idToken: string | undefined,
+  forbiddenMessage = 'Nur freigegebene Vorstandsmitglieder dürfen das.'
+): Promise<{ ok: true; email: string } | { ok: false; result: Result }> {
+  let caller;
+  try {
+    caller = await FirebaseAuthAdmin.verifyIdToken(idToken || '');
+  } catch {
+    return {
+      ok: false,
+      result: {
+        status: 401,
+        body: { error: 'Deine Anmeldung ist abgelaufen. Bitte die Seite neu laden und erneut versuchen.' },
+      },
+    };
+  }
+  if (!caller.email || !caller.emailVerified || !(await isAllowlisted(normalizeEmail(caller.email)))) {
+    return { ok: false, result: { status: 403, body: { error: forbiddenMessage } } };
+  }
+  return { ok: true, email: caller.email };
+}
+
 export async function handleSendInvite(
   payload: { idToken?: string; memberId?: string },
   origin: string
@@ -53,18 +81,11 @@ export async function handleSendInvite(
 
   try {
     // Nur freigegebene Vorstandsmitglieder duerfen einladen.
-    let caller;
-    try {
-      caller = await FirebaseAuthAdmin.verifyIdToken(payload.idToken || '');
-    } catch {
-      return {
-        status: 401,
-        body: { error: 'Deine Anmeldung ist abgelaufen. Bitte die Seite neu laden und erneut versuchen.' },
-      };
-    }
-    if (!caller.email || !caller.emailVerified || !(await isAllowlisted(caller.email))) {
-      return { status: 403, body: { error: 'Nur freigegebene Vorstandsmitglieder dürfen einladen.' } };
-    }
+    const caller = await verifyBoardCaller(
+      payload.idToken,
+      'Nur freigegebene Vorstandsmitglieder dürfen einladen.'
+    );
+    if (caller.ok === false) return caller.result;
 
     if (!payload.memberId) return { status: 400, body: { error: 'Kein Mitglied angegeben.' } };
     const member = await FirestoreAdmin.getDocument(`members/${payload.memberId}`);

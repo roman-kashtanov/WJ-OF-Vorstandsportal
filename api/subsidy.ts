@@ -8,6 +8,7 @@ import { isValidIban } from '../src/utils/sepa';
 import { dataUrlBytes, formatBytes, MAX_STORED_BYTES } from '../src/utils/fileStorage';
 import { writeNotification, writeAuditLogEntry } from './notify';
 import { normalizeNameKey, joinPersonName, splitPersonName } from '../src/utils/subsidies';
+import { verifyBoardCaller } from './auth';
 
 /**
  * Oeffentliches Zuschuss-Antragsformular (/antrag) und Nachweis-Nachreichen
@@ -396,15 +397,58 @@ export interface ResendProofLinkInput {
 }
 
 /**
+ * Gemeinsam fuer "Nachweis-Link senden" und "Link kopieren": prueft, dass der
+ * Zuschuss existiert und noch ein Nachweis fehlt, und baut den signierten
+ * Link zur /nachweis-Seite (siehe subsidyProofToken.ts).
+ */
+async function buildProofLink(
+  subsidyId: string,
+  appUrl: string
+): Promise<
+  | { ok: true; url: string; subsidy: Record<string, any>; missingText: string }
+  | { ok: false; status: number; body: any }
+> {
+  const subsidy = await FirestoreAdmin.getDocument(`subsidies/${subsidyId}`);
+  if (!subsidy) {
+    return { ok: false, status: 404, body: { error: 'Dieser Zuschuss existiert nicht mehr.' } };
+  }
+
+  const missing = missingProofLabels(
+    subsidy.proofState === 'hochgeladen',
+    subsidy.costProofState === 'hochgeladen'
+  );
+  if (missing.length === 0) {
+    return {
+      ok: false,
+      status: 400,
+      body: { error: 'Beide Nachweise liegen bereits vor - kein Link nötig.' },
+    };
+  }
+
+  const token = createSubsidyProofToken(subsidyId);
+  if (!token) {
+    return { ok: false, status: 500, body: { error: 'SUBSIDY_PROOF_LINK_SECRET ist nicht gesetzt.' } };
+  }
+
+  return {
+    ok: true,
+    url: `${appUrl.replace(/\/$/, '')}/nachweis?t=${token}`,
+    subsidy,
+    missingText: missing.join(' und '),
+  };
+}
+
+/**
  * Vom Vorstand aus der App heraus ausgeloest (nicht Teil des oeffentlichen
  * Formulars), wenn ein Nachweis fehlt und noch einmal per E-Mail
- * nachgefordert werden soll. Die Anzeige-Werte (Name/Veranstaltung) kennt
- * die Admin-Ansicht bereits aus dem geladenen State - nur eine knappe
- * Existenzpruefung der subsidyId schuetzt davor, den Endpunkt als
- * beliebigen Mail-Versender zu missbrauchen.
+ * nachgefordert werden soll.
+ *
+ * Seit v3.23.0 nur fuer angemeldete Vorstandsmitglieder: vorher genuegte eine
+ * bekannte subsidyId, um sich einen gueltigen Hochlade-Link an eine beliebige
+ * Adresse schicken zu lassen.
  */
 export async function handleResendProofLink(
-  input: ResendProofLinkInput,
+  input: ResendProofLinkInput & { idToken?: string },
   appUrl: string
 ): Promise<{ status: number; body: any }> {
   if (!FirestoreAdmin.isConfigured()) {
@@ -418,30 +462,14 @@ export async function handleResendProofLink(
   }
 
   try {
-    const subsidy = await FirestoreAdmin.getDocument(`subsidies/${subsidyId}`);
-    if (!subsidy) {
-      return { status: 404, body: { error: 'Dieser Zuschuss existiert nicht mehr.' } };
-    }
+    const caller = await verifyBoardCaller(input?.idToken);
+    if (caller.ok === false) return caller.result;
 
-    const token = createSubsidyProofToken(subsidyId);
-    if (!token) {
-      return { status: 500, body: { error: 'SUBSIDY_PROOF_LINK_SECRET ist nicht gesetzt.' } };
-    }
-    const proofUploadUrl = `${appUrl.replace(/\/$/, '')}/nachweis?t=${token}`;
+    const link = await buildProofLink(subsidyId, appUrl);
+    if (link.ok === false) return { status: link.status, body: link.body };
+    const { url: proofUploadUrl, subsidy, missingText } = link;
     const personName = input.personName || subsidy.personName || '';
     const eventName = input.eventName || subsidy.eventName || '';
-
-    const missing = missingProofLabels(
-      subsidy.proofState === 'hochgeladen',
-      subsidy.costProofState === 'hochgeladen'
-    );
-    if (missing.length === 0) {
-      return {
-        status: 400,
-        body: { error: 'Beide Nachweise liegen bereits vor - kein Link nötig.' },
-      };
-    }
-    const missingText = missing.join(' und ');
 
     const result = await sendEmail({
       to: [email],
@@ -459,6 +487,49 @@ export async function handleResendProofLink(
     return {
       status: 500,
       body: { error: err?.message || 'Der Nachweis-Link konnte nicht versendet werden.' },
+    };
+  }
+}
+
+/**
+ * "Link kopieren": liefert denselben Nachweis-Link wie die E-Mail, ohne sie
+ * zu verschicken - zum Weiterleiten z. B. per WhatsApp. Nur fuer angemeldete
+ * Vorstandsmitglieder, denn wer den Link hat, kann Nachweise hochladen. Jeder
+ * Abruf landet in der Historie des Zuschusses.
+ */
+export async function handleGetProofLink(
+  input: { idToken?: string; subsidyId?: string },
+  appUrl: string
+): Promise<{ status: number; body: any }> {
+  if (!FirestoreAdmin.isConfigured()) {
+    return { status: 500, body: { error: 'Der Server ist nicht eingerichtet.' } };
+  }
+
+  const subsidyId = (input?.subsidyId || '').trim();
+  if (!subsidyId) {
+    return { status: 400, body: { error: 'subsidyId wird benötigt.' } };
+  }
+
+  try {
+    const caller = await verifyBoardCaller(input?.idToken);
+    if (caller.ok === false) return caller.result;
+
+    const link = await buildProofLink(subsidyId, appUrl);
+    if (link.ok === false) return { status: link.status, body: link.body };
+
+    await writeAuditLogEntry({
+      entityType: 'subsidy',
+      entityId: subsidyId,
+      entityLabel: `${link.subsidy.personName || ''} – ${link.subsidy.eventName || ''}`,
+      action: 'Nachweis-Link zum Weiterleiten kopiert',
+      actorName: caller.email,
+    }).catch(() => {});
+
+    return { status: 200, body: { ok: true, url: link.url, missing: link.missingText } };
+  } catch (err: any) {
+    return {
+      status: 500,
+      body: { error: err?.message || 'Der Nachweis-Link konnte nicht erzeugt werden.' },
     };
   }
 }

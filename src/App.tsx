@@ -932,8 +932,6 @@ export default function App() {
                 setActiveTab(target.tab);
               })
             }
-            onOpenNewResolution={() => setIsNewResolutionOpen(true)}
-            onOpenNewInvoice={() => setIsNewInvoiceOpen(true)}
             onSelectResolution={(resId) => {
               setSelectedResolutionId(resId);
               setActiveTab('resolutions');
