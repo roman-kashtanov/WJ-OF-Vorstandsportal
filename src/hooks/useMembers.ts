@@ -176,6 +176,15 @@ export function useMembers() {
   const handleUpdateMembers = (newMembers: BoardMember[]) => {
     const before = new Map(members.map((m) => [m.id, JSON.stringify(m)]));
     setMembers(newMembers);
+
+    // Die Anmeldung merkt sich die Person separat (authSession.user) - ohne
+    // Abgleich zeigte das Menue oben rechts nach einer Aenderung am eigenen
+    // Namen oder der eigenen Rolle weiter den alten Stand.
+    const me = authSession?.user ? newMembers.find((m) => m.id === authSession.user!.id) : undefined;
+    if (authSession && me && JSON.stringify(me) !== JSON.stringify(authSession.user)) {
+      setAuthSession({ ...authSession, user: me });
+    }
+
     newMembers
       .filter((m) => before.get(m.id) !== JSON.stringify(m))
       .forEach((m) => FirebaseSync.saveMember(m).catch(() => {}));

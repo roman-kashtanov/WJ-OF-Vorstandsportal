@@ -188,6 +188,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   // Klick-zum-Bearbeiten je Mitglied (Rolle zuweisen, Einladung senden)
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
+  /** Entwurf fuer den Namen der gerade aufgeklappten Person. */
+  const [nameDraft, setNameDraft] = useState('');
 
   // Einladungs-E-Mail: Rueckfrage direkt nach dem Anlegen + Senden-Status
   // pro Mitglied (fuers erneute Senden aus dem Bearbeiten-Bereich).
@@ -210,6 +212,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         x.id === member.id ? { ...x, credentialsSentAt: new Date().toISOString() } : x
       )
     );
+  };
+
+  // Namen nachtraeglich aendern. Die E-Mail-Adresse bleibt fest - an ihr haengt
+  // die Anmeldung. Das Kuerzel wird wie beim Anlegen aus dem Namen gebildet.
+  // Bereits abgegebene Stimmen und Kommentare behalten den damaligen Namen.
+  const cleanName = (value: string) => value.trim().replace(/\s+/g, ' ');
+  const handleRenameMember = (member: BoardMember) => {
+    const name = cleanName(nameDraft);
+    if (!name || name === member.name) return;
+    const initials =
+      name
+        .split(' ')
+        .map((part) => part[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase() || 'WJ';
+    onUpdateMembers(members.map((x) => (x.id === member.id ? { ...x, name, initials } : x)));
   };
 
   // Security Passcode change state
@@ -1055,7 +1074,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <div className="flex items-center justify-between">
                     <button
                       type="button"
-                      onClick={() => setEditingMemberId(isEditing ? null : m.id)}
+                      onClick={() => {
+                        setEditingMemberId(isEditing ? null : m.id);
+                        setNameDraft(m.name);
+                      }}
                       className="flex items-center space-x-3 text-left cursor-pointer flex-1 min-w-0"
                     >
                       <div className={`w-9 h-9 rounded-xl ${m.avatarColor || 'bg-[#003594]'} text-white font-bold text-xs flex items-center justify-center shrink-0`}>
@@ -1098,6 +1120,38 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                     {isEditing && (
                       <div className="mt-3 pt-3 border-t border-slate-200 space-y-2.5 wj-expand">
+                        <div>
+                          <label className="block font-bold text-slate-700 text-[11px] mb-1">
+                            Name
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={nameDraft}
+                              onChange={(e) => setNameDraft(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  handleRenameMember(m);
+                                }
+                              }}
+                              className="flex-1 min-w-0 px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#003594] text-base sm:text-sm"
+                            />
+                            {cleanName(nameDraft) && cleanName(nameDraft) !== m.name && (
+                              <button
+                                type="button"
+                                onClick={() => handleRenameMember(m)}
+                                className="px-3 py-2 rounded-xl bg-[#003594] hover:bg-[#00266B] text-white font-bold text-[11px] shrink-0 cursor-pointer animate-in fade-in"
+                              >
+                                Speichern
+                              </button>
+                            )}
+                          </div>
+                          <p className="mt-1 text-[10px] text-slate-400">
+                            Die E-Mail-Adresse lässt sich nicht ändern – an ihr hängt die Anmeldung.
+                          </p>
+                        </div>
+
                         <div>
                           <label className="block font-bold text-slate-700 text-[11px] mb-1">
                             Vorstandsrolle

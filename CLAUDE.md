@@ -1671,3 +1671,13 @@ gezielt ueber `deleteMember`, Freigaben nur beim Anlegen/Entfernen.
 an. Die automatische Abmeldung entfernter Personen vergleicht nur noch die
 Kennung (vorher auch die Adresse - bei doppelter Adresse blieb die geloeschte
 Person angemeldet).
+
+## v3.17.7 - Namen bestehender Personen aenderbar
+
+Einstellungen → Vorstand → Person antippen: neues Feld "Name" mit
+"Speichern" (auch per Enter). Kuerzel wird neu aus dem Namen gebildet. Die
+E-Mail-Adresse bleibt bewusst fest (Anmeldung, Freigabeliste). Bereits
+gespeicherte Stimmen/Kommentare behalten den damaligen Namen (`memberName`
+wird beim Abstimmen kopiert). `handleUpdateMembers` gleicht jetzt auch
+`authSession.user` ab, damit Aenderungen an der eigenen Person sofort im
+Kopfbereich sichtbar sind.
