@@ -1639,3 +1639,13 @@ haette die Freigabe fuer beide entfernt. Jetzt: Anlegen weist eine schon
 vergebene Adresse ab; Loeschen entfernt die Freigabe nur, wenn keine andere
 Person die Adresse nutzt. "Festangestellt" wird nach dem Anlegen
 zurueckgesetzt (blieb vorher fuer die naechste Person angehakt).
+
+## v3.17.5 - "Festangestellt" nachtraeglich aenderbar
+
+Im Bearbeiten-Bereich einer Person (Einstellungen → Vorstand → Person
+antippen) gibt es jetzt den Haken "festangestellt (kein Vorstandscode
+noetig)" - vorher nur beim Anlegen setzbar. Beim Umschalten wird
+`isVotingMember` ausdruecklich mitgeschrieben, weil `isVotingMember()` bei
+Altbestand ohne eigenes Feld das Stimmrecht aus `isPermanentStaff` ableitet.
+Hinweis: `securitySettings.exemptMemberIds`/`exemptEmails` befreien ebenfalls
+vom Code, werden aber von keiner Stelle der App mehr geschrieben.

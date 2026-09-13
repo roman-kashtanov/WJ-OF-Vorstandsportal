@@ -1136,6 +1136,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           </span>
                         </label>
 
+                        {/* Nachtraeglich aenderbar (vorher nur beim Anlegen). Stimmrecht wird
+                            dabei ausdruecklich mitgeschrieben: bei Altbestand ohne eigenes
+                            Feld leitet isVotingMember() es sonst aus "festangestellt" ab
+                            und es wuerde sich stillschweigend mitaendern. */}
+                        <label className="flex items-center space-x-1.5 cursor-pointer w-fit">
+                          <input
+                            type="checkbox"
+                            checked={!!m.isPermanentStaff}
+                            onChange={(e) =>
+                              onUpdateMembers(
+                                members.map((x) =>
+                                  x.id === m.id
+                                    ? {
+                                        ...x,
+                                        isVotingMember: isVotingMember(x),
+                                        isPermanentStaff: e.target.checked,
+                                      }
+                                    : x
+                                )
+                              )
+                            }
+                            className="w-3.5 h-3.5 accent-[#003594]"
+                          />
+                          <span className="text-[11px] font-semibold text-slate-600">
+                            festangestellt (kein Vorstandscode nötig)
+                          </span>
+                        </label>
+
                         <div className="pt-1 flex items-center gap-2 flex-wrap">
                           <button
                             type="button"
