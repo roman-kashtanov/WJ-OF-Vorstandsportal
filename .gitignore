@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Lokale Claude-Einstellungen (Dev-Server-Start, Berechtigungen)
+.claude/

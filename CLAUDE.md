@@ -1,10 +1,46 @@
 # WJOF Vorstandsportal — Projektgedächtnis
 
-Diese Datei wird bei jeder Sitzung automatisch gelesen. Sie hält fest, was sich
-aus dem Code allein **nicht** erschließt: getroffene Entscheidungen, bekannte
-Fallstricke und der Stand der Einrichtung.
+Diese Datei wird automatisch gelesen, **wenn die Sitzung im Ordner
+`Vorstandsportal` gestartet ist** (bis 13.09.2026 lief das Portal als
+Zusatzordner einer anderen Sitzung – dann wird sie NICHT geladen). Sie hält
+fest, was sich aus dem Code allein **nicht** erschließt: getroffene
+Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
 
-**Bitte bei jeder wesentlichen Änderung mit aktualisieren.**
+**Bitte bei jeder wesentlichen Änderung mit aktualisieren – und den Abschnitt
+„Aktueller Stand" am Ende jeder Anfrage.**
+
+---
+
+## Arbeitsregeln (zuerst lesen)
+
+- Antworten auf **Deutsch**, ohne Fachjargon. Der Nutzer ist Schatzmeister, kein Entwickler.
+- **Nur committen, nie selbst pushen.** Der Nutzer testet lokal und pusht selbst.
+  Am Ende jeder Antwort den Push-Befehl als eigenen `bash`-Block nennen.
+  Ausnahme: Er verlangt den Push ausdrücklich.
+- **Versionsnummer bei jeder Code-Änderung erhöhen** (`npm version patch|minor
+  --no-git-tag-version`) und am Ende „Aktuelle Version: vX.Y.Z" nennen.
+- **Lokal testen** mit `preview_start` Name `vorstandsportal` (Port 3007) und dem
+  Knopf „Entwickler-Login (nur lokal)" (Zugangsdaten in `.env.local`, meldet
+  als „WJ OF (Entwickler)" an). Lokal = **echte Daten**: nur ansehen, nichts
+  speichern oder löschen, ohne vorher zu fragen.
+- **Codes:** Admin- und Vorstandscode kennt Claude nicht (nur Hashes). Lokal sind
+  Einstellungen ohne Code offen, Code-Abfragen vor dem Löschen bleiben.
+- **Firebase-Konsole** nur über Claude in Chrome, Google-Konto `/u/1/` (WJ-Konto).
+  Keine netlify/firebase-CLI, lokal kein Dienstkonto. Daten in Firestore nie
+  selbst löschen.
+- **Nie ganze Sammlungen aus dem lokalen Stand zurückschreiben** und
+  Firestore-Abos immer an die Firebase-Anmeldung koppeln (siehe v3.17.6, v3.18.0).
+
+## Aktueller Stand (13.09.2026)
+
+- Version **v3.18.0**, lokal committet; noch nicht gepusht: v3.17.7 (Namen
+  änderbar), v3.17.8 (Einstellungen lokal ohne Code), v3.17.9
+  (Rollen-Auswahl), v3.18.0 (Start-Hänger/leere Daten).
+- Mitglieder: Roman Kashtanov (Schatzmeister), Roman Test, WJ OF (Entwickler)
+  = `offenbachwj@gmail.com`, Rolle „Tester/Entwickler", festangestellt, ohne
+  Stimmrecht – offen: ob „festangestellt" entfernt werden soll.
+- Angeboten, noch nicht beauftragt: diese Datei aufteilen (Versionsgeschichte
+  in eine eigene Datei, oben nur Regeln und Stand).
 
 ---
 
