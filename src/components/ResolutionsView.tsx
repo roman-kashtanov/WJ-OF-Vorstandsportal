@@ -70,6 +70,7 @@ import { prepareFileForStorage, formatBytes } from '../utils/fileStorage';
 import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
 import { RevisionHistoryModal } from './RevisionHistoryModal';
 import { RequestInvoiceLinkModal } from './RequestInvoiceLinkModal';
+import { ResolutionArchiveTree } from './ResolutionArchiveTree';
 import {
   RESOLUTION_SECTIONS,
   ResolutionSectionKey,
@@ -173,6 +174,39 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
 
   // Archiv: standardmaessig ausgeblendet, damit die laufende Liste kurz bleibt
   const [showArchived, setShowArchived] = useState<boolean>(false);
+
+  /**
+   * Buchhaltung mit sanftem Uebergang: Der Schalter gleitet sofort um, ein
+   * kurzer Hinweis erscheint, dann blendet die Detailansicht aus und der
+   * Beschluss wandert ins Archiv (bzw. heraus). Aendert sich am Archiv nichts,
+   * wird sofort gespeichert.
+   */
+  const [bookkeepingTransition, setBookkeepingTransition] = useState<{
+    id: string;
+    status: BookkeepingStatus;
+    leaving: boolean;
+  } | null>(null);
+  /** Rueckfrage vor "Nicht relevant fuer die Buchhaltung" */
+  const [irrelevantTargetId, setIrrelevantTargetId] = useState<string | null>(null);
+
+  const changeBookkeeping = (res: Resolution, status: BookkeepingStatus) => {
+    if (!onUpdateResolutionBookkeepingStatus || bookkeepingTransition) return;
+    const moves = (status !== 'nicht_bearbeitet') !== !!res.isArchived;
+    if (!moves) {
+      onUpdateResolutionBookkeepingStatus(res.id, status);
+      return;
+    }
+    setBookkeepingTransition({ id: res.id, status, leaving: false });
+    window.setTimeout(
+      () => setBookkeepingTransition((t) => (t && t.id === res.id ? { ...t, leaving: true } : t)),
+      600
+    );
+    window.setTimeout(() => {
+      onUpdateResolutionBookkeepingStatus(res.id, status);
+      onSelectResolution(null);
+      setBookkeepingTransition(null);
+    }, 900);
+  };
 
   /**
    * Bereich der Liste: Offen / Abgestimmt · Buchhaltung offen / Alle. Ist
@@ -842,7 +876,9 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
               )}
             </div>
           ) : (
-            filteredResolutions.map((res) => {
+            (() => {
+              // Eine Karte fuer Liste und Archiv-Baum
+              const renderCard = (res: Resolution) => {
               const isSelected = activeResolution?.id === res.id;
               const isExpanded = expandedListId === res.id;
               const stats = calculateVoteStats(res, members.length);
@@ -992,7 +1028,10 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                       </div>
 
                       {res.bookkeepingStatus === 'bearbeitet' && (
-                        <div className="text-emerald-700 font-semibold">✓ Buchhaltung erledigt</div>
+                        <div className="text-emerald-700 font-semibold">✓ In der Buchhaltung berücksichtigt</div>
+                      )}
+                      {res.bookkeepingStatus === 'nicht_notwendig' && (
+                        <div className="text-slate-500 font-semibold">Nicht relevant für die Buchhaltung</div>
                       )}
 
                       {(() => {
@@ -1045,7 +1084,18 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                   )}
                 </div>
               );
-            })
+              };
+              // Archiv: nach Jahr → Monat → Art gegliedert, sonst flache Liste
+              return showArchived ? (
+                <ResolutionArchiveTree
+                  resolutions={filteredResolutions}
+                  linkCounts={linkCountsByResolution}
+                  renderCard={renderCard}
+                />
+              ) : (
+                filteredResolutions.map(renderCard)
+              );
+            })()
           )}
         </div>
 
@@ -1054,7 +1104,11 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
           {activeResolution && activeStats ? (
             <div
               key={activeResolution.id}
-              className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs space-y-5 wj-view-enter"
+              className={`bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs space-y-5 wj-view-enter transition-all duration-300 ${
+                bookkeepingTransition?.id === activeResolution.id && bookkeepingTransition.leaving
+                  ? 'opacity-0 translate-y-3 scale-[0.98]'
+                  : ''
+              }`}
             >
               {/* Kopf: Nummer + auf dem Handy zurueck zur Liste */}
               <div className="flex items-center justify-between gap-2">
@@ -1139,29 +1193,80 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-slate-200">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Buchhaltung</span>
-                  <select
-                    value={activeResolution.bookkeepingStatus || 'nicht_bearbeitet'}
-                    onChange={(e) => onUpdateResolutionBookkeepingStatus?.(activeResolution.id, e.target.value as any)}
-                    className={`text-xs font-bold py-1.5 pl-3 pr-7 rounded-lg border border-slate-200 shadow-sm cursor-pointer appearance-none bg-no-repeat focus:ring-2 focus:ring-offset-1 transition-colors ${
-                      (activeResolution.bookkeepingStatus || 'nicht_bearbeitet') === 'bearbeitet'
-                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                        : activeResolution.bookkeepingStatus === 'nicht_notwendig'
-                        ? 'bg-slate-100 text-slate-700 border-slate-300'
-                        : 'bg-amber-50 text-amber-800 border-amber-200'
-                    }`}
-                    style={{
-                      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='2' stroke='currentColor' class='w-4 h-4'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9' /%3E%3C/svg%3E")`,
-                      backgroundPosition: 'right 6px center',
-                      backgroundSize: '14px'
-                    }}
-                  >
-                    <option value="nicht_bearbeitet">Offen (Nicht bearbeitet)</option>
-                    <option value="bearbeitet">✓ Bearbeitet</option>
-                    <option value="nicht_notwendig">Nicht notwendig</option>
-                  </select>
-                </div>
+                {/* Buchhaltung: EIN Schalter. "Berücksichtigt" und "nicht
+                    relevant" verschieben den Beschluss ins Archiv (useResolutions). */}
+                {(() => {
+                  const current = activeResolution.bookkeepingStatus || 'nicht_bearbeitet';
+                  const pending =
+                    bookkeepingTransition?.id === activeResolution.id ? bookkeepingTransition : null;
+                  const isOn = (pending ? pending.status : current) === 'bearbeitet';
+                  const isVoting = activeResolution.status === 'in_abstimmung';
+
+                  return (
+                    <div className="pt-2.5 border-t border-slate-200 space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                            Buchhaltung
+                          </div>
+                          <div className="text-xs font-semibold text-slate-800 mt-0.5">
+                            In der Buchhaltung berücksichtigt
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={isOn}
+                          aria-label="In der Buchhaltung berücksichtigt"
+                          disabled={isVoting || !!bookkeepingTransition || !onUpdateResolutionBookkeepingStatus}
+                          onClick={() =>
+                            changeBookkeeping(activeResolution, isOn ? 'nicht_bearbeitet' : 'bearbeitet')
+                          }
+                          className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors duration-300 cursor-pointer disabled:cursor-not-allowed ${
+                            isOn ? 'bg-emerald-500' : 'bg-slate-300'
+                          } ${isVoting ? 'opacity-50' : ''}`}
+                        >
+                          <span
+                            className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform duration-300 ${
+                              isOn ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                      </div>
+
+                      {isVoting ? (
+                        <p className="text-[11px] text-slate-500">
+                          Erst möglich, wenn die Abstimmung abgeschlossen ist.
+                        </p>
+                      ) : pending ? (
+                        <p className="text-[11px] font-semibold text-emerald-700 wj-expand">
+                          {pending.status === 'nicht_bearbeitet'
+                            ? 'Wird aus dem Archiv geholt …'
+                            : 'Wird ins Archiv verschoben …'}
+                        </p>
+                      ) : current === 'nicht_notwendig' ? (
+                        <p className="text-[11px] text-slate-500">
+                          Als nicht relevant für die Buchhaltung markiert.{' '}
+                          <button
+                            type="button"
+                            onClick={() => changeBookkeeping(activeResolution, 'nicht_bearbeitet')}
+                            className="font-semibold text-[#003594] hover:underline cursor-pointer"
+                          >
+                            Rückgängig
+                          </button>
+                        </p>
+                      ) : !isOn ? (
+                        <button
+                          type="button"
+                          onClick={() => setIrrelevantTargetId(activeResolution.id)}
+                          className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 underline underline-offset-2 cursor-pointer"
+                        >
+                          Nicht relevant für die Buchhaltung
+                        </button>
+                      ) : null}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Bezeichnung, Antragswortlaut, Budget */}
@@ -1944,6 +2049,57 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* Rueckfrage: nicht relevant fuer die Buchhaltung - nach Bestaetigung ins Archiv */}
+      {irrelevantTargetId &&
+        (() => {
+          const target = resolutions.find((r) => r.id === irrelevantTargetId);
+          if (!target) return null;
+          return (
+            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center wj-overlay animate-in fade-in">
+              <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl animate-in fade-in zoom-in-95">
+                <div className="w-11 h-11 rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center mx-auto">
+                  <Archive className="w-5 h-5" strokeWidth={1.75} />
+                </div>
+
+                <h3 className="mt-4 text-sm font-bold text-slate-900 text-center">
+                  Nicht relevant für die Buchhaltung?
+                </h3>
+                <p className="mt-1.5 text-[12px] text-slate-600 text-center leading-relaxed">
+                  Bist du sicher, dass der Beschluss{' '}
+                  <strong className="text-slate-800">
+                    {target.number} „{target.title}“
+                  </strong>{' '}
+                  für die Buchhaltung nicht relevant ist?
+                </p>
+                <p className="mt-2 text-[12px] text-slate-500 text-center leading-relaxed">
+                  Nach der Bestätigung wird er ins Archiv verschoben. Dort bleibt er vollständig
+                  erhalten und kann jederzeit zurückgeholt werden.
+                </p>
+
+                <div className="mt-5 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIrrelevantTargetId(null)}
+                    className="py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                  >
+                    Abbrechen
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIrrelevantTargetId(null);
+                      changeBookkeeping(target, 'nicht_notwendig');
+                    }}
+                    className="py-2.5 rounded-xl bg-[#003594] hover:bg-[#00266B] text-xs font-bold text-white transition-colors cursor-pointer"
+                  >
+                    Ja, ins Archiv
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
       {/* Endgueltiges Loeschen - nur mit Admin-Code */}
       {deleteTargetId && (

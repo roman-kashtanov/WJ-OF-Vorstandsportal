@@ -516,26 +516,67 @@ export function useResolutions({
     return newRes;
   };
 
+  /**
+   * Buchhaltung eines Beschlusses. "Berücksichtigt" und "nicht relevant"
+   * schliessen den Vorgang ab und verschieben den Beschluss ins Archiv;
+   * zurueck auf "offen" holt ihn wieder heraus. Ein Speichervorgang fuer
+   * beides, damit Status und Archiv nie auseinanderlaufen.
+   */
   const handleUpdateResolutionBookkeepingStatus = (resolutionId: string, status: BookkeepingStatus) => {
+    const target = resolutions.find((r) => r.id === resolutionId);
+    if (!target) return;
+    const archive = status !== 'nicht_bearbeitet';
+    const moves = archive !== !!target.isArchived;
+    const now = new Date().toISOString();
+
     setResolutions((prev) =>
       prev.map((res) => {
         if (res.id !== resolutionId) return res;
         const updatedRes: Resolution = {
           ...res,
           bookkeepingStatus: status,
+          ...(moves
+            ? {
+                isArchived: archive,
+                archivedAt: archive ? now : undefined,
+                archivedBy: archive ? `${currentMember.name} (${currentMember.role})` : undefined,
+              }
+            : {}),
         };
         FirebaseSync.saveResolution(updatedRes).catch(() => {});
-        addAuditLogEntry({
-          entityType: 'resolution',
-          entityId: res.id,
-          entityLabel: res.number,
-          action: `Buchhaltungsstatus geändert`,
-          actorName: currentMember.name,
-          actorId: currentMember.id,
-        });
         return updatedRes;
       })
     );
+
+    const label =
+      status === 'bearbeitet'
+        ? 'In der Buchhaltung berücksichtigt'
+        : status === 'nicht_notwendig'
+        ? 'Als nicht relevant für die Buchhaltung markiert'
+        : 'Buchhaltung wieder offen';
+    addAuditLogEntry({
+      entityType: 'resolution',
+      entityId: target.id,
+      entityLabel: target.number,
+      action: moves ? `${label} – ${archive ? 'ins Archiv verschoben' : 'aus dem Archiv geholt'}` : label,
+      actorName: currentMember.name,
+      actorId: currentMember.id,
+    });
+
+    if (moves && archive && selectedResolutionId === resolutionId) {
+      setSelectedResolutionId(null);
+    }
+
+    if (moves) {
+      setSystemBanner({
+        type: 'success',
+        title: archive ? 'Ins Archiv verschoben' : 'Aus dem Archiv geholt',
+        message: archive
+          ? `${target.number}: ${label}.`
+          : `${target.number} steht wieder unter „Abgestimmt · Buchhaltung offen“.`,
+      });
+      setTimeout(() => setSystemBanner(null), 4000);
+    }
   };
 
   const handleOpenEmailVoteModal = (resolution: Resolution) => {

@@ -33,10 +33,13 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
 
 ## Aktueller Stand (13.09.2026)
 
-- Version **v3.20.0**, lokal committet; noch nicht gepusht: Doku-Commit
-  (Arbeitsregeln oben), v3.19.0 (Übersicht-Module, „Alle" am Ende,
-  Beschlussbereiche), v3.20.0 (Personen: Vor-/Nachname, Zuordnung über den
-  Namen, Personenübersicht). v3.17.7–v3.18.0 sind veröffentlicht.
+- Version **v3.21.0**, lokal committet; noch nicht gepusht: v3.19.0
+  (Übersicht-Module, „Alle" am Ende, Beschlussbereiche), v3.20.0 (Personen:
+  Vor-/Nachname, Zuordnung über den Namen, Personenübersicht), v3.21.0
+  (Buchhaltungs-Schalter mit Archiv, Archiv nach Jahr/Monat/Art).
+  Bis einschließlich Doku-Commit „Arbeitsregeln" ist alles veröffentlicht.
+- Offen beim Nutzer: doppelte Personen (Roman Kashtanov 7×, Diana Sajzew 2×)
+  in der Personenübersicht zusammenführen.
 - Nach dem Deploy prüfen: öffentlichen Antrag mit bereits vorhandenem Namen
   einreichen → wird derselben Person zugeordnet, bei abweichender IBAN steht
   ein Hinweis in der Notiz.
@@ -1840,3 +1843,38 @@ mit nachgestellter Datenbank (gleicher Name mit abweichenden Daten, neuer Name,
 altes Formular, fehlender Nachname, Datenbank nicht lesbar). Im Browser:
 Personenübersicht und die neuen Namensfelder. Echter Antrag erst nach dem
 Deploy möglich.
+
+## v3.21.0 - Buchhaltung als Schalter mit Archiv, Archiv nach Jahr/Monat/Art
+
+**Fehler:** Die Buchhaltungs-Auswahl im Beschluss (drei Optionen „Offen (Nicht
+bearbeitet)", „✓ Bearbeitet", „Nicht notwendig") hat nie etwas gespeichert –
+`App.tsx` hat `onUpdateResolutionBookkeepingStatus` gar nicht an
+`ResolutionsView` übergeben (einer der toten Handler aus der
+App.tsx-Modularisierung).
+
+**Jetzt** (Detailansicht, Kasten „Buchhaltung"):
+- **Ein Schalter** „In der Buchhaltung berücksichtigt" (`bearbeitet` ↔
+  `nicht_bearbeitet`). Einschalten verschiebt den Beschluss ins Archiv,
+  Ausschalten eines archivierten holt ihn wieder heraus.
+- Darunter **„Nicht relevant für die Buchhaltung"** → Rückfrage-Fenster
+  („Bist du sicher …? Nach der Bestätigung wird er ins Archiv verschoben …")
+  → `nicht_notwendig` + Archiv. Danach Text mit „Rückgängig".
+- Während einer laufenden Abstimmung ist der Schalter gesperrt.
+- `handleUpdateResolutionBookkeepingStatus` (`useResolutions.ts`) setzt Status
+  und Archiv in **einem** Speichervorgang, schreibt einen Historie-Eintrag
+  und zeigt einen Hinweis.
+- Sanfter Übergang (`changeBookkeeping` in `ResolutionsView`): Schalter gleitet
+  sofort, „Wird ins Archiv verschoben …", nach 0,6 s blendet die Detailansicht
+  aus, nach 0,9 s wird gespeichert und die Auswahl geschlossen.
+- Die Knöpfe je Rechnung (Bearbeitet/Offen/Nicht nötig) sind unverändert – sie
+  gehören zu Rechnungen, nicht zum Beschluss.
+
+**Archiv** (`ResolutionArchiveTree.tsx`): aufklappbarer Baum Jahr → Monat →
+Zuschüsse / Auslagen / Allgemeine Beschlüsse, einsortiert nach Beschlussdatum
+(sonst Erstelldatum), neueste zuerst. Standardmäßig offen: neuestes Jahr und
+dessen neuester Monat, Art-Gruppen immer offen. Art ergibt sich aus den
+verknüpften Vorgängen (`linkCountsByResolution`). Liste und Archiv nutzen
+dieselbe Karte (`renderCard`). Filter und Suche wirken auch im Archiv.
+
+**Bewusst nicht automatisch:** Ältere Beschlüsse, die schon „bearbeitet" sind,
+aber nicht archiviert, bleiben, wo sie sind (unter „Alle").

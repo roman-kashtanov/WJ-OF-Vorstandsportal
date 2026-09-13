@@ -960,6 +960,7 @@ export default function App() {
             onOpenEmailVoteModal={handleOpenEmailVoteModal}
             onAddAttachment={handleAddAttachment}
             onArchiveResolution={handleArchiveResolution}
+            onUpdateResolutionBookkeepingStatus={handleUpdateResolutionBookkeepingStatus}
             onDeleteResolution={handleDeleteResolution}
             securitySettings={securitySettings}
             initialSection={overviewTarget?.tab === 'resolutions' ? overviewTarget.section : undefined}
