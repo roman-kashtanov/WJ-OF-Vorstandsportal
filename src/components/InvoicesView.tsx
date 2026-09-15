@@ -5,13 +5,17 @@ import {
   Resolution,
   InvoiceStatus,
   BookkeepingStatus,
-  InvoiceFolder,
-  Subsidy
+  InvoiceFolder
 } from '../types';
-import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
-import { downloadBlob, openDataUrl } from '../utils/fileHelpers';
+import { downloadBlob } from '../utils/fileHelpers';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { transitionName } from '../utils/smooth';
+import {
+  InvoiceSectionKey,
+  bookkeepingOf,
+  hasInvoiceResolution,
+  invoiceSectionOf
+} from '../utils/invoiceSections';
 import {
   Receipt,
   Plus,
@@ -22,15 +26,16 @@ import {
   Trash2,
   Filter,
   ChevronDown,
-  Wallet,
   Paperclip,
   CheckCircle2,
   MinusCircle,
   RotateCcw,
-  Eye
+  Eye,
+  Archive
 } from 'lucide-react';
 import { Collapse } from './Collapse';
 import { StageTabs } from './StageTabs';
+import { ArchiveTree, ArchiveLevel } from './ArchiveTree';
 import { useSwipeTabs } from '../hooks/useSwipeTabs';
 
 interface InvoicesViewProps {
@@ -39,9 +44,6 @@ interface InvoicesViewProps {
   invoices: Invoice[];
   resolutions: Resolution[];
   folders?: InvoiceFolder[];
-  /** Auslagenerstattungen - deren Belege sollen hier auffindbar sein. */
-  expenses?: Subsidy[];
-  onNavigateToExpenses?: () => void;
   onOpenNewInvoice: () => void;
   onSelectInvoice: (invoiceId: string) => void;
   onUpdateInvoiceStatus: (invoiceId: string, newStatus: InvoiceStatus) => void;
@@ -51,21 +53,19 @@ interface InvoicesViewProps {
   onDeleteFolder?: (folderId: string) => void;
   onUpdateInvoiceFolder?: (invoiceId: string, folderId: string | undefined) => void;
   onOpenInvoiceRequestModal?: () => void;
+  /** Vorausgewaehlter Reiter beim Sprung aus der Uebersicht. */
+  initialSection?: InvoiceSectionKey;
 }
 
 /**
- * Belege - aufgebaut wie Zuschuesse und Beschluesse (v3.26.0):
- * Reiter "Buchhaltung offen" / "Erledigt" / "Aus Auslagen" (per Tippen oder
- * Wischen), schlichte Karten, Aktionen erst beim Aufklappen. Beschluss,
- * Ordner, Jahr und Monat sind Filter statt eigener Leisten. Alles Weitere
- * (Beleg ansehen, Status, Historie) steht im Detailfenster.
+ * Belege - aufgebaut wie Zuschuesse und Beschluesse:
+ * Reiter "Offen" / "Archiv" (per Tippen oder Wischen). Ein Beleg ist offen,
+ * solange er keinem Beschluss zugeordnet und in der Buchhaltung nicht
+ * erledigt ist (utils/invoiceSections.ts). Das Archiv ist ein aufklappbarer
+ * Baum Jahr → Kategorie → mit/ohne Beschluss. Beschluss, Ordner, Jahr und
+ * Monat sind zusaetzlich Filter. Alles Weitere (Beleg ansehen, Status,
+ * Historie) steht im Detailfenster.
  */
-
-type Section = 'offen' | 'erledigt' | 'auslagen';
-
-/** Buchhaltungsstand eines Belegs - aeltere Belege kennen nur das Haekchen. */
-const bookkeepingOf = (inv: Invoice): BookkeepingStatus =>
-  inv.bookkeepingStatus || (inv.isBookkeepingRecorded ? 'bearbeitet' : 'nicht_bearbeitet');
 
 const MONTHS = [
   { value: '01', label: 'Januar' },
@@ -82,6 +82,53 @@ const MONTHS = [
   { value: '12', label: 'Dezember' },
 ];
 
+const CATEGORY_ORDER = [
+  'Events & Projekte',
+  'Marketing & PR',
+  'IT, Web & Lizenzen',
+  'Verwaltung & IHK',
+  'Konferenzen (LAKO/BUKO)',
+  'Sonstiges',
+];
+
+const SECTION_KEYS: InvoiceSectionKey[] = ['offen', 'archiv'];
+
+const dateOf = (inv: Invoice) => inv.date || inv.createdAt || '';
+
+/** Archiv: Jahr (Belegdatum) → Kategorie → mit/ohne Beschluss. */
+const ARCHIVE_LEVELS: [ArchiveLevel<Invoice>, ArchiveLevel<Invoice>, ArchiveLevel<Invoice>] = [
+  {
+    keyOf: (inv) => {
+      const year = dateOf(inv).slice(0, 4);
+      return /^\d{4}$/.test(year) ? year : '0';
+    },
+    label: (key) => (key === '0' ? 'Ohne Datum' : key),
+    compare: (a, b) => Number(b) - Number(a),
+    defaultOpen: 'first',
+  },
+  {
+    keyOf: (inv) => inv.category || 'Sonstiges',
+    label: (key) => key,
+    compare: (a, b) => {
+      const ia = CATEGORY_ORDER.indexOf(a);
+      const ib = CATEGORY_ORDER.indexOf(b);
+      if (ia !== ib) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+      return a.localeCompare(b, 'de');
+    },
+    defaultOpen: 'first',
+  },
+  {
+    keyOf: (inv) => (hasInvoiceResolution(inv) ? 'mit' : 'ohne'),
+    label: (key) => (key === 'mit' ? 'Mit Beschluss' : 'Ohne Beschluss'),
+    compare: (a, b) => (a === b ? 0 : a === 'mit' ? -1 : 1),
+    defaultOpen: 'all',
+    chipClass: (key) =>
+      key === 'mit'
+        ? 'bg-indigo-50 border-indigo-100 text-indigo-700'
+        : 'bg-slate-100 border-slate-200 text-slate-600',
+  },
+];
+
 const selectClass =
   'w-full min-w-0 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#003594]';
 
@@ -91,8 +138,6 @@ const smallButton =
 export const InvoicesView: React.FC<InvoicesViewProps> = ({
   invoices,
   resolutions,
-  expenses = [],
-  onNavigateToExpenses,
   folders = [],
   onOpenNewInvoice,
   onSelectInvoice,
@@ -100,23 +145,17 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
   onCreateFolder,
   onDeleteFolder,
   onUpdateInvoiceFolder,
+  initialSection,
 }) => {
-  const openCount = invoices.filter((i) => bookkeepingOf(i) === 'nicht_bearbeitet').length;
-  const hasExpenses = expenses.length > 0;
+  const openCount = invoices.filter((i) => invoiceSectionOf(i) === 'offen').length;
 
-  const sectionKeys = useMemo<Section[]>(
-    () => (hasExpenses ? ['offen', 'erledigt', 'auslagen'] : ['offen', 'erledigt']),
-    [hasExpenses]
-  );
-  const [section, setSection] = useState<Section>(() =>
-    openCount > 0 || invoices.length === 0 ? 'offen' : 'erledigt'
-  );
-  // Verschwinden die Auslagen, faellt ein gewaehlter "Auslagen"-Reiter zurueck
-  const activeSection: Section = sectionKeys.includes(section) ? section : 'offen';
-  const swipe = useSwipeTabs<Section>({ keys: sectionKeys, active: activeSection, onChange: setSection });
+  const [section, setSection] = useState<InvoiceSectionKey>(() => {
+    if (initialSection) return initialSection;
+    return openCount > 0 || invoices.length === 0 ? 'offen' : 'archiv';
+  });
+  const swipe = useSwipeTabs<InvoiceSectionKey>({ keys: SECTION_KEYS, active: section, onChange: setSection });
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [expensePreview, setExpensePreview] = useState<PreviewableFile | null>(null);
 
   const [showFilters, setShowFilters] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -127,9 +166,12 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
   const [showFolderAdmin, setShowFolderAdmin] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
 
+  // Offene Belege haben nie einen Beschluss - der Filter gilt nur im Archiv
+  const resolutionFilter = section === 'archiv' ? filterResolution : 'all';
+
   const hasActiveFilters =
     !!searchQuery.trim() ||
-    filterResolution !== 'all' ||
+    resolutionFilter !== 'all' ||
     filterFolder !== 'all' ||
     filterYear !== 'all' ||
     filterMonth !== 'all';
@@ -152,15 +194,15 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
   }, [invoices]);
 
   const matchesFilters = (inv: Invoice) => {
-    if (filterResolution === 'with' && !inv.hasResolution) return false;
-    if (filterResolution === 'without' && inv.hasResolution) return false;
+    if (resolutionFilter === 'with' && !hasInvoiceResolution(inv)) return false;
+    if (resolutionFilter === 'without' && hasInvoiceResolution(inv)) return false;
     if (filterFolder === 'none' && inv.folderId) return false;
     if (filterFolder !== 'all' && filterFolder !== 'none' && inv.folderId !== filterFolder) return false;
     if (filterYear !== 'all' && !inv.date?.startsWith(filterYear)) return false;
     if (filterMonth !== 'all' && inv.date?.split('-')[1] !== filterMonth) return false;
     const q = searchQuery.trim().toLowerCase();
     if (q) {
-      const haystack = [inv.vendor, inv.title, inv.invoiceNumber, inv.submittedBy?.name]
+      const haystack = [inv.vendor, inv.title, inv.invoiceNumber, inv.submittedBy?.name, inv.category]
         .join(' ')
         .toLowerCase();
       if (!haystack.includes(q)) return false;
@@ -168,23 +210,20 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
     return true;
   };
 
-  const filteredInvoices = invoices
-    .filter((inv) => {
-      const isOpen = bookkeepingOf(inv) === 'nicht_bearbeitet';
-      if (activeSection === 'offen' && !isOpen) return false;
-      if (activeSection === 'erledigt' && isOpen) return false;
-      return matchesFilters(inv);
-    })
-    .sort((a, b) => (b.date || b.createdAt || '').localeCompare(a.date || a.createdAt || ''));
+  const filteredInvoices = useMemo(
+    () =>
+      invoices
+        .filter((inv) => invoiceSectionOf(inv) === section && matchesFilters(inv))
+        .sort((a, b) => dateOf(b).localeCompare(dateOf(a))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [invoices, section, searchQuery, resolutionFilter, filterFolder, filterYear, filterMonth]
+  );
 
-  const listCount = activeSection === 'auslagen' ? expenses.length : filteredInvoices.length;
-  const listSum =
-    activeSection === 'auslagen'
-      ? expenses.reduce((sum, e) => sum + (e.amount || 0), 0)
-      : filteredInvoices.reduce((sum, i) => sum + (i.amount || 0), 0);
+  const listCount = filteredInvoices.length;
+  const listSum = filteredInvoices.reduce((sum, i) => sum + (i.amount || 0), 0);
 
   const exportCSV = () => {
-    const headers = ['Belegnummer', 'Lieferant / Empfänger', 'Beschreibung', 'Betrag (EUR)', 'Belegdatum', 'Ordner', 'Buchhaltungs-Status', 'Typ'];
+    const headers = ['Belegnummer', 'Lieferant / Empfänger', 'Beschreibung', 'Betrag (EUR)', 'Belegdatum', 'Kategorie', 'Ordner', 'Buchhaltungs-Status', 'Typ'];
     const rows = filteredInvoices.map((inv) => {
       const folderName = inv.folderId ? folders.find((f) => f.id === inv.folderId)?.name || 'Ordner' : 'Ohne Ordner';
       return [
@@ -193,16 +232,17 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
         `"${inv.title}"`,
         inv.amount.toFixed(2),
         `"${inv.date}"`,
+        `"${inv.category || ''}"`,
         `"${folderName}"`,
         `"${bookkeepingOf(inv)}"`,
-        inv.hasResolution ? '"Mit Beschluss"' : '"Ohne Beschluss"',
+        hasInvoiceResolution(inv) ? '"Mit Beschluss"' : '"Ohne Beschluss"',
       ];
     });
     const csvContent = [headers.join(';'), ...rows.map((e) => e.join(';'))].join('\n');
     // BOM vorneweg, damit Excel die Umlaute richtig erkennt.
     downloadBlob(
       new Blob(['﻿' + csvContent], { type: 'text/csv;charset=utf-8' }),
-      `WJ_Belege_${new Date().toISOString().split('T')[0]}.csv`
+      `WJ_Belege_${section === 'archiv' ? 'Archiv' : 'Offen'}_${new Date().toISOString().split('T')[0]}.csv`
     );
   };
 
@@ -215,7 +255,9 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
   const renderInvoice = (inv: Invoice) => {
     const folder = inv.folderId ? folders.find((f) => f.id === inv.folderId) : undefined;
     const linkedRes = inv.resolutionId ? resolutions.find((r) => r.id === inv.resolutionId) : undefined;
+    const withResolution = hasInvoiceResolution(inv);
     const bk = bookkeepingOf(inv);
+    const archived = invoiceSectionOf(inv) === 'archiv';
     const isExpanded = expandedId === inv.id;
     const toggle = () => setExpandedId(isExpanded ? null : inv.id);
 
@@ -224,7 +266,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
         key={inv.id}
         // Eigener Uebergangs-Name: die Karte gleitet bei smooth() an ihren neuen Platz
         style={{ viewTransitionName: transitionName('inv', inv.id) }}
-        className="bg-white rounded-xl border border-slate-200 wj-view-enter"
+        className="bg-white rounded-xl border border-slate-200"
       >
         <div
           role="button"
@@ -247,7 +289,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
               {inv.title}
               {inv.date ? ` · ${formatDate(inv.date)}` : ''}
             </div>
-            {(inv.fileUrl || linkedRes || folder || bk === 'nicht_notwendig') && (
+            {(inv.fileUrl || linkedRes || folder || archived) && (
               <div className="mt-1 flex flex-wrap items-center gap-1">
                 {inv.fileUrl && (
                   <span className="text-slate-400" title="Beleg hinterlegt">
@@ -265,9 +307,19 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
                     {folder.name}
                   </span>
                 )}
+                {archived && bk === 'bearbeitet' && (
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-100 text-emerald-700">
+                    Gebucht
+                  </span>
+                )}
                 {bk === 'nicht_notwendig' && (
                   <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
                     Nicht nötig
+                  </span>
+                )}
+                {archived && bk === 'nicht_bearbeitet' && (
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 border border-amber-100 text-amber-700">
+                    Buchhaltung offen
                   </span>
                 )}
               </div>
@@ -295,7 +347,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
               </div>
             )}
 
-            {onUpdateInvoiceFolder && !inv.hasResolution && (
+            {onUpdateInvoiceFolder && !withResolution && (
               <label className="flex items-center gap-2">
                 <span className="text-slate-500 shrink-0">Ordner</span>
                 <select
@@ -350,58 +402,27 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
                     className={`${smallButton} border border-slate-200 text-slate-600 hover:bg-slate-50`}
                   >
                     <RotateCcw className="w-3 h-3" strokeWidth={1.75} />
-                    Wieder offen
+                    {withResolution ? 'Buchhaltung zurücksetzen' : 'Wieder offen'}
                   </button>
                 ))}
             </div>
+
+            {withResolution && bk !== 'nicht_bearbeitet' && (
+              <p className="text-slate-400">
+                Bleibt im Archiv, weil der Beleg einem Beschluss zugeordnet ist.
+              </p>
+            )}
           </div>
         </Collapse>
       </div>
     );
   };
 
-  const renderExpense = (e: Subsidy) => {
-    const file = e.costProofFile || e.proofFile;
-    return (
-      <button
-        key={e.id}
-        type="button"
-        disabled={!file}
-        onClick={() => {
-          if (!file) return;
-          const isImage = file.mimeType?.startsWith('image/');
-          if (!file.dataUrl || isImage) setExpensePreview(file);
-          else openDataUrl(file.dataUrl, file.name);
-        }}
-        className="w-full bg-white rounded-xl border border-slate-200 p-3 flex items-center gap-2 text-left transition-colors enabled:hover:bg-slate-50 enabled:cursor-pointer disabled:opacity-70 wj-view-enter"
-      >
-        <div className="flex-1 min-w-0">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="font-bold text-slate-900 text-sm truncate">{e.eventName}</span>
-            <span className="font-bold text-[#003594] text-sm shrink-0">{formatCurrency(e.amount)}</span>
-          </div>
-          <div className="mt-0.5 text-[11px] text-slate-500 truncate">
-            {e.personName}
-            {e.eventDate ? ` · ${formatDate(e.eventDate)}` : ''}
-          </div>
-        </div>
-        {file ? (
-          <Paperclip className="w-4 h-4 text-[#003594] shrink-0" strokeWidth={1.75} />
-        ) : (
-          <span className="text-[10px] text-slate-400 shrink-0">kein Beleg</span>
-        )}
-      </button>
-    );
-  };
-
-  const emptyText =
-    activeSection === 'auslagen'
-      ? 'Keine Belege aus Auslagen.'
-      : hasActiveFilters
-      ? 'Keine Belege für diese Auswahl.'
-      : activeSection === 'offen'
-      ? 'Alle Belege sind in der Buchhaltung erledigt.'
-      : 'Noch keine erledigten Belege.';
+  const emptyText = hasActiveFilters
+    ? 'Keine Belege für diese Auswahl.'
+    : section === 'offen'
+    ? 'Keine offenen Belege.'
+    : 'Noch keine Belege im Archiv.';
 
   return (
     <div ref={swipe.ref} className="space-y-4 max-w-5xl mx-auto">
@@ -437,54 +458,34 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
       {/* Reiter - per Tippen oder Wischen */}
       <StageTabs
         tabs={[
-          { key: 'offen' as Section, label: 'Buchhaltung offen', count: openCount },
-          { key: 'erledigt' as Section, label: 'Erledigt', count: invoices.length - openCount },
-          ...(hasExpenses
-            ? [
-                {
-                  key: 'auslagen' as Section,
-                  label: 'Aus Auslagen',
-                  count: expenses.length,
-                  icon: <Wallet className="w-3.5 h-3.5" strokeWidth={1.75} />,
-                },
-              ]
-            : []),
+          { key: 'offen' as InvoiceSectionKey, label: 'Offen', count: openCount },
+          {
+            key: 'archiv' as InvoiceSectionKey,
+            label: 'Archiv',
+            count: invoices.length - openCount,
+            icon: <Archive className="w-3.5 h-3.5" strokeWidth={1.75} />,
+          },
         ]}
-        active={activeSection}
+        active={section}
         onSelect={swipe.select}
       />
 
-      {/* Filter - Beschluss, Ordner, Jahr, Monat und Ordner verwalten */}
-      {activeSection !== 'auslagen' ? (
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={() => setShowFilters((v) => !v)}
-            className={`px-3.5 py-2 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer ${
-              hasActiveFilters ? 'bg-blue-50 border-blue-200 text-[#003594]' : 'bg-white border-slate-200 text-slate-600'
-            }`}
-          >
-            <Filter className="w-3.5 h-3.5" strokeWidth={1.75} />
-            <span>Filter{hasActiveFilters ? ' (aktiv)' : ''}</span>
-            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
-          </button>
-        </div>
-      ) : (
-        <div className="flex items-center justify-between gap-2 text-[11px] text-slate-500 px-1">
-          <span>Nur zum Nachschlagen – bearbeitet werden Auslagen im Bereich Auslagen.</span>
-          {onNavigateToExpenses && (
-            <button
-              type="button"
-              onClick={onNavigateToExpenses}
-              className="font-bold text-[#003594] hover:underline cursor-pointer shrink-0"
-            >
-              Zu den Auslagen
-            </button>
-          )}
-        </div>
-      )}
+      {/* Filter - Beschluss (nur Archiv), Ordner, Jahr, Monat und Ordner verwalten */}
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setShowFilters((v) => !v)}
+          className={`px-3.5 py-2 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer ${
+            hasActiveFilters ? 'bg-blue-50 border-blue-200 text-[#003594]' : 'bg-white border-slate-200 text-slate-600'
+          }`}
+        >
+          <Filter className="w-3.5 h-3.5" strokeWidth={1.75} />
+          <span>Filter{hasActiveFilters ? ' (aktiv)' : ''}</span>
+          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+        </button>
+      </div>
 
-      <Collapse open={showFilters && activeSection !== 'auslagen'}>
+      <Collapse open={showFilters}>
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200 space-y-2.5 text-xs">
           <div className="relative">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -498,16 +499,22 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
           </div>
 
           <div className="grid grid-cols-2 gap-2">
+            {section === 'archiv' && (
+              <select
+                value={filterResolution}
+                onChange={(e) => setFilterResolution(e.target.value as 'all' | 'with' | 'without')}
+                className={selectClass}
+              >
+                <option value="all">Mit & ohne Beschluss</option>
+                <option value="with">Mit Beschluss</option>
+                <option value="without">Ohne Beschluss</option>
+              </select>
+            )}
             <select
-              value={filterResolution}
-              onChange={(e) => setFilterResolution(e.target.value as 'all' | 'with' | 'without')}
-              className={selectClass}
+              value={filterFolder}
+              onChange={(e) => setFilterFolder(e.target.value)}
+              className={`${selectClass} ${section === 'offen' ? 'col-span-2' : ''}`}
             >
-              <option value="all">Mit & ohne Beschluss</option>
-              <option value="with">Mit Beschluss</option>
-              <option value="without">Ohne Beschluss</option>
-            </select>
-            <select value={filterFolder} onChange={(e) => setFilterFolder(e.target.value)} className={selectClass}>
               <option value="all">Alle Ordner</option>
               <option value="none">Ohne Ordner</option>
               {folders.map((f) => (
@@ -613,7 +620,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
         </div>
       </Collapse>
 
-      {/* Liste */}
+      {/* Liste bzw. Archiv-Baum */}
       <div className="flex items-baseline justify-between px-1 text-[11px] text-slate-500">
         <span className="uppercase font-bold tracking-wider text-slate-400">
           {listCount} {listCount === 1 ? 'Beleg' : 'Belege'}
@@ -621,16 +628,25 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
         <span className="font-bold text-slate-900 text-sm">{formatCurrency(listSum)}</span>
       </div>
 
-      <div key={activeSection} className={`space-y-1.5 ${swipe.slideClass}`}>
+      <div key={section} className={`space-y-1.5 ${swipe.slideClass}`}>
         {listCount === 0 && (
           <div className="bg-white p-8 text-center rounded-2xl border border-slate-200 text-slate-500 text-xs">
             {emptyText}
           </div>
         )}
-        {activeSection === 'auslagen' ? expenses.map(renderExpense) : filteredInvoices.map(renderInvoice)}
+        {section === 'offen' ? (
+          filteredInvoices.map(renderInvoice)
+        ) : (
+          listCount > 0 && (
+            <ArchiveTree
+              items={filteredInvoices}
+              levels={ARCHIVE_LEVELS}
+              sortItems={(a, b) => dateOf(b).localeCompare(dateOf(a))}
+              renderItem={renderInvoice}
+            />
+          )
+        )}
       </div>
-
-      <FilePreviewModal file={expensePreview} onClose={() => setExpensePreview(null)} />
     </div>
   );
 };

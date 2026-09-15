@@ -33,10 +33,10 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
 
 ## Aktueller Stand (15.09.2026)
 
-- Version **v3.26.0**, lokal committet; noch nicht gepusht: v3.25.0 (Reiter
+- Version **v3.27.0**, lokal committet; noch nicht gepusht: v3.25.0 (Reiter
   per Wischen, Budget als aufklappbare Leiste, kleiner Link-Knopf), v3.26.0
-  (Belege wie die anderen Bereiche aufgebaut). Alles bis v3.24.0 ist
-  veröffentlicht.
+  (Belege wie die anderen Bereiche aufgebaut), v3.27.0 (Belege Offen/Archiv,
+  Belege-Modul in der Übersicht). Alles bis v3.24.0 ist veröffentlicht.
 - Weiche Übergänge nur im Chrome-Vorschaufenster geprüft – auf dem iPhone
   (Safari ab iOS 18) noch vom Nutzer zu testen.
 - Offen beim Nutzer: doppelte Personen (Roman Kashtanov 7×, Diana Sajzew 2×)
@@ -2048,3 +2048,27 @@ ist neu aufgebaut nach dem Muster der Zuschuss-Ansicht:
 - Die Props an `InvoicesView` sind unverändert; `onUpdateInvoiceStatus`,
   `onToggleBookkeepingRecorded` und `onOpenInvoiceRequestModal` nutzt die
   Liste nicht mehr (Status und Historie stehen im Detailfenster).
+
+## v3.27.0 - Belege: Offen und Archiv, Belege-Modul in der Übersicht
+
+**Zwei Reiter** (`InvoicesView.tsx`, Logik in `utils/invoiceSections.ts`):
+- **Offen** = eingereicht, keinem Beschluss zugeordnet, Buchhaltung
+  „nicht bearbeitet".
+- **Archiv** = einem Beschluss zugeordnet (`hasResolution` oder
+  `resolutionId`) ODER Buchhaltung „bearbeitet"/„nicht notwendig" – analog zu
+  den Beschlüssen. „In Buchhaltung erledigt"/„Nicht nötig" verschieben also
+  sofort ins Archiv; „Wieder offen" gibt es nur ohne Beschluss (mit Beschluss
+  heißt der Knopf „Buchhaltung zurücksetzen", der Beleg bleibt im Archiv und
+  trägt das Etikett „Buchhaltung offen").
+- Der Reiter „Aus Auslagen" (v3.26.0) ist entfallen (Nutzervorgabe: nur zwei
+  Reiter). Auslagen-Belege stehen weiter im Bereich Auslagen.
+
+**Archiv-Baum:** Jahr (Belegdatum) → Kategorie → Mit/Ohne Beschluss. Neuer
+gemeinsamer Baustein **`components/ArchiveTree.tsx`** (drei Ebenen, Karten
+zeichnet der Aufrufer); `ResolutionArchiveTree` nutzt ihn jetzt ebenfalls –
+per Render-Vergleich geprüft, dass das Beschluss-Archiv zeichengenau gleich
+aussieht. Für weitere Archive diesen Baustein verwenden.
+
+**Übersicht:** Modul „Belege" mit der Zahl offener Belege
+(`countOpenInvoices`), nur sichtbar, wenn welche offen sind; Sprung in
+Belege → Offen (`OverviewTarget` um `tab: 'invoices'` erweitert).

@@ -929,7 +929,7 @@ export default function App() {
             onNavigateTo={(target) =>
               smooth(() => {
                 if (target.tab === 'resolutions') setSelectedResolutionId(null);
-                else if (target.year) setSubsidyYear(target.year);
+                else if (target.tab !== 'invoices' && target.year) setSubsidyYear(target.year);
                 setOverviewTarget(target);
                 setActiveTab(target.tab);
               })
@@ -974,8 +974,7 @@ export default function App() {
 
         {activeTab === 'invoices' && (
           <InvoicesView
-            expenses={subsidies.filter((s) => s.kind === 'auslage')}
-            onNavigateToExpenses={() => setActiveTab('expenses')}
+            initialSection={overviewTarget?.tab === 'invoices' ? overviewTarget.section : undefined}
             currentMember={currentMember}
             members={members}
             invoices={invoices}
@@ -1053,7 +1052,9 @@ export default function App() {
             onOpenBundle={() => setIsBundleModalOpen(true)}
             onImportCsv={handleImportSubsidyCsv}
             initialStage={
-              overviewTarget && overviewTarget.tab !== 'resolutions' ? overviewTarget.stage : undefined
+              overviewTarget && (overviewTarget.tab === 'subsidies' || overviewTarget.tab === 'expenses')
+                ? overviewTarget.stage
+                : undefined
             }
           />
         )}

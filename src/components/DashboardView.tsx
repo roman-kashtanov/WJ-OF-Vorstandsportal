@@ -14,6 +14,7 @@ import {
   ResolutionSectionKey,
   countResolutionSection
 } from '../utils/resolutionSections';
+import { countOpenInvoices, InvoiceSectionKey } from '../utils/invoiceSections';
 import { formatDate } from '../utils/formatters';
 import { downloadMeetingICS } from '../utils/calendar';
 import { DashboardModule, DashboardModuleRow } from './DashboardModule';
@@ -21,6 +22,7 @@ import {
   Vote,
   HandCoins,
   Wallet,
+  Receipt,
   Video,
   AlertCircle,
   Download,
@@ -34,7 +36,8 @@ import {
  */
 export type OverviewTarget =
   | { tab: 'resolutions'; section: ResolutionSectionKey }
-  | { tab: 'subsidies' | 'expenses'; stage: string; year?: number };
+  | { tab: 'subsidies' | 'expenses'; stage: string; year?: number }
+  | { tab: 'invoices'; section: InvoiceSectionKey };
 
 interface DashboardViewProps {
   currentMember: BoardMember;
@@ -68,6 +71,7 @@ const RESOLUTION_DOT: Record<ResolutionSectionKey, string> = {
 export const DashboardView: React.FC<DashboardViewProps> = ({
   currentMember,
   resolutions,
+  invoices,
   subsidies,
   nextMeeting,
   onNavigate,
@@ -117,6 +121,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       };
     });
   };
+
+  /** Belege: nur die offenen - eingereicht, ohne Beschluss, Buchhaltung offen. */
+  const invoiceRows: DashboardModuleRow[] = [
+    {
+      key: 'offen',
+      label: 'Offen',
+      count: countOpenInvoices(invoices),
+      dotClass: 'bg-amber-400',
+      onClick: () => onNavigateTo({ tab: 'invoices', section: 'offen' }),
+    },
+  ];
 
   return (
     <div className="space-y-4 max-w-4xl mx-auto">
@@ -211,6 +226,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         icon={<Wallet className="w-4 h-4" strokeWidth={2} />}
         title="Auslagen"
         rows={subsidyRows('auslage')}
+      />
+      <DashboardModule
+        icon={<Receipt className="w-4 h-4" strokeWidth={2} />}
+        title="Belege"
+        rows={invoiceRows}
       />
     </div>
   );
