@@ -1,9 +1,8 @@
-import React, { useState, useMemo } from 'react';
-import { 
-  BoardMember, 
-  Invoice, 
-  Resolution, 
-  InvoiceCategory, 
+import React, { useMemo, useState } from 'react';
+import {
+  BoardMember,
+  Invoice,
+  Resolution,
   InvoiceStatus,
   BookkeepingStatus,
   InvoiceFolder,
@@ -11,36 +10,28 @@ import {
 } from '../types';
 import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
 import { downloadBlob, openDataUrl } from '../utils/fileHelpers';
-import { 
-  formatCurrency, 
-  formatDate, 
-  formatDateTime 
-} from '../utils/formatters';
-import { 
-  Receipt, 
-  Plus, 
-  Search, 
-  Download, 
-  FileText, 
-  CheckCircle2, 
-  Clock, 
-  MinusCircle,
-  Layers, 
-  Calendar, 
-  Eye, 
-  Folder, 
-  FolderPlus, 
-  Trash2, 
-  Filter, 
-  X,
-  FileCheck,
-  ChevronRight,
+import { formatCurrency, formatDate } from '../utils/formatters';
+import { transitionName } from '../utils/smooth';
+import {
+  Receipt,
+  Plus,
+  Search,
+  Download,
+  Folder,
+  FolderPlus,
+  Trash2,
+  Filter,
   ChevronDown,
-  Sparkles,
   Wallet,
-  Paperclip
+  Paperclip,
+  CheckCircle2,
+  MinusCircle,
+  RotateCcw,
+  Eye
 } from 'lucide-react';
 import { Collapse } from './Collapse';
+import { StageTabs } from './StageTabs';
+import { useSwipeTabs } from '../hooks/useSwipeTabs';
 
 interface InvoicesViewProps {
   currentMember: BoardMember;
@@ -62,9 +53,42 @@ interface InvoicesViewProps {
   onOpenInvoiceRequestModal?: () => void;
 }
 
+/**
+ * Belege - aufgebaut wie Zuschuesse und Beschluesse (v3.26.0):
+ * Reiter "Buchhaltung offen" / "Erledigt" / "Aus Auslagen" (per Tippen oder
+ * Wischen), schlichte Karten, Aktionen erst beim Aufklappen. Beschluss,
+ * Ordner, Jahr und Monat sind Filter statt eigener Leisten. Alles Weitere
+ * (Beleg ansehen, Status, Historie) steht im Detailfenster.
+ */
+
+type Section = 'offen' | 'erledigt' | 'auslagen';
+
+/** Buchhaltungsstand eines Belegs - aeltere Belege kennen nur das Haekchen. */
+const bookkeepingOf = (inv: Invoice): BookkeepingStatus =>
+  inv.bookkeepingStatus || (inv.isBookkeepingRecorded ? 'bearbeitet' : 'nicht_bearbeitet');
+
+const MONTHS = [
+  { value: '01', label: 'Januar' },
+  { value: '02', label: 'Februar' },
+  { value: '03', label: 'März' },
+  { value: '04', label: 'April' },
+  { value: '05', label: 'Mai' },
+  { value: '06', label: 'Juni' },
+  { value: '07', label: 'Juli' },
+  { value: '08', label: 'August' },
+  { value: '09', label: 'September' },
+  { value: '10', label: 'Oktober' },
+  { value: '11', label: 'November' },
+  { value: '12', label: 'Dezember' },
+];
+
+const selectClass =
+  'w-full min-w-0 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#003594]';
+
+const smallButton =
+  'px-2.5 py-1.5 rounded-lg font-semibold flex items-center gap-1 transition-colors duration-200 cursor-pointer';
+
 export const InvoicesView: React.FC<InvoicesViewProps> = ({
-  currentMember,
-  members,
   invoices,
   resolutions,
   expenses = [],
@@ -72,124 +96,97 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
   folders = [],
   onOpenNewInvoice,
   onSelectInvoice,
-  onUpdateInvoiceStatus,
-  onToggleBookkeepingRecorded,
   onUpdateInvoiceBookkeepingStatus,
   onCreateFolder,
   onDeleteFolder,
   onUpdateInvoiceFolder,
-  onOpenInvoiceRequestModal,
 }) => {
-  // Main view scope: 'without_res' (default focus), 'all', or 'with_res'
-  const [scopeTab, setScopeTab] = useState<'without_res' | 'all' | 'with_res'>('without_res');
-  /** Beleg einer Auslage in der Vorschau - hier nur lesend. */
+  const openCount = invoices.filter((i) => bookkeepingOf(i) === 'nicht_bearbeitet').length;
+  const hasExpenses = expenses.length > 0;
+
+  const sectionKeys = useMemo<Section[]>(
+    () => (hasExpenses ? ['offen', 'erledigt', 'auslagen'] : ['offen', 'erledigt']),
+    [hasExpenses]
+  );
+  const [section, setSection] = useState<Section>(() =>
+    openCount > 0 || invoices.length === 0 ? 'offen' : 'erledigt'
+  );
+  // Verschwinden die Auslagen, faellt ein gewaehlter "Auslagen"-Reiter zurueck
+  const activeSection: Section = sectionKeys.includes(section) ? section : 'offen';
+  const swipe = useSwipeTabs<Section>({ keys: sectionKeys, active: activeSection, onChange: setSection });
+
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expensePreview, setExpensePreview] = useState<PreviewableFile | null>(null);
-  const [selectedFolderId, setSelectedFolderId] = useState<string>('all'); // 'all', 'none', or folder.id
-  const [filterYear, setFilterYear] = useState<string>('all');
-  const [filterMonth, setFilterMonth] = useState<string>('all');
-  const [filterBookkeeping, setFilterBookkeeping] = useState<'all' | BookkeepingStatus>('all');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [showFilters, setShowFilters] = useState<boolean>(false);
 
-  const hasActiveFilters =
-    filterYear !== 'all' ||
-    filterMonth !== 'all' ||
-    filterBookkeeping !== 'all' ||
-    searchQuery.trim() !== '';
-
-  // Folder creation modal/popover
-  const [isAddingFolder, setIsAddingFolder] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterResolution, setFilterResolution] = useState<'all' | 'with' | 'without'>('all');
+  const [filterFolder, setFilterFolder] = useState<string>('all'); // all | none | Ordner-ID
+  const [filterYear, setFilterYear] = useState('all');
+  const [filterMonth, setFilterMonth] = useState('all');
+  const [showFolderAdmin, setShowFolderAdmin] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
 
-  // Extract unique years from invoices
+  const hasActiveFilters =
+    !!searchQuery.trim() ||
+    filterResolution !== 'all' ||
+    filterFolder !== 'all' ||
+    filterYear !== 'all' ||
+    filterMonth !== 'all';
+
+  const resetFilters = () => {
+    setSearchQuery('');
+    setFilterResolution('all');
+    setFilterFolder('all');
+    setFilterYear('all');
+    setFilterMonth('all');
+  };
+
   const availableYears = useMemo(() => {
     const years = new Set<string>();
     invoices.forEach((inv) => {
-      if (inv.date) {
-        const y = inv.date.split('-')[0];
-        if (y) years.add(y);
-      }
+      const y = inv.date?.split('-')[0];
+      if (y) years.add(y);
     });
-    return Array.from(years).sort().reverse();
+    return [...years].sort().reverse();
   }, [invoices]);
 
-  const months = [
-    { value: '01', label: 'Jan' },
-    { value: '02', label: 'Feb' },
-    { value: '03', label: 'Mär' },
-    { value: '04', label: 'Apr' },
-    { value: '05', label: 'Mai' },
-    { value: '06', label: 'Jun' },
-    { value: '07', label: 'Jul' },
-    { value: '08', label: 'Aug' },
-    { value: '09', label: 'Sep' },
-    { value: '10', label: 'Okt' },
-    { value: '11', label: 'Nov' },
-    { value: '12', label: 'Dez' },
-  ];
-
-  const handleCreateNewFolder = () => {
-    if (!newFolderName.trim() || !onCreateFolder) return;
-    onCreateFolder(newFolderName.trim());
-    setNewFolderName('');
-    setIsAddingFolder(false);
+  const matchesFilters = (inv: Invoice) => {
+    if (filterResolution === 'with' && !inv.hasResolution) return false;
+    if (filterResolution === 'without' && inv.hasResolution) return false;
+    if (filterFolder === 'none' && inv.folderId) return false;
+    if (filterFolder !== 'all' && filterFolder !== 'none' && inv.folderId !== filterFolder) return false;
+    if (filterYear !== 'all' && !inv.date?.startsWith(filterYear)) return false;
+    if (filterMonth !== 'all' && inv.date?.split('-')[1] !== filterMonth) return false;
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      const haystack = [inv.vendor, inv.title, inv.invoiceNumber, inv.submittedBy?.name]
+        .join(' ')
+        .toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
   };
 
-  const filteredInvoices = useMemo(() => {
-    return invoices.filter((inv) => {
-      // Scope filter
-      if (scopeTab === 'without_res' && inv.hasResolution) return false;
-      if (scopeTab === 'with_res' && !inv.hasResolution) return false;
+  const filteredInvoices = invoices
+    .filter((inv) => {
+      const isOpen = bookkeepingOf(inv) === 'nicht_bearbeitet';
+      if (activeSection === 'offen' && !isOpen) return false;
+      if (activeSection === 'erledigt' && isOpen) return false;
+      return matchesFilters(inv);
+    })
+    .sort((a, b) => (b.date || b.createdAt || '').localeCompare(a.date || a.createdAt || ''));
 
-      // Folder filter
-      if (selectedFolderId !== 'all') {
-        if (selectedFolderId === 'none' && inv.folderId) return false;
-        if (selectedFolderId !== 'none' && inv.folderId !== selectedFolderId) return false;
-      }
-
-      // Year filter
-      if (filterYear !== 'all' && inv.date) {
-        if (!inv.date.startsWith(filterYear)) return false;
-      }
-
-      // Month filter
-      if (filterMonth !== 'all' && inv.date) {
-        const parts = inv.date.split('-');
-        if (parts[1] !== filterMonth) return false;
-      }
-
-      // Bookkeeping filter (3 options: bearbeitet, nicht_bearbeitet, nicht_notwendig)
-      if (filterBookkeeping !== 'all') {
-        const status = inv.bookkeepingStatus || (inv.isBookkeepingRecorded ? 'bearbeitet' : 'nicht_bearbeitet');
-        if (status !== filterBookkeeping) return false;
-      }
-
-      // Search query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchVendor = inv.vendor?.toLowerCase().includes(q);
-        const matchTitle = inv.title?.toLowerCase().includes(q);
-        const matchNumber = inv.invoiceNumber?.toLowerCase().includes(q);
-        const matchSubmitter = inv.submittedBy?.name.toLowerCase().includes(q);
-        return matchVendor || matchTitle || matchNumber || matchSubmitter;
-      }
-
-      return true;
-    });
-  }, [invoices, scopeTab, selectedFolderId, filterYear, filterMonth, filterBookkeeping, searchQuery]);
-
-  const totalSum = useMemo(() => {
-    return filteredInvoices.reduce((sum, i) => sum + (i.amount || 0), 0);
-  }, [filteredInvoices]);
-
-  const withoutResCount = useMemo(() => invoices.filter((i) => !i.hasResolution).length, [invoices]);
-  const withResCount = useMemo(() => invoices.filter((i) => i.hasResolution).length, [invoices]);
+  const listCount = activeSection === 'auslagen' ? expenses.length : filteredInvoices.length;
+  const listSum =
+    activeSection === 'auslagen'
+      ? expenses.reduce((sum, e) => sum + (e.amount || 0), 0)
+      : filteredInvoices.reduce((sum, i) => sum + (i.amount || 0), 0);
 
   const exportCSV = () => {
     const headers = ['Belegnummer', 'Lieferant / Empfänger', 'Beschreibung', 'Betrag (EUR)', 'Belegdatum', 'Ordner', 'Buchhaltungs-Status', 'Typ'];
     const rows = filteredInvoices.map((inv) => {
       const folderName = inv.folderId ? folders.find((f) => f.id === inv.folderId)?.name || 'Ordner' : 'Ohne Ordner';
-      const bkStatus = inv.bookkeepingStatus || (inv.isBookkeepingRecorded ? 'bearbeitet' : 'nicht_bearbeitet');
       return [
         `"${inv.invoiceNumber}"`,
         `"${inv.vendor}"`,
@@ -197,11 +194,10 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
         inv.amount.toFixed(2),
         `"${inv.date}"`,
         `"${folderName}"`,
-        `"${bkStatus}"`,
+        `"${bookkeepingOf(inv)}"`,
         inv.hasResolution ? '"Mit Beschluss"' : '"Ohne Beschluss"',
       ];
     });
-
     const csvContent = [headers.join(';'), ...rows.map((e) => e.join(';'))].join('\n');
     // BOM vorneweg, damit Excel die Umlaute richtig erkennt.
     downloadBlob(
@@ -210,526 +206,429 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
     );
   };
 
-  return (
-    <div className="space-y-4 max-w-7xl mx-auto">
-      
-      {/* Top Header Bar */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center space-x-2">
-          <Receipt className="w-5 h-5 text-[#003594]" />
-          <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-            Belege
-          </h2>
+  const handleCreateFolder = () => {
+    if (!newFolderName.trim() || !onCreateFolder) return;
+    onCreateFolder(newFolderName.trim());
+    setNewFolderName('');
+  };
+
+  const renderInvoice = (inv: Invoice) => {
+    const folder = inv.folderId ? folders.find((f) => f.id === inv.folderId) : undefined;
+    const linkedRes = inv.resolutionId ? resolutions.find((r) => r.id === inv.resolutionId) : undefined;
+    const bk = bookkeepingOf(inv);
+    const isExpanded = expandedId === inv.id;
+    const toggle = () => setExpandedId(isExpanded ? null : inv.id);
+
+    return (
+      <div
+        key={inv.id}
+        // Eigener Uebergangs-Name: die Karte gleitet bei smooth() an ihren neuen Platz
+        style={{ viewTransitionName: transitionName('inv', inv.id) }}
+        className="bg-white rounded-xl border border-slate-200 wj-view-enter"
+      >
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={toggle}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              toggle();
+            }
+          }}
+          className="flex items-center gap-2 p-3 cursor-pointer rounded-xl hover:bg-slate-50 transition-colors"
+        >
+          <div className="flex-1 min-w-0 text-left">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="font-bold text-slate-900 text-sm truncate">{inv.vendor || inv.title}</span>
+              <span className="font-bold text-[#003594] text-sm shrink-0">{formatCurrency(inv.amount)}</span>
+            </div>
+            <div className="mt-0.5 text-[11px] text-slate-500 truncate">
+              {inv.title}
+              {inv.date ? ` · ${formatDate(inv.date)}` : ''}
+            </div>
+            {(inv.fileUrl || linkedRes || folder || bk === 'nicht_notwendig') && (
+              <div className="mt-1 flex flex-wrap items-center gap-1">
+                {inv.fileUrl && (
+                  <span className="text-slate-400" title="Beleg hinterlegt">
+                    <Paperclip className="w-3 h-3" strokeWidth={2} />
+                  </span>
+                )}
+                {linkedRes && (
+                  <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-100 text-indigo-700">
+                    {linkedRes.number}
+                  </span>
+                )}
+                {folder && (
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 border border-amber-100 text-amber-800 inline-flex items-center gap-0.5">
+                    <Folder className="w-2.5 h-2.5" strokeWidth={2} />
+                    {folder.name}
+                  </span>
+                )}
+                {bk === 'nicht_notwendig' && (
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                    Nicht nötig
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+          <ChevronDown
+            aria-hidden="true"
+            className={`w-4 h-4 shrink-0 text-slate-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+            strokeWidth={1.75}
+          />
         </div>
 
-        <div className="flex items-center space-x-1.5 sm:space-x-2">
+        <Collapse open={isExpanded}>
+          <div className="px-3 pb-3 space-y-2.5 text-[11px]">
+            <div className="flex flex-wrap gap-x-3 gap-y-1 text-slate-500">
+              {inv.invoiceNumber && <span>Nr. {inv.invoiceNumber}</span>}
+              {inv.category && <span>{inv.category}</span>}
+              {inv.submittedBy?.name && <span>Eingereicht von {inv.submittedBy.name}</span>}
+            </div>
+
+            {linkedRes && (
+              <div className="text-slate-600 truncate">
+                Beschluss <span className="font-mono font-bold text-indigo-700">{linkedRes.number}</span> ·{' '}
+                {linkedRes.title}
+              </div>
+            )}
+
+            {onUpdateInvoiceFolder && !inv.hasResolution && (
+              <label className="flex items-center gap-2">
+                <span className="text-slate-500 shrink-0">Ordner</span>
+                <select
+                  value={inv.folderId || ''}
+                  onChange={(e) => onUpdateInvoiceFolder(inv.id, e.target.value || undefined)}
+                  className="flex-1 min-w-0 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-base sm:text-[11px] font-semibold text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#003594]"
+                >
+                  <option value="">Kein Ordner</option>
+                  {folders.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            <div className="flex flex-wrap gap-1.5 pt-0.5">
+              <button
+                type="button"
+                onClick={() => onSelectInvoice(inv.id)}
+                className={`${smallButton} border border-slate-200 text-slate-700 hover:bg-slate-50`}
+              >
+                <Eye className="w-3 h-3" strokeWidth={1.75} />
+                Details & Beleg
+              </button>
+
+              {onUpdateInvoiceBookkeepingStatus &&
+                (bk === 'nicht_bearbeitet' ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => onUpdateInvoiceBookkeepingStatus(inv.id, 'bearbeitet')}
+                      className={`${smallButton} bg-emerald-600 hover:bg-emerald-700 text-white`}
+                    >
+                      <CheckCircle2 className="w-3 h-3" strokeWidth={2} />
+                      In Buchhaltung erledigt
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onUpdateInvoiceBookkeepingStatus(inv.id, 'nicht_notwendig')}
+                      className={`${smallButton} border border-slate-200 text-slate-600 hover:bg-slate-50`}
+                    >
+                      <MinusCircle className="w-3 h-3" strokeWidth={1.75} />
+                      Nicht nötig
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onUpdateInvoiceBookkeepingStatus(inv.id, 'nicht_bearbeitet')}
+                    className={`${smallButton} border border-slate-200 text-slate-600 hover:bg-slate-50`}
+                  >
+                    <RotateCcw className="w-3 h-3" strokeWidth={1.75} />
+                    Wieder offen
+                  </button>
+                ))}
+            </div>
+          </div>
+        </Collapse>
+      </div>
+    );
+  };
+
+  const renderExpense = (e: Subsidy) => {
+    const file = e.costProofFile || e.proofFile;
+    return (
+      <button
+        key={e.id}
+        type="button"
+        disabled={!file}
+        onClick={() => {
+          if (!file) return;
+          const isImage = file.mimeType?.startsWith('image/');
+          if (!file.dataUrl || isImage) setExpensePreview(file);
+          else openDataUrl(file.dataUrl, file.name);
+        }}
+        className="w-full bg-white rounded-xl border border-slate-200 p-3 flex items-center gap-2 text-left transition-colors enabled:hover:bg-slate-50 enabled:cursor-pointer disabled:opacity-70 wj-view-enter"
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="font-bold text-slate-900 text-sm truncate">{e.eventName}</span>
+            <span className="font-bold text-[#003594] text-sm shrink-0">{formatCurrency(e.amount)}</span>
+          </div>
+          <div className="mt-0.5 text-[11px] text-slate-500 truncate">
+            {e.personName}
+            {e.eventDate ? ` · ${formatDate(e.eventDate)}` : ''}
+          </div>
+        </div>
+        {file ? (
+          <Paperclip className="w-4 h-4 text-[#003594] shrink-0" strokeWidth={1.75} />
+        ) : (
+          <span className="text-[10px] text-slate-400 shrink-0">kein Beleg</span>
+        )}
+      </button>
+    );
+  };
+
+  const emptyText =
+    activeSection === 'auslagen'
+      ? 'Keine Belege aus Auslagen.'
+      : hasActiveFilters
+      ? 'Keine Belege für diese Auswahl.'
+      : activeSection === 'offen'
+      ? 'Alle Belege sind in der Buchhaltung erledigt.'
+      : 'Noch keine erledigten Belege.';
+
+  return (
+    <div ref={swipe.ref} className="space-y-4 max-w-5xl mx-auto">
+      {/* Kopf */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Receipt className="w-5 h-5 text-[#003594]" strokeWidth={1.75} />
+          <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">Belege</h2>
+        </div>
+
+        <div className="flex items-center gap-1.5">
           <button
+            type="button"
             onClick={exportCSV}
-            className="flex items-center space-x-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-2.5 sm:px-3 py-1.5 rounded-xl text-xs transition cursor-pointer"
-            title="CSV Exportieren"
+            className="p-2 sm:px-3 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
+            title="Aktuelle Liste als CSV exportieren"
           >
-            <Download className="w-3.5 h-3.5" />
+            <Download className="w-4 h-4" strokeWidth={1.75} />
             <span className="hidden sm:inline">CSV</span>
           </button>
-
           <button
+            type="button"
             onClick={onOpenNewInvoice}
             id="invoices-new-btn"
-            className="flex items-center space-x-1 bg-[#003594] hover:bg-[#00266B] text-white font-bold px-3 sm:px-4 py-1.5 rounded-xl text-xs sm:text-sm transition-all shadow-xs cursor-pointer active:scale-98"
+            className="px-3 sm:px-4 py-2 rounded-xl bg-[#003594] hover:bg-[#00266B] text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-colors cursor-pointer active:scale-98"
           >
-            <Plus className="w-4 h-4" />
-            <span>Rechnung hochladen</span>
+            <Plus className="w-4 h-4" strokeWidth={2} />
+            <span>Hochladen</span>
           </button>
         </div>
       </div>
 
-      {/* Primary Scope Tabs */}
-      <div className="flex items-center space-x-1.5 bg-slate-100 p-1 rounded-xl text-xs font-bold">
-        <button
-          onClick={() => setScopeTab('without_res')}
-          className={`flex-1 py-1.5 px-2 rounded-lg transition-all text-center cursor-pointer flex items-center justify-center space-x-1.5 ${
-            scopeTab === 'without_res'
-              ? 'bg-white text-[#003594] shadow-xs'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <Folder className="w-3.5 h-3.5 text-amber-500" />
-          <span>Ohne Beschluss</span>
-          <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${scopeTab === 'without_res' ? 'bg-blue-100 text-[#003594]' : 'bg-slate-200 text-slate-600'}`}>
-            {withoutResCount}
-          </span>
-        </button>
+      {/* Reiter - per Tippen oder Wischen */}
+      <StageTabs
+        tabs={[
+          { key: 'offen' as Section, label: 'Buchhaltung offen', count: openCount },
+          { key: 'erledigt' as Section, label: 'Erledigt', count: invoices.length - openCount },
+          ...(hasExpenses
+            ? [
+                {
+                  key: 'auslagen' as Section,
+                  label: 'Aus Auslagen',
+                  count: expenses.length,
+                  icon: <Wallet className="w-3.5 h-3.5" strokeWidth={1.75} />,
+                },
+              ]
+            : []),
+        ]}
+        active={activeSection}
+        onSelect={swipe.select}
+      />
 
-        <button
-          onClick={() => setScopeTab('all')}
-          className={`flex-1 py-1.5 px-2 rounded-lg transition-all text-center cursor-pointer flex items-center justify-center space-x-1.5 ${
-            scopeTab === 'all'
-              ? 'bg-white text-[#003594] shadow-xs'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <Receipt className="w-3.5 h-3.5 text-slate-500" />
-          <span>Alle</span>
-          <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${scopeTab === 'all' ? 'bg-blue-100 text-[#003594]' : 'bg-slate-200 text-slate-600'}`}>
-            {invoices.length}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setScopeTab('with_res')}
-          className={`flex-1 py-1.5 px-2 rounded-lg transition-all text-center cursor-pointer flex items-center justify-center space-x-1.5 ${
-            scopeTab === 'with_res'
-              ? 'bg-white text-[#003594] shadow-xs'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <FileText className="w-3.5 h-3.5 text-indigo-600" />
-          <span>Mit Beschluss</span>
-          <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${scopeTab === 'with_res' ? 'bg-blue-100 text-[#003594]' : 'bg-slate-200 text-slate-600'}`}>
-            {withResCount}
-          </span>
-        </button>
-      </div>
-
-      {/* Folders Bar (Quick navigation chips like Ionos, Hosting, IHK, etc.) */}
-      <div className="bg-white p-2.5 sm:p-3 rounded-2xl border border-slate-200 shadow-2xs space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center space-x-1">
-            <Folder className="w-3.5 h-3.5 text-amber-500" />
-            <span>Ordner</span>
-          </span>
-
-          {onCreateFolder && (
+      {/* Filter - Beschluss, Ordner, Jahr, Monat und Ordner verwalten */}
+      {activeSection !== 'auslagen' ? (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => setShowFilters((v) => !v)}
+            className={`px-3.5 py-2 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer ${
+              hasActiveFilters ? 'bg-blue-50 border-blue-200 text-[#003594]' : 'bg-white border-slate-200 text-slate-600'
+            }`}
+          >
+            <Filter className="w-3.5 h-3.5" strokeWidth={1.75} />
+            <span>Filter{hasActiveFilters ? ' (aktiv)' : ''}</span>
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-2 text-[11px] text-slate-500 px-1">
+          <span>Nur zum Nachschlagen – bearbeitet werden Auslagen im Bereich Auslagen.</span>
+          {onNavigateToExpenses && (
             <button
-              onClick={() => setIsAddingFolder(!isAddingFolder)}
-              className="text-xs font-bold text-[#003594] hover:underline flex items-center space-x-1 cursor-pointer"
+              type="button"
+              onClick={onNavigateToExpenses}
+              className="font-bold text-[#003594] hover:underline cursor-pointer shrink-0"
             >
-              <FolderPlus className="w-3.5 h-3.5" />
-              <span>{isAddingFolder ? 'Abbrechen' : '+ Neuer Ordner'}</span>
+              Zu den Auslagen
             </button>
           )}
         </div>
+      )}
 
-        {/* Add Folder Inline Input */}
-        <Collapse open={!!(isAddingFolder)}>{isAddingFolder && (
-          <div className="flex items-center space-x-2 pt-1 pb-1">
-            <input
-              type="text"
-              value={newFolderName}
-              onChange={(e) => setNewFolderName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleCreateNewFolder()}
-              placeholder="Ordnername (z.B. Ionos, Zoom, Hosting...)"
-              className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#003594]"
-              autoFocus
-            />
-            <button
-              type="button"
-              onClick={handleCreateNewFolder}
-              disabled={!newFolderName.trim()}
-              className="px-3 py-1.5 bg-[#003594] hover:bg-[#00266B] text-white font-bold rounded-xl text-xs disabled:opacity-50 cursor-pointer"
-            >
-              Erstellen
-            </button>
-          </div>
-        )}</Collapse>
-
-        {/* Folder Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
-          <button
-            onClick={() => setSelectedFolderId('all')}
-            className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all cursor-pointer ${
-              selectedFolderId === 'all'
-                ? 'bg-[#003594] text-white shadow-2xs'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            Alle Ordner
-          </button>
-
-          {folders.map((f) => {
-            const countInFolder = invoices.filter((i) => i.folderId === f.id).length;
-            const isSelected = selectedFolderId === f.id;
-            return (
-              <div key={f.id} className="relative group shrink-0">
-                <button
-                  onClick={() => setSelectedFolderId(f.id)}
-                  className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all cursor-pointer flex items-center space-x-1.5 ${
-                    isSelected
-                      ? 'bg-amber-600 text-white shadow-2xs'
-                      : 'bg-slate-100 text-slate-700 hover:bg-amber-50 hover:text-amber-900'
-                  }`}
-                >
-                  <Folder className="w-3.5 h-3.5" />
-                  <span>{f.name}</span>
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isSelected ? 'bg-amber-800 text-amber-100' : 'bg-slate-200 text-slate-600'}`}>
-                    {countInFolder}
-                  </span>
-                </button>
-
-                {onDeleteFolder && isSelected && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (confirm(`Ordner "${f.name}" löschen?`)) {
-                        onDeleteFolder(f.id);
-                        setSelectedFolderId('all');
-                      }
-                    }}
-                    className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white p-0.5 rounded-full hover:bg-rose-700 transition-colors shadow-2xs"
-                    title="Ordner löschen"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                )}
-              </div>
-            );
-          })}
-
-          <button
-            onClick={() => setSelectedFolderId('none')}
-            className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all cursor-pointer ${
-              selectedFolderId === 'none'
-                ? 'bg-slate-800 text-white shadow-2xs'
-                : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-            }`}
-          >
-            Ohne Ordner
-          </button>
-        </div>
-      </div>
-
-      {/* Filter & Suche - eingeklappt, damit auf dem Smartphone die Belege
-          sofort sichtbar sind statt einer Filterwand. */}
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => setShowFilters((v) => !v)}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-semibold transition-colors ${
-            hasActiveFilters
-              ? 'bg-blue-50 border-blue-200 text-[#003594]'
-              : 'bg-white border-slate-200 text-slate-600'
-          }`}
-        >
-          <Filter className="w-3.5 h-3.5" strokeWidth={1.75} />
-          <span>Filter & Suche{hasActiveFilters ? ' (aktiv)' : ''}</span>
-          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
-        </button>
-      </div>
-
-      {showFilters && (
-      <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs space-y-2.5 text-xs">
-        
-        {/* Row 1: Search & Buchhaltung 3-Status Filter */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-          <div className="relative flex-1">
+      <Collapse open={showFilters && activeSection !== 'auslagen'}>
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 space-y-2.5 text-xs">
+          <div className="relative">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Lieferant, Betrag oder Beleg suchen..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-[#003594] text-base sm:text-sm"
+              placeholder="Lieferant, Beschreibung, Nummer oder Name …"
+              className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-xs focus:outline-none focus:ring-2 focus:ring-[#003594]"
             />
           </div>
 
-          {/* 3-State Buchhaltung Filter Switcher */}
-          <div className="flex flex-wrap items-center gap-1 bg-slate-100 p-1 rounded-xl shrink-0">
-            <button
-              onClick={() => setFilterBookkeeping('all')}
-              className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-                filterBookkeeping === 'all'
-                  ? 'bg-white text-slate-900 shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
+          <div className="grid grid-cols-2 gap-2">
+            <select
+              value={filterResolution}
+              onChange={(e) => setFilterResolution(e.target.value as 'all' | 'with' | 'without')}
+              className={selectClass}
             >
-              Buchhaltung: Alle
-            </button>
-            <button
-              onClick={() => setFilterBookkeeping('bearbeitet')}
-              className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer flex items-center space-x-1 ${
-                filterBookkeeping === 'bearbeitet'
-                  ? 'bg-emerald-600 text-white shadow-2xs'
-                  : 'text-slate-600 hover:text-emerald-700'
-              }`}
-            >
-              <CheckCircle2 className="w-3 h-3" />
-              <span>Bearbeitet</span>
-            </button>
-            <button
-              onClick={() => setFilterBookkeeping('nicht_bearbeitet')}
-              className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer flex items-center space-x-1 ${
-                filterBookkeeping === 'nicht_bearbeitet'
-                  ? 'bg-amber-600 text-white shadow-2xs'
-                  : 'text-slate-600 hover:text-amber-700'
-              }`}
-            >
-              <Clock className="w-3 h-3" />
-              <span>Offen</span>
-            </button>
-            <button
-              onClick={() => setFilterBookkeeping('nicht_notwendig')}
-              className={`px-2 py-1 rounded-lg font-bold transition-all cursor-pointer flex items-center space-x-1 ${
-                filterBookkeeping === 'nicht_notwendig'
-                  ? 'bg-slate-700 text-white shadow-2xs'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <MinusCircle className="w-3 h-3" />
-              <span>Nicht nötig</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Row 2: Year & Month Filter */}
-        <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-slate-100">
-          <div className="flex items-center space-x-1 font-bold text-slate-600 shrink-0 mr-1">
-            <Calendar className="w-3.5 h-3.5 text-slate-400" />
-            <span>Jahr:</span>
+              <option value="all">Mit & ohne Beschluss</option>
+              <option value="with">Mit Beschluss</option>
+              <option value="without">Ohne Beschluss</option>
+            </select>
+            <select value={filterFolder} onChange={(e) => setFilterFolder(e.target.value)} className={selectClass}>
+              <option value="all">Alle Ordner</option>
+              <option value="none">Ohne Ordner</option>
+              {folders.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+            <select value={filterYear} onChange={(e) => setFilterYear(e.target.value)} className={selectClass}>
+              <option value="all">Alle Jahre</option>
+              {availableYears.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+            <select value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)} className={selectClass}>
+              <option value="all">Alle Monate</option>
+              {MONTHS.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <button
-            onClick={() => setFilterYear('all')}
-            className={`px-2.5 py-1 rounded-lg font-bold cursor-pointer ${
-              filterYear === 'all' ? 'bg-[#003594] text-white shadow-2xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            Alle
-          </button>
-
-          {availableYears.map((yr) => (
-            <button
-              key={yr}
-              onClick={() => setFilterYear(yr)}
-              className={`px-2.5 py-1 rounded-lg font-bold cursor-pointer ${
-                filterYear === yr ? 'bg-[#003594] text-white shadow-2xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              {yr}
-            </button>
-          ))}
-
-          <span className="text-slate-300 mx-1">|</span>
-
-          <div className="flex items-center space-x-1 font-bold text-slate-600 shrink-0">
-            <span>Monat:</span>
-          </div>
-
-          <button
-            onClick={() => setFilterMonth('all')}
-            className={`px-2 py-0.5 rounded-md font-bold text-[11px] cursor-pointer ${
-              filterMonth === 'all' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            Alle
-          </button>
-
-          {months.map((m) => (
-            <button
-              key={m.value}
-              onClick={() => setFilterMonth(m.value)}
-              className={`px-1.5 py-0.5 rounded-md font-bold text-[11px] cursor-pointer ${
-                filterMonth === m.value ? 'bg-[#003594] text-white' : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              {m.label}
-            </button>
-          ))}
-
-          {(filterYear !== 'all' || filterMonth !== 'all' || filterBookkeeping !== 'all' || searchQuery.trim() || selectedFolderId !== 'all') && (
-            <button
-              onClick={() => {
-                setFilterYear('all');
-                setFilterMonth('all');
-                setFilterBookkeeping('all');
-                setSelectedFolderId('all');
-                setSearchQuery('');
-              }}
-              className="ml-auto text-rose-600 hover:text-rose-800 font-bold text-[11px] flex items-center space-x-1 cursor-pointer"
-            >
-              <X className="w-3 h-3" />
-              <span>Filter zurücksetzen</span>
-            </button>
-          )}
-        </div>
-      </div>
-      )}
-
-      {/* Summary Header */}
-      <div className="flex items-center justify-between px-1 text-xs text-slate-600">
-        <span className="font-semibold">
-          {filteredInvoices.length} Belege gefunden
-        </span>
-        <span className="font-black text-slate-900 text-sm">
-          Summe: {formatCurrency(totalSum)}
-        </span>
-      </div>
-
-      {/* Invoices List / Cards View */}
-      {filteredInvoices.length === 0 ? (
-        <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center space-y-2">
-          <Receipt className="w-8 h-8 text-slate-300 mx-auto" />
-          <p className="font-bold text-slate-700 text-xs">
-            Keine Belege für die gewählten Filter vorhanden
-          </p>
-          <p className="text-[11px] text-slate-400">
-            Lade eine neue Rechnung hoch oder passe die Filter an.
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {filteredInvoices.map((inv) => {
-            const folder = inv.folderId ? folders.find((f) => f.id === inv.folderId) : undefined;
-            const currentBk = inv.bookkeepingStatus || (inv.isBookkeepingRecorded ? 'bearbeitet' : 'nicht_bearbeitet');
-            const linkedRes = inv.resolutionId ? resolutions.find((r) => r.id === inv.resolutionId) : undefined;
-
-            return (
-              <div
-                key={inv.id}
-                className="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-2xs hover:border-[#003594]/40 hover:shadow-sm transition-all duration-200 flex flex-col justify-between gap-3 wj-view-enter"
-              >
-                {/* Kopf: Lieferant und Betrag - das Wichtigste zuerst */}
-                <button
-                  type="button"
-                  onClick={() => onSelectInvoice(inv.id)}
-                  className="text-left cursor-pointer space-y-1"
-                >
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="font-bold text-slate-900 text-sm truncate">
-                      {inv.vendor}
-                    </span>
-                    <span className="font-bold text-[#003594] text-sm shrink-0">
-                      {formatCurrency(inv.amount)}
-                    </span>
-                  </div>
-
-                  <div className="flex items-baseline justify-between gap-2 text-[11px]">
-                    <span className="text-slate-500 truncate">{inv.title}</span>
-                    <span className="text-slate-400 shrink-0">{formatDate(inv.date)}</span>
-                  </div>
-
-                  {/* Zuordnung nur zeigen, wenn es eine gibt */}
-                  {(folder || linkedRes) && (
-                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                      {folder && (
-                        <span className="text-[10px] text-amber-700 font-semibold">
-                          {folder.name}
-                        </span>
-                      )}
-                      {folder && linkedRes && <span className="text-[10px] text-slate-300">·</span>}
-                      {linkedRes && (
-                        <span className="text-[10px] text-indigo-700 font-semibold font-mono">
-                          {linkedRes.number}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </button>
-
-                {/* Fuss: Buchhaltung als ein Auswahlmenue statt dreier Knoepfe */}
-                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                  <select
-                    value={currentBk}
-                    onChange={(e) =>
-                      onUpdateInvoiceBookkeepingStatus?.(inv.id, e.target.value as BookkeepingStatus)
-                    }
-                    className={`flex-1 min-w-0 text-[11px] font-semibold rounded-lg px-2 py-1.5 border cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#003594] ${
-                      currentBk === 'bearbeitet'
-                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                        : currentBk === 'nicht_notwendig'
-                        ? 'bg-slate-100 text-slate-600 border-slate-200'
-                        : 'bg-amber-50 text-amber-800 border-amber-200'
-                    }`}
-                  >
-                    <option value="nicht_bearbeitet">Buchhaltung offen</option>
-                    <option value="bearbeitet">Buchhaltung erledigt</option>
-                    <option value="nicht_notwendig">Nicht nötig</option>
-                  </select>
-
-                  {onUpdateInvoiceFolder && !inv.hasResolution && (
-                    <select
-                      value={inv.folderId || ''}
-                      onChange={(e) => onUpdateInvoiceFolder(inv.id, e.target.value || undefined)}
-                      className="flex-1 min-w-0 text-[11px] font-semibold bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#003594] cursor-pointer"
-                    >
-                      <option value="">Kein Ordner</option>
-                      {folders.map((f) => (
-                        <option key={f.id} value={f.id}>
-                          {f.name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Belege aus Auslagenerstattungen - bearbeitet werden sie im eigenen
-          Reiter "Auslagen", hier stehen sie nur, damit man jede Rechnung des
-          Vereins an einer Stelle wiederfindet. */}
-      {expenses.length > 0 && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs">
-          <div className="flex items-center justify-between gap-2 mb-3">
-            <div className="flex items-center gap-2">
-              <Wallet className="w-4 h-4 text-[#003594]" strokeWidth={1.75} />
-              <h3 className="text-xs uppercase font-bold text-slate-700 tracking-wider">
-                Belege aus Auslagen ({expenses.length})
-              </h3>
-            </div>
-            {onNavigateToExpenses && (
+          <div className="flex items-center justify-between gap-2 pt-0.5">
+            {hasActiveFilters ? (
               <button
                 type="button"
-                onClick={onNavigateToExpenses}
-                className="text-[11px] font-bold text-[#003594] hover:underline cursor-pointer"
+                onClick={resetFilters}
+                className="text-[11px] font-bold text-rose-600 hover:underline cursor-pointer"
               >
-                Zu den Auslagen
+                Filter zurücksetzen
+              </button>
+            ) : (
+              <span />
+            )}
+            {(onCreateFolder || onDeleteFolder) && (
+              <button
+                type="button"
+                onClick={() => setShowFolderAdmin((v) => !v)}
+                className="text-[11px] font-bold text-[#003594] hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <Folder className="w-3.5 h-3.5" strokeWidth={1.75} />
+                Ordner verwalten
               </button>
             )}
           </div>
 
-          <div className="space-y-1.5">
-            {expenses.map((e) => {
-              const file = e.costProofFile || e.proofFile;
-              return (
-              <button
-                key={e.id}
-                type="button"
-                disabled={!file}
-                onClick={() => {
-                  if (!file) return;
-                  const isImage = file.mimeType?.startsWith('image/');
-                  if (!file.dataUrl || isImage) {
-                    setExpensePreview(file);
-                  } else {
-                    openDataUrl(file.dataUrl, file.name);
-                  }
-                }}
-                className="w-full flex items-center justify-between gap-2 p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-left transition-colors enabled:hover:bg-blue-50/50 enabled:cursor-pointer disabled:opacity-70"
-              >
-                <div className="min-w-0 flex items-center gap-2">
-                  {file && (
-                    <Paperclip className="w-3.5 h-3.5 text-[#003594] shrink-0" strokeWidth={1.75} />
-                  )}
-                  <div className="min-w-0">
-                    <div className="font-bold text-slate-900 truncate">{e.eventName}</div>
-                    <div className="text-[11px] text-slate-500 truncate">
-                      {e.personName}
-                      {e.eventDate ? ` · ${formatDate(e.eventDate)}` : ''}
-                      {file ? ` · ${file.name}` : ' · kein Beleg hinterlegt'}
-                    </div>
+          <Collapse open={showFolderAdmin}>
+            <div className="pt-2.5 border-t border-slate-100 space-y-1.5">
+              {folders.length === 0 && <p className="text-[11px] text-slate-400">Noch keine Ordner angelegt.</p>}
+              {folders.map((f) => {
+                const count = invoices.filter((i) => i.folderId === f.id).length;
+                return (
+                  <div key={f.id} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-100">
+                    <Folder className="w-3.5 h-3.5 text-amber-600 shrink-0" strokeWidth={1.75} />
+                    <span className="flex-1 min-w-0 truncate font-semibold text-slate-700">{f.name}</span>
+                    <span className="text-[10px] text-slate-400 shrink-0">
+                      {count} {count === 1 ? 'Beleg' : 'Belege'}
+                    </span>
+                    {onDeleteFolder && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!confirm(`Ordner „${f.name}" löschen? Die Belege darin bleiben erhalten, nur ohne Ordner.`)) return;
+                          onDeleteFolder(f.id);
+                          if (filterFolder === f.id) setFilterFolder('all');
+                        }}
+                        className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                        title="Ordner löschen"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                      </button>
+                    )}
                   </div>
+                );
+              })}
+              {onCreateFolder && (
+                <div className="flex items-center gap-1.5 pt-0.5">
+                  <input
+                    type="text"
+                    value={newFolderName}
+                    onChange={(e) => setNewFolderName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCreateFolder()}
+                    placeholder="Neuer Ordner, z. B. IONOS oder IHK"
+                    className="flex-1 min-w-0 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-base sm:text-xs focus:outline-none focus:ring-2 focus:ring-[#003594]"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCreateFolder}
+                    disabled={!newFolderName.trim()}
+                    className={`${smallButton} bg-[#003594] hover:bg-[#00266B] text-white disabled:opacity-40`}
+                  >
+                    <FolderPlus className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    Anlegen
+                  </button>
                 </div>
-                <span className="font-bold text-slate-900 shrink-0">
-                  {formatCurrency(e.amount)}
-                </span>
-              </button>
-              );
-            })}
-          </div>
+              )}
+            </div>
+          </Collapse>
         </div>
-      )}
+      </Collapse>
+
+      {/* Liste */}
+      <div className="flex items-baseline justify-between px-1 text-[11px] text-slate-500">
+        <span className="uppercase font-bold tracking-wider text-slate-400">
+          {listCount} {listCount === 1 ? 'Beleg' : 'Belege'}
+        </span>
+        <span className="font-bold text-slate-900 text-sm">{formatCurrency(listSum)}</span>
+      </div>
+
+      <div key={activeSection} className={`space-y-1.5 ${swipe.slideClass}`}>
+        {listCount === 0 && (
+          <div className="bg-white p-8 text-center rounded-2xl border border-slate-200 text-slate-500 text-xs">
+            {emptyText}
+          </div>
+        )}
+        {activeSection === 'auslagen' ? expenses.map(renderExpense) : filteredInvoices.map(renderInvoice)}
+      </div>
 
       <FilePreviewModal file={expensePreview} onClose={() => setExpensePreview(null)} />
     </div>

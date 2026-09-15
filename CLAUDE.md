@@ -33,10 +33,10 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
 
 ## Aktueller Stand (15.09.2026)
 
-- Version **v3.25.0**, lokal committet; noch nicht gepusht: v3.25.0 (Reiter
-  per Wischen, Budget als aufklappbare Leiste, kleiner Link-Knopf). Alles bis
-  v3.24.0 ist veröffentlicht.
-- In Arbeit/als Nächstes: Belege-Bereich an die anderen Bereiche angleichen.
+- Version **v3.26.0**, lokal committet; noch nicht gepusht: v3.25.0 (Reiter
+  per Wischen, Budget als aufklappbare Leiste, kleiner Link-Knopf), v3.26.0
+  (Belege wie die anderen Bereiche aufgebaut). Alles bis v3.24.0 ist
+  veröffentlicht.
 - Weiche Übergänge nur im Chrome-Vorschaufenster geprüft – auf dem iPhone
   (Safari ab iOS 18) noch vom Nutzer zu testen.
 - Offen beim Nutzer: doppelte Personen (Roman Kashtanov 7×, Diana Sajzew 2×)
@@ -2021,3 +2021,30 @@ Fenster-Inhalt, nicht die Seite).
 
 **Antragslink:** nur noch ein kleiner Knopf „Antragslink kopieren" bzw.
 „Auslagen-Link kopieren", die Adresse wird nicht mehr angezeigt.
+
+## v3.26.0 - Belege wie die anderen Bereiche
+
+Der Nutzer fand den Belege-Bereich unübersichtlich und optisch anders als
+Beschlüsse/Zuschüsse (große Umschaltleiste Ohne/Alle/Mit Beschluss, eigener
+Ordner-Kasten mit Chips, Karten mit je zwei Auswahlfeldern). `InvoicesView.tsx`
+ist neu aufgebaut nach dem Muster der Zuschuss-Ansicht:
+
+- **Kopf:** „Belege", CSV, „Hochladen".
+- **Reiter** (`StageTabs` + `useSwipeTabs`, wischbar): „Buchhaltung offen"
+  (`bookkeepingOf() === 'nicht_bearbeitet'`), „Erledigt" (bearbeitet oder nicht
+  nötig), „Aus Auslagen" (nur wenn es Auslagen gibt; nur zum Nachschlagen, mit
+  Sprung in den Auslagen-Bereich). Jeder Beleg steht genau in Offen oder
+  Erledigt.
+- **Filter** (eingeklappt): Suche, Beschluss mit/ohne, Ordner, Jahr, Monat;
+  darin „Ordner verwalten" (anlegen, löschen mit Rückfrage). Mit/ohne Beschluss
+  und Ordner sind damit keine eigenen Leisten mehr.
+- **Karten:** Lieferant + Betrag, Beschreibung · Datum, kleine Etiketten
+  (Beleg vorhanden, Beschlussnummer, Ordner, „Nicht nötig"). Aufklappen zeigt
+  Nummer/Kategorie/Einreicher, den Beschluss, die Ordner-Auswahl (nur ohne
+  Beschluss) und „Details & Beleg" (Detailfenster), „In Buchhaltung erledigt" /
+  „Nicht nötig" bzw. „Wieder offen". Buchhaltungsaktionen laufen über
+  `smoothly()` aus App.tsx, die Karte (`viewTransitionName` `inv-…`) wandert
+  weich in den anderen Reiter.
+- Die Props an `InvoicesView` sind unverändert; `onUpdateInvoiceStatus`,
+  `onToggleBookkeepingRecorded` und `onOpenInvoiceRequestModal` nutzt die
+  Liste nicht mehr (Status und Historie stehen im Detailfenster).
