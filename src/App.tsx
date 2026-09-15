@@ -41,7 +41,7 @@ import { BiometricLock } from './components/BiometricLock';
 import { SubsidiesView } from './components/SubsidiesView';
 import { NewSubsidyModal } from './components/NewSubsidyModal';
 import { SubsidyPeopleModal } from './components/SubsidyPeopleModal';
-import { SubsidyCatalogueModal } from './components/SubsidyCatalogueModal';
+import type { SettingsTab } from './components/SettingsModal';
 import { SubsidyPayoutModal } from './components/SubsidyPayoutModal';
 import { BundleSubsidiesModal } from './components/BundleSubsidiesModal';
 import { subsidyKind } from './utils/subsidies';
@@ -101,9 +101,7 @@ export default function App() {
   const [cloudStatus, setCloudStatus] = useState<FirebaseSyncStatus>(() => FirebaseSync.getStatus());
   /** Nur gesetzt, wenn die Cloud-Synchronisation tatsaechlich blockiert ist. */
   const [syncBlocked, setSyncBlocked] = useState(false);
-  const [settingsInitialTab, setSettingsInitialTab] = useState<
-    'members' | 'security' | 'notifications' | 'system' | 'teams'
-  >('members');
+  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('members');
 
   // Register PWA Service Worker on mount
   useEffect(() => {
@@ -791,8 +789,6 @@ export default function App() {
     setEditingSubsidy,
     isSubsidyPeopleOpen,
     setIsSubsidyPeopleOpen,
-    isSubsidyCatalogueOpen,
-    setIsSubsidyCatalogueOpen,
     isPayoutOpen,
     setIsPayoutOpen,
     isBundleModalOpen,
@@ -1054,7 +1050,11 @@ export default function App() {
               setPeopleFocusId(personId);
               setIsSubsidyPeopleOpen(true);
             }}
-            onManageCatalogue={() => setIsSubsidyCatalogueOpen(true)}
+            onManageCatalogue={() => {
+              // Katalog und Grenzen stehen seit v3.29.0 in Einstellungen → Zuschüsse
+              setSettingsInitialTab('subsidies');
+              setIsSettingsOpen(true);
+            }}
             onOpenPayout={() => setIsPayoutOpen(true)}
             onOpenBundle={() => setIsBundleModalOpen(true)}
             onImportCsv={handleImportSubsidyCsv}
@@ -1254,14 +1254,6 @@ export default function App() {
         onMerge={smoothly(handleMergeSubsidyPeople)}
       />
 
-      <SubsidyCatalogueModal
-        isOpen={isSubsidyCatalogueOpen}
-        onClose={() => setIsSubsidyCatalogueOpen(false)}
-        settings={catalogueSettings}
-        onSave={handleSaveCatalogueSettings}
-        onResetToDefault={handleResetCatalogueToDefault}
-      />
-
       <SubsidyPayoutModal
         isOpen={isPayoutOpen}
         onClose={() => setIsPayoutOpen(false)}
@@ -1382,6 +1374,10 @@ export default function App() {
         onToggleShowProtocolFormatHint={setShowProtocolFormatHint}
         resolutions={resolutions}
         auditLog={auditLog}
+        subsidyCatalogue={catalogueSettings}
+        onSaveSubsidyCatalogue={handleSaveCatalogueSettings}
+        onResetSubsidyCatalogue={handleResetCatalogueToDefault}
+        subsidies={subsidies}
       />
 
       <TeamsSettingsModal

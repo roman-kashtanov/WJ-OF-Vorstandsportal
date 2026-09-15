@@ -28,8 +28,12 @@ import {
   CheckCircle2,
   Lock,
   ArrowRight,
-  History as HistoryIcon
+  History as HistoryIcon,
+  HandCoins
 } from 'lucide-react';
+import { SubsidyCatalogueSettings } from '../data/subsidyCatalogue';
+import { Subsidy } from '../types';
+import { SubsidyCatalogueEditor } from './SubsidyCatalogueEditor';
 import { FirebaseSync } from '../utils/firebaseSync';
 import { useModalTransition } from '../hooks/useModalTransition';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
@@ -49,6 +53,8 @@ import { isVotingMember, formatDate } from '../utils/formatters';
 import { firebaseConfig } from '../lib/firebase';
 import { RoleCatalogueSettings } from '../data/roleCatalogue';
 import { Collapse } from './Collapse';
+
+export type SettingsTab = 'members' | 'security' | 'notifications' | 'system' | 'teams' | 'subsidies' | 'history';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -72,9 +78,14 @@ interface SettingsModalProps {
   notificationSettings?: NotificationSettings;
   onUpdateNotificationSettings?: (settings: NotificationSettings) => void;
   onSendTestNotification?: () => void;
-  initialTab?: 'members' | 'security' | 'notifications' | 'system' | 'teams' | 'history';
+  initialTab?: SettingsTab;
   resolutions: Resolution[];
   auditLog: AuditLogEntry[];
+  /** Reiter "Zuschüsse": Obergrenzen und Veranstaltungskatalog. */
+  subsidyCatalogue: SubsidyCatalogueSettings;
+  onSaveSubsidyCatalogue: (settings: SubsidyCatalogueSettings) => void;
+  onResetSubsidyCatalogue: () => void;
+  subsidies: Subsidy[];
 }
 
 
@@ -103,10 +114,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   initialTab,
   resolutions,
   auditLog,
+  subsidyCatalogue,
+  onSaveSubsidyCatalogue,
+  onResetSubsidyCatalogue,
+  subsidies,
 }) => {
-  const [activeTab, setActiveTab] = useState<
-    'members' | 'security' | 'notifications' | 'system' | 'teams' | 'history'
-  >(initialTab || 'members');
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab || 'members');
 
   /** Der gesamte Einstellungen-Bereich ist per Löschcode gesperrt (gleicher
    * Code wie beim endgültigen Löschen archivierter Beschlüsse) - hier
@@ -829,6 +842,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           >
             <Video className="w-4 h-4" />
             <span>MS Teams Link</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('subsidies')}
+            className={`pb-2.5 px-3 border-b-2 font-bold cursor-pointer transition-colors flex items-center space-x-1.5 whitespace-nowrap ${
+              activeTab === 'subsidies'
+                ? 'border-[#003594] text-[#003594]'
+                : 'border-transparent text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            <HandCoins className="w-4 h-4" />
+            <span>Zuschüsse</span>
           </button>
 
           <button
@@ -1884,6 +1910,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   />
                 </label>
               </div>
+            </div>
+          )}
+
+          {/* TAB: ZUSCHÜSSE - Obergrenzen und Veranstaltungen */}
+          {activeTab === 'subsidies' && (
+            <div key="subsidies" className="wj-expand">
+              <SubsidyCatalogueEditor
+                settings={subsidyCatalogue}
+                subsidies={subsidies}
+                onSave={onSaveSubsidyCatalogue}
+                onResetToDefault={onResetSubsidyCatalogue}
+              />
             </div>
           )}
 

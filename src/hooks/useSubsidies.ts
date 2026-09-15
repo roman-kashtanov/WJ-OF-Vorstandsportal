@@ -84,7 +84,6 @@ export function useSubsidies({
   const [isSubsidyModalOpen, setIsSubsidyModalOpen] = useState(false);
   const [editingSubsidy, setEditingSubsidy] = useState<Subsidy | null>(null);
   const [isSubsidyPeopleOpen, setIsSubsidyPeopleOpen] = useState(false);
-  const [isSubsidyCatalogueOpen, setIsSubsidyCatalogueOpen] = useState(false);
   const [isPayoutOpen, setIsPayoutOpen] = useState(false);
   const [isBundleModalOpen, setIsBundleModalOpen] = useState(false);
 
@@ -641,8 +640,6 @@ export function useSubsidies({
     setEditingSubsidy,
     isSubsidyPeopleOpen,
     setIsSubsidyPeopleOpen,
-    isSubsidyCatalogueOpen,
-    setIsSubsidyCatalogueOpen,
     isPayoutOpen,
     setIsPayoutOpen,
     isBundleModalOpen,

@@ -33,11 +33,12 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
 
 ## Aktueller Stand (15.09.2026)
 
-- Version **v3.28.0**, lokal committet; noch nicht gepusht: v3.25.0 (Reiter
+- Version **v3.29.0**, lokal committet; noch nicht gepusht: v3.25.0 (Reiter
   per Wischen, Budget als aufklappbare Leiste, kleiner Link-Knopf), v3.26.0
   (Belege wie die anderen Bereiche aufgebaut), v3.27.0 (Belege Offen/Archiv,
   Belege-Modul in der Übersicht), v3.28.0 (öffentlicher Beleg-Link, „Belege
-  anfragen" mit Vorlagen). Alles bis v3.24.0 ist veröffentlicht.
+  anfragen" mit Vorlagen), v3.29.0 (Einstellungen → Zuschüsse). Alles bis
+  v3.24.0 ist veröffentlicht.
 - Nach dem Deploy prüfen: „Beleg-Link kopieren", Beleg darüber einreichen →
   erscheint unter Belege → Offen; „Belege anfragen" an sich selbst schicken.
 - Weiche Übergänge nur im Chrome-Vorschaufenster geprüft – auf dem iPhone
@@ -2119,3 +2120,25 @@ unverändert verknüpft, Pflichtdatei, Anfrage-Prüfungen bis zum Mailversand),
 Platzhalter, Render-Test von Fenster und Knöpfen, Browser (nur ansehen).
 Echter Versand und Kopieren erst nach dem Deploy (lokal fehlen Dienstkonto,
 Link-Schlüssel und Mailzugang).
+
+## v3.29.0 - Einstellungen → Zuschüsse (Grenzen und Veranstaltungen)
+
+Neuer Reiter **„Zuschüsse"** in den Einstellungen (vor „Historie"), Inhalt
+`components/SubsidyCatalogueEditor.tsx`; das frühere Fenster
+`SubsidyCatalogueModal` ist entfernt. Der Knopf „Katalog" bei den Zuschüssen
+öffnet jetzt Einstellungen → Zuschüsse (`settingsInitialTab`, gemeinsamer Typ
+`SettingsTab` aus `SettingsModal.tsx`). Achtung: Die Einstellungen sind im
+Live-Portal per Admin-Code gesperrt – der Katalog damit jetzt auch (vorher frei).
+
+- **Grenzen je Kalenderjahr:** Gesamtbudget, je Person, je Kategorie (mit
+  „kein Limit"). Der Entwurf folgt Änderungen anderer Geräte, solange nichts
+  ungespeichert geändert ist.
+- **Veranstaltungen:** der vorhandene Katalog (`settings/subsidyCatalogue`,
+  sonst Richtlinien-Standard), nach Kategorie gruppiert; „Eigene erfassen",
+  bearbeiten direkt an der Stelle des Eintrags, entfernen.
+- **Aus bisherigen Anträgen:** Veranstaltungsnamen aus Zuschüssen (keine
+  Auslagen), die nicht im Katalog stehen – gleiche Bezeichnung
+  (Groß-/Kleinschreibung, Leerzeichen egal) oder ein Katalogschlüssel außer
+  „Sonstiges" gelten als bekannt. „Übernehmen" belegt einen neuen Eintrag mit
+  Name, Kategorie und zuletzt gewährtem Betrag vor.
+- Speicherlogik unverändert (`handleSaveCatalogueSettings` in `useSubsidies`).

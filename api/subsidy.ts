@@ -160,7 +160,7 @@ function validateProofFile(file?: ProofFileInput): string | null {
 
 /**
  * Der Zuschuss-Katalog (Veranstaltungen + Beträge) ist admin-editierbar
- * (settings/subsidyCatalogue, siehe SubsidyCatalogueModal.tsx) - anders als
+ * (settings/subsidyCatalogue, siehe SubsidyCatalogueEditor.tsx) - anders als
  * frueher kann er nicht mehr statisch importiert werden. Ohne Dokument
  * (frische Installation, oder lokal ohne FIREBASE_SERVICE_ACCOUNT) wird der
  * eingebaute Standard aus der Richtlinie als Fallback verwendet.
