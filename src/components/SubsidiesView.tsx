@@ -56,6 +56,9 @@ import {
   Share2,
 } from 'lucide-react';
 import { Collapse } from './Collapse';
+import { StageTabs } from './StageTabs';
+import { SubsidyBudgetBar } from './SubsidyBudgetBar';
+import { useSwipeTabs } from '../hooks/useSwipeTabs';
 import { smooth, transitionName } from '../utils/smooth';
 
 interface Props {
@@ -78,6 +81,8 @@ interface Props {
   onUpdateStatus: (id: string, status: SubsidyStatus) => void;
   onReassignResolution: (id: string, resolutionId: string | null) => void;
   onManagePeople: () => void;
+  /** Personenuebersicht direkt bei einer Person oeffnen (aus der Budget-Leiste) */
+  onOpenPerson: (personId: string) => void;
   onManageCatalogue: () => void;
   onOpenPayout: () => void;
   onOpenBundle: () => void;
@@ -113,6 +118,7 @@ export const SubsidiesView: React.FC<Props> = ({
   onUpdateStatus,
   onReassignResolution,
   onManagePeople,
+  onOpenPerson,
   onManageCatalogue,
   onOpenPayout,
   onOpenBundle,
@@ -125,6 +131,9 @@ export const SubsidiesView: React.FC<Props> = ({
   const [activeStage, setActiveStage] = useState<string>(
     () => initialStage || defaultSubsidyStage(ofKind(subsidies, kind), year)
   );
+  /** Reiter-Reihenfolge fuers Wischen: die Phasen, dann "Alle". */
+  const stageKeys = useMemo(() => [...SUBSIDY_STAGES.map((s) => s.key), 'all'], []);
+  const stageSwipe = useSwipeTabs({ keys: stageKeys, active: activeStage, onChange: setActiveStage });
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [manualOverrideId, setManualOverrideId] = useState<string | null>(null);
@@ -379,7 +388,7 @@ export const SubsidiesView: React.FC<Props> = ({
   };
 
   return (
-    <div className="space-y-4 max-w-5xl mx-auto">
+    <div ref={stageSwipe.ref} className="space-y-4 max-w-5xl mx-auto">
       {/* Kopf */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
@@ -432,112 +441,42 @@ export const SubsidiesView: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Öffentlicher Antragslink - zum Weitergeben, z. B. als Antwort auf
-          eine E-Mail-Anfrage: "Bitte die Daten über diesen Link erfassen." */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-2xs flex items-center gap-2.5">
-        <div className="w-8 h-8 rounded-lg bg-blue-50 text-[#003594] flex items-center justify-center shrink-0">
-          <LinkIcon className="w-4 h-4" strokeWidth={1.75} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-bold text-slate-700">
-              {kind === 'auslage' ? 'Öffentlicher Auslagen-Link' : 'Öffentlicher Antragslink'}
-            </div>
-          <div className="text-[11px] text-slate-400 truncate font-mono">{antragUrl}</div>
-        </div>
+      {/* Öffentlicher Link zum Weiterleiten (z. B. per WhatsApp) - nur ein
+          kleiner Kopier-Knopf, die Adresse selbst braucht niemand zu sehen. */}
+      <div className="-mt-1">
         <button
           type="button"
           onClick={handleCopyAntragUrl}
-          className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer flex items-center gap-1.5 text-[11px] font-semibold shrink-0"
+          className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold inline-flex items-center gap-1.5 transition-colors duration-200 cursor-pointer ${
+            linkCopied
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+              : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+          }`}
         >
           {linkCopied ? (
-            <>
-              <Check className="w-3.5 h-3.5 text-emerald-600" strokeWidth={2} />
-              <span>Kopiert</span>
-            </>
+            <Check className="w-3.5 h-3.5" strokeWidth={2} />
           ) : (
-            <>
-              <Copy className="w-3.5 h-3.5" strokeWidth={1.75} />
-              <span>Kopieren</span>
-            </>
+            <LinkIcon className="w-3.5 h-3.5" strokeWidth={1.75} />
           )}
+          {linkCopied
+            ? 'Link kopiert'
+            : kind === 'auslage'
+            ? 'Auslagen-Link kopieren'
+            : 'Antragslink kopieren'}
         </button>
       </div>
 
-      {/* Budget - nur bei Zuschuessen: Auslagenerstattungen zaehlen nicht gegen
-          das Jahresbudget der Zuschuss-Richtlinie, sie haengen an einem eigenen
-          Beschluss. */}
+      {/* Budget als schlanke Leiste - nur bei Zuschuessen: Auslagenerstattungen
+          zaehlen nicht gegen das Jahresbudget der Zuschuss-Richtlinie. */}
       {kind === 'zuschuss' && (
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-            Budget {year}
-          </span>
-          <span className="text-xs text-slate-500">
-            <strong className="text-slate-900">{formatCurrency(overview.used)}</strong> von{' '}
-            {formatCurrency(overview.total)}
-          </span>
-        </div>
-
-        <div className="mt-2 h-2 w-full bg-slate-100 rounded-full overflow-hidden flex">
-          <div
-            className="bg-emerald-500 h-full transition-all duration-300"
-            style={{ width: `${paidPercent}%` }}
-            title={`Bezahlt: ${formatCurrency(overview.paid)}`}
-          />
-          <div
-            className="bg-[#003594] h-full transition-all duration-300"
-            style={{ width: `${usedPercent - paidPercent}%` }}
-            title={`Zugesagt: ${formatCurrency(overview.committed)}`}
-          />
-        </div>
-
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500">
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            Bezahlt {formatCurrency(overview.paid)}
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#003594]" />
-            Zugesagt {formatCurrency(overview.committed)}
-          </span>
-          <span className="ml-auto font-semibold text-slate-700">
-            {formatCurrency(overview.remaining)} frei
-          </span>
-        </div>
-
-        {overview.isExhausted && (
-          <div className="mt-2.5 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2">
-            Das Jahresbudget ist ausgeschöpft. Nach § 8 der Richtlinie ist das den
-            Mitgliedern unverzüglich mitzuteilen.
-          </div>
-        )}
-
-        {/* Personenübersicht: Jahresgrenze je Person. Bewusst hier sichtbar -
-            der Knopf oben ist auf dem Handy nur ein Symbol und wurde übersehen. */}
-        <button
-          type="button"
-          onClick={onManagePeople}
-          className="mt-3 pt-3 w-full border-t border-slate-100 flex items-center justify-between gap-2 text-left cursor-pointer group"
-        >
-          <span className="flex items-center gap-2 min-w-0">
-            <Users className="w-4 h-4 text-[#003594] shrink-0" strokeWidth={1.75} />
-            <span className="min-w-0">
-              <span className="block text-xs font-bold text-slate-800">Personenübersicht</span>
-              <span className="block text-[11px] text-slate-500 truncate">
-                Grenze je Person {formatCurrency(limits.perPersonPerYear)} im Jahr
-              </span>
-            </span>
-          </span>
-          <span className="flex items-center gap-1.5 shrink-0">
-            {peopleOverLimit > 0 && (
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700">
-                {peopleOverLimit} über Grenze
-              </span>
-            )}
-            <span className="text-[#003594] font-bold text-xs group-hover:underline">Öffnen →</span>
-          </span>
-        </button>
-      </div>
+        <SubsidyBudgetBar
+          subsidies={subsidies}
+          people={people}
+          year={year}
+          limits={limits}
+          onOpenPerson={onOpenPerson}
+          onOpenPeople={onManagePeople}
+        />
       )}
 
       {/* Buendeln zu Beschluss */}
@@ -628,34 +567,20 @@ export const SubsidiesView: React.FC<Props> = ({
           freigegeben -> Erledigt. Der Übergang zwischen den Phasen passiert
           bis auf "Geprüft setzen" automatisch (siehe useSubsidies.ts) - die
           Reiter dienen nur der Übersicht, nicht der manuellen Steuerung.
-          "Alle" steht auf Wunsch des Vorstands ganz am Ende, hinter "Erledigt". */}
-      <div className="flex gap-1.5 overflow-x-auto pb-0.5">
-        {SUBSIDY_STAGES.map((stage) => (
-          <button
-            key={stage.key}
-            type="button"
-            onClick={() => smooth(() => setActiveStage(stage.key))}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors cursor-pointer shrink-0 ${
-              activeStage === stage.key
-                ? 'bg-[#003594] text-white'
-                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            {stage.label} ({stageCounts[stage.key] || 0})
-          </button>
-        ))}
-        <button
-          type="button"
-          onClick={() => smooth(() => setActiveStage('all'))}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors cursor-pointer shrink-0 ${
-            activeStage === 'all'
-              ? 'bg-[#003594] text-white'
-              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-          }`}
-        >
-          Alle ({scoped.filter((s) => s.year === year).length})
-        </button>
-      </div>
+          "Alle" steht auf Wunsch des Vorstands ganz am Ende, hinter "Erledigt".
+          Wechsel per Tippen oder Wischen (useSwipeTabs). */}
+      <StageTabs
+        tabs={[
+          ...SUBSIDY_STAGES.map((stage) => ({
+            key: stage.key,
+            label: stage.label,
+            count: stageCounts[stage.key] || 0,
+          })),
+          { key: 'all', label: 'Alle', count: scoped.filter((s) => s.year === year).length },
+        ]}
+        active={activeStage}
+        onSelect={stageSwipe.select}
+      />
 
       {/* Filter */}
       <div className="flex justify-end gap-2">
@@ -765,7 +690,7 @@ export const SubsidiesView: React.FC<Props> = ({
         <span className="font-bold text-slate-900 text-sm">{formatCurrency(filteredSum)}</span>
       </div>
 
-      <div className="space-y-1.5">
+      <div key={activeStage} className={`space-y-1.5 ${stageSwipe.slideClass}`}>
         {filtered.length === 0 && (
           <div className="bg-white p-8 text-center rounded-2xl border border-slate-200 text-slate-500 text-xs">
             Keine {texts.plural} für diese Auswahl.

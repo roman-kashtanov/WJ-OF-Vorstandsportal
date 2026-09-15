@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { SubsidyPerson, SubsidyPersonType, Subsidy, SubsidyCategory } from '../types';
 import { formatCurrency } from '../utils/formatters';
@@ -34,6 +34,8 @@ interface Props {
   onSave: (person: SubsidyPerson) => void;
   onDelete: (personId: string) => void;
   onMerge: (keepId: string, mergeId: string) => void;
+  /** Aus der Budget-Leiste geoeffnet: diese Person gleich aufklappen. */
+  focusPersonId?: string | null;
 }
 
 type Draft = SubsidyPerson & { firstName: string; lastName: string };
@@ -80,12 +82,36 @@ export const SubsidyPeopleModal: React.FC<Props> = ({
   onSave,
   onDelete,
   onMerge,
+  focusPersonId,
 }) => {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [ibanError, setIbanError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [mergeChoice, setMergeChoice] = useState('');
   const [search, setSearch] = useState('');
+
+  /**
+   * Aus der Budget-Leiste geoeffnet: die angetippte Person aufklappen und im
+   * Fenster in den sichtbaren Bereich holen. Bewusst per scrollTop am
+   * Fenster-Inhalt statt scrollIntoView - Letzteres wuerde auch die gesperrte
+   * Seite dahinter verschieben.
+   */
+  useEffect(() => {
+    if (!isOpen || !focusPersonId) return;
+    setSearch('');
+    setDraft(null);
+    setExpandedId(focusPersonId);
+    const timer = window.setTimeout(() => {
+      const row = document.querySelector<HTMLElement>(
+        `[data-person-row="${CSS.escape(focusPersonId)}"]`
+      );
+      const scroller = row?.closest<HTMLElement>('.overflow-y-auto');
+      if (!row || !scroller) return;
+      const offset = row.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 12;
+      scroller.scrollTo({ top: scroller.scrollTop + offset, behavior: 'smooth' });
+    }, 320);
+    return () => clearTimeout(timer);
+  }, [isOpen, focusPersonId]);
 
   const duplicateGroups = useMemo(() => {
     const groups = new Map<string, SubsidyPerson[]>();
@@ -422,6 +448,7 @@ export const SubsidyPeopleModal: React.FC<Props> = ({
               return (
                 <div
                   key={p.id}
+                  data-person-row={p.id}
                   className={`rounded-xl border bg-white ${ratio > 1 ? 'border-rose-200' : 'border-slate-200'}`}
                 >
                   <button

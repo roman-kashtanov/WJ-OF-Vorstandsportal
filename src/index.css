@@ -119,6 +119,26 @@
     --wj-enter-y: -0.25rem;
   }
 
+  /* Reiterwechsel per Tippen oder Wischen (hooks/useSwipeTabs.ts): der neue
+     Inhalt gleitet aus der Richtung herein, in die man gewischt hat. Die
+     einzelnen Karten blenden dabei nicht noch zusaetzlich ein. */
+  .wj-slide-from-right {
+    animation: wj-enter 260ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+    --wj-enter-opacity: 0;
+    --wj-enter-x: 2.5rem;
+  }
+
+  .wj-slide-from-left {
+    animation: wj-enter 260ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+    --wj-enter-opacity: 0;
+    --wj-enter-x: -2.5rem;
+  }
+
+  .wj-slide-from-right .wj-view-enter,
+  .wj-slide-from-left .wj-view-enter {
+    animation: none;
+  }
+
   .wj-pulse-soft {
     animation: wj-pulse-soft 2s ease-in-out infinite;
   }

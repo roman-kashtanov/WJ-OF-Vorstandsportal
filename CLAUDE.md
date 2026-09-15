@@ -31,16 +31,12 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
 - **Nie ganze Sammlungen aus dem lokalen Stand zurückschreiben** und
   Firestore-Abos immer an die Firebase-Anmeldung koppeln (siehe v3.17.6, v3.18.0).
 
-## Aktueller Stand (13.09.2026)
+## Aktueller Stand (15.09.2026)
 
-- Version **v3.24.0**, lokal committet; noch nicht gepusht: v3.19.0
-  (Übersicht-Module, Beschlussbereiche), v3.20.0 (Personen: Vor-/Nachname,
-  Zuordnung über den Namen, Personenübersicht), v3.21.0 (Buchhaltungs-Schalter
-  mit Archiv, Archiv nach Jahr/Monat/Art), v3.22.0 (Archiv als Reiter, weiche
-  Übergänge überall), v3.23.0 (große Knöpfe aus der Übersicht entfernt,
-  Nachweis-Link kopieren), v3.24.0 (Beschluss-Entwurf vor dem Anlegen,
-  archivierte Beschlüsse in der Auswahl einblendbar). Bis einschließlich
-  Doku-Commit „Arbeitsregeln" ist alles veröffentlicht.
+- Version **v3.25.0**, lokal committet; noch nicht gepusht: v3.25.0 (Reiter
+  per Wischen, Budget als aufklappbare Leiste, kleiner Link-Knopf). Alles bis
+  v3.24.0 ist veröffentlicht.
+- In Arbeit/als Nächstes: Belege-Bereich an die anderen Bereiche angleichen.
 - Weiche Übergänge nur im Chrome-Vorschaufenster geprüft – auf dem iPhone
   (Safari ab iOS 18) noch vom Nutzer zu testen.
 - Offen beim Nutzer: doppelte Personen (Roman Kashtanov 7×, Diana Sajzew 2×)
@@ -1995,3 +1991,33 @@ gewählt sind (`draftKey`); beim Schließen wird alles zurückgesetzt (das Fenst
 ist in App.tsx dauerhaft eingebunden). Die Beschlusserkennung aus dem
 Protokolltext (`ProtocolScanResultsModal`) hatte schon bearbeitbare Felder und
 ist unverändert.
+
+## v3.25.0 - Reiter per Wischen, Budget-Leiste, kleiner Link-Knopf
+
+**Wischen** (`hooks/useSwipeTabs.ts`): In Beschlüssen (Offen / Buchhaltung
+offen / Archiv) sowie Zuschüssen und Auslagen (Phasen + „Alle") wechselt ein
+Wisch nach links zum nächsten, nach rechts zum vorherigen Reiter. Erkannt wird
+nur eine klar waagerechte, zügige Bewegung (≥ 60 px, ≤ 700 ms, 1,5× waagerechter
+als senkrecht). Ignoriert werden Gesten in Eingabefeldern, Fenstern
+(`.wj-overlay`, `[data-wj-exit]`), waagerecht scrollbaren Leisten (die
+Reiterleiste selbst) und `[data-no-swipe]`. In den Beschlüssen ist Wischen bei
+offener Detailansicht aus. Tippen und Wischen laufen über `select()`: der
+Inhalt mit `key={active}` gleitet mit `wj-slide-from-right/left` (index.css)
+aus der passenden Richtung herein; die Karten blenden dann nicht zusätzlich
+ein. Reiterwechsel laufen dafür **nicht mehr** über `smooth()`.
+
+**Gemeinsame Reiterleiste** (`components/StageTabs.tsx`): schiebt den aktiven
+Reiter per `scrollTo` in die Mitte (bewusst nicht `scrollIntoView`, das würde
+auch die Seite senkrecht verschieben). Für neue Bereiche mit Reitern verwenden.
+
+**Budget-Leiste** (`components/SubsidyBudgetBar.tsx`, nur Zuschüsse): schlanke
+Leiste wie der iPhone-Speicher (Bezahlt grün, Zugesagt blau, bei
+ausgeschöpftem Budget rot). Antippen klappt auf: Legende, § 8-Hinweis, „Nach
+Personen" (Summe je Person, Balken gegen die Grenze je Person) und „Alle
+Personen & Bankverbindungen". Ein Tipp auf eine Person öffnet die
+Personenübersicht direkt aufgeklappt bei ihr (`focusPersonId` in
+`SubsidyPeopleModal`, `peopleFocusId` in App.tsx; gescrollt wird im
+Fenster-Inhalt, nicht die Seite).
+
+**Antragslink:** nur noch ein kleiner Knopf „Antragslink kopieren" bzw.
+„Auslagen-Link kopieren", die Adresse wird nicht mehr angezeigt.

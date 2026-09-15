@@ -71,6 +71,8 @@ import { FilePreviewModal, PreviewableFile } from './FilePreviewModal';
 import { RevisionHistoryModal } from './RevisionHistoryModal';
 import { RequestInvoiceLinkModal } from './RequestInvoiceLinkModal';
 import { ResolutionArchiveTree } from './ResolutionArchiveTree';
+import { StageTabs } from './StageTabs';
+import { useSwipeTabs } from '../hooks/useSwipeTabs';
 import { smooth, supportsSmooth, transitionName } from '../utils/smooth';
 import {
   RESOLUTION_SECTIONS,
@@ -503,6 +505,18 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
    */
   const hasExplicitSelection = !!resolutions.find((r) => r.id === selectedResolutionId);
 
+  /** Bereiche per Tippen oder Wischen wechseln - nicht bei offener Detailansicht. */
+  const sectionKeys = useMemo(() => RESOLUTION_SECTIONS.map((s) => s.key), []);
+  const sectionSwipe = useSwipeTabs({
+    keys: sectionKeys,
+    active: section,
+    onChange: (key) => {
+      setSection(key);
+      onSelectResolution(null);
+    },
+    enabled: !hasExplicitSelection,
+  });
+
   /**
    * Bewusst OHNE Ersatzauswahl: frueher wurde automatisch der erste Beschluss
    * der Liste geoeffnet. Dadurch stand man beim Wechsel in den Reiter sofort
@@ -588,7 +602,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
     .filter((entry): entry is { subsidy: Subsidy; file: NonNullable<Subsidy['costProofFile']> } => !!entry.file);
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div ref={sectionSwipe.ref} className="space-y-4 sm:space-y-6">
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
@@ -608,30 +622,19 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
         </button>
       </div>
 
-      {/* Bereiche: Offen / Abgestimmt · Buchhaltung offen / Archiv. Jeder
-          Beschluss gehoert genau einem Bereich an (utils/resolutionSections). */}
-      <div className="flex gap-1.5 overflow-x-auto pb-0.5">
-        {RESOLUTION_SECTIONS.map((s) => (
-          <button
-            key={s.key}
-            type="button"
-            onClick={() =>
-              smooth(() => {
-                setSection(s.key);
-                onSelectResolution(null);
-              })
-            }
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors duration-200 cursor-pointer shrink-0 flex items-center gap-1.5 ${
-              section === s.key
-                ? 'bg-[#003594] text-white'
-                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            {s.key === 'archiv' && <Archive className="w-3.5 h-3.5" strokeWidth={1.75} />}
-            {s.label} ({countResolutionSection(resolutions, s.key)})
-          </button>
-        ))}
-      </div>
+      {/* Bereiche: Offen / Abgestimmt · Buchhaltung offen / Archiv - per Tippen
+          oder Wischen. Jeder Beschluss gehoert genau einem Bereich an
+          (utils/resolutionSections). */}
+      <StageTabs
+        tabs={RESOLUTION_SECTIONS.map((s) => ({
+          key: s.key,
+          label: s.label,
+          count: countResolutionSection(resolutions, s.key),
+          icon: s.key === 'archiv' ? <Archive className="w-3.5 h-3.5" strokeWidth={1.75} /> : undefined,
+        }))}
+        active={section}
+        onSelect={sectionSwipe.select}
+      />
 
       {/* Filter */}
       <div className="flex justify-end items-center gap-2">
@@ -852,6 +855,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
             )}
           </div>
 
+          <div key={section} className={`space-y-3 ${sectionSwipe.slideClass}`}>
           {filteredResolutions.length === 0 ? (
             <div className="bg-white p-8 text-center rounded-2xl border border-slate-200 text-slate-500 text-xs space-y-2">
               <p>
@@ -1099,6 +1103,7 @@ export const ResolutionsView: React.FC<ResolutionsViewProps> = ({
               );
             })()
           )}
+          </div>
         </div>
 
         {/* Rechte Spalte: Detailansicht des gewaehlten Beschlusses */}

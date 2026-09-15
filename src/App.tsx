@@ -482,6 +482,8 @@ export default function App() {
    * wieder mit der normalen Vorauswahl startet.
    */
   const [overviewTarget, setOverviewTarget] = useState<OverviewTarget | null>(null);
+  /** Personenuebersicht direkt bei einer Person oeffnen (aus der Budget-Leiste). */
+  const [peopleFocusId, setPeopleFocusId] = useState<string | null>(null);
   useEffect(() => {
     setOverviewTarget(null);
   }, [activeTab]);
@@ -1038,7 +1040,14 @@ export default function App() {
             onDelete={smoothly(handleDeleteSubsidy)}
             onUpdateStatus={smoothly(handleUpdateSubsidyStatus)}
             onReassignResolution={smoothly(handleReassignSubsidyResolution)}
-            onManagePeople={() => setIsSubsidyPeopleOpen(true)}
+            onManagePeople={() => {
+              setPeopleFocusId(null);
+              setIsSubsidyPeopleOpen(true);
+            }}
+            onOpenPerson={(personId) => {
+              setPeopleFocusId(personId);
+              setIsSubsidyPeopleOpen(true);
+            }}
             onManageCatalogue={() => setIsSubsidyCatalogueOpen(true)}
             onOpenPayout={() => setIsPayoutOpen(true)}
             onOpenBundle={() => setIsBundleModalOpen(true)}
@@ -1223,7 +1232,11 @@ export default function App() {
 
       <SubsidyPeopleModal
         isOpen={isSubsidyPeopleOpen}
-        onClose={() => setIsSubsidyPeopleOpen(false)}
+        onClose={() => {
+          setIsSubsidyPeopleOpen(false);
+          setPeopleFocusId(null);
+        }}
+        focusPersonId={peopleFocusId}
         people={subsidyPeople}
         subsidies={subsidies}
         year={subsidyYear}
