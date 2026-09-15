@@ -1,4 +1,5 @@
 import { Subsidy, SubsidyCategory, SubsidyKind, SubsidyPerson, SubsidyStatus } from '../types';
+import { subsidyCategoriesOf } from '../data/subsidyCatalogue';
 import { SubsidyLimits } from '../data/subsidyCatalogue';
 
 /** Alte Datensaetze ohne `kind` sind immer Zuschuesse (siehe types.ts). */
@@ -58,7 +59,8 @@ export const KIND_TEXTS: Record<SubsidyKind, KindTexts> = {
 
 /** `null` heißt "kein Limit" (siehe SubsidyLimits) - fürs Rechnen als Infinity behandeln. */
 function resolveCategoryLimit(limits: SubsidyLimits, category: SubsidyCategory): number {
-  const raw = limits.perCategoryPerYear[category];
+  // Eine entfernte Kategorie hat keine eigene Grenze mehr
+  const raw = subsidyCategoriesOf(limits).find((c) => c.key === category)?.limit;
   return raw === null || raw === undefined ? Infinity : raw;
 }
 
@@ -200,7 +202,9 @@ export function personBudget(
   );
 
   const perCategory = {} as PersonBudget['perCategory'];
-  for (const cat of ['academy', 'training', 'konferenz', 'sonstiges'] as SubsidyCategory[]) {
+  // Alle eingerichteten Kategorien, dazu solche, die nur noch in Vorgaengen vorkommen
+  const keys = [...new Set([...subsidyCategoriesOf(limits).map((c) => c.key), ...own.map((s) => s.category)])];
+  for (const cat of keys) {
     const used = own
       .filter((s) => s.category === cat)
       .reduce((sum, s) => sum + (s.amount || 0), 0);
@@ -285,7 +289,8 @@ export function checkSubsidy(
         s.eventKey === draft.eventKey &&
         countsTowardsBudget(s)
     );
-    if (already && (draft.category === 'academy' || draft.category === 'training')) {
+    const categoryDef = subsidyCategoriesOf(limits).find((c) => c.key === draft.category);
+    if (already && categoryDef?.oncePerMembership) {
       warnings.push({
         level: 'hinweis',
         text: `Diese Veranstaltung wurde für diese Person bereits ${already.year} bezuschusst. Laut Richtlinie ist das nur einmal je Mitgliedschaft vorgesehen.`,

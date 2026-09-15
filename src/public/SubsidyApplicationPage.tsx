@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { CATEGORY_LABEL, SubsidyCatalogueEntry } from '../data/subsidyCatalogue';
+import { SubsidyCatalogueEntry, SubsidyCategoryDef, categoryLabel } from '../data/subsidyCatalogue';
 import { isValidIban } from '../utils/sepa';
 import { prepareFileForStorage } from '../utils/fileStorage';
 import { DropzoneFileInput } from '../components/DropzoneFileInput';
@@ -41,6 +41,8 @@ export const SubsidyApplicationPage: React.FC = () => {
   const [codeError, setCodeError] = useState<string | null>(null);
   const [checkingCode, setCheckingCode] = useState(false);
   const [catalogue, setCatalogue] = useState<SubsidyCatalogueEntry[]>([]);
+  /** Kategorien aus Einstellungen → Zuschüsse (nur fuer die Anzeige) */
+  const [categories, setCategories] = useState<SubsidyCategoryDef[]>([]);
   const [catalogueError, setCatalogueError] = useState<string | null>(null);
 
   const [firstName, setFirstName] = useState('');
@@ -91,6 +93,7 @@ export const SubsidyApplicationPage: React.FC = () => {
           const { ok, data: catalogueData } = await getJson('subsidy/catalogue');
           if (ok && Array.isArray(catalogueData?.entries)) {
             setCatalogue(catalogueData.entries);
+            if (Array.isArray(catalogueData.categories)) setCategories(catalogueData.categories);
           } else {
             setCatalogueError('Die Liste der Veranstaltungen konnte nicht geladen werden.');
           }
@@ -303,7 +306,7 @@ export const SubsidyApplicationPage: React.FC = () => {
                   <option value="">Bitte auswählen…</option>
                   {catalogue.map((c) => (
                     <option key={c.key} value={c.key}>
-                      {c.label} ({CATEGORY_LABEL[c.category]})
+                      {c.label} ({categoryLabel({ categories }, c.category)})
                     </option>
                   ))}
                 </select>

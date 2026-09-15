@@ -22,7 +22,7 @@ import {
   ofKind,
   KIND_TEXTS,
 } from '../utils/subsidies';
-import { CATEGORY_LABEL, SubsidyLimits } from '../data/subsidyCatalogue';
+import { categoryLabel, SubsidyLimits } from '../data/subsidyCatalogue';
 import { formatIban, buildSepaCreditTransfer, downloadSepaFile, isValidIban } from '../utils/sepa';
 import { generateGiroCodePaymentsPdf } from '../utils/giroCodePdf';
 import { downloadBlob, openDataUrl } from '../utils/fileHelpers';
@@ -368,7 +368,7 @@ export const SubsidiesView: React.FC<Props> = ({
       PERSON_TYPE_LABEL[personById[s.personId]?.type || 'mitglied'],
       s.eventDate ? formatDate(s.eventDate) : '',
       s.eventName,
-      CATEGORY_LABEL[s.category],
+      categoryLabel(limits, s.category),
       s.amount.toFixed(2),
       s.actualCost?.toFixed(2) || '',
       STATUS_LABEL[s.status],
@@ -757,7 +757,7 @@ export const SubsidiesView: React.FC<Props> = ({
               <Collapse open={!!(isExpanded)}>{isExpanded && (
                 <div className="px-3 pb-3 space-y-2.5 text-[11px]">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-500">
-                    <span>{CATEGORY_LABEL[s.category]}</span>
+                    <span>{categoryLabel(limits, s.category)}</span>
                     {person && (
                       <>
                         <span>·</span>

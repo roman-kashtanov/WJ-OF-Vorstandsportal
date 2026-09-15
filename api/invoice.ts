@@ -153,12 +153,17 @@ export async function handleGetGeneralUploadLink(
 
 export interface SendInvoiceRequestInput {
   idToken?: string;
+  /** Seit v3.30.0: mehrere Empfaenger, jede Person bekommt eine eigene Mail */
+  recipients?: { email?: string; name?: string }[];
+  /** Aeltere Fassung mit genau einem Empfaenger */
   recipientEmail?: string;
   recipientName?: string;
   senderName?: string;
   subject?: string;
   message?: string;
 }
+
+const MAX_REQUEST_RECIPIENTS = 25;
 
 /**
  * "Belege anfragen": E-Mail mit frei formuliertem Text (aus einer Vorlage
@@ -171,14 +176,32 @@ export async function handleSendInvoiceRequest(input: SendInvoiceRequestInput, a
     return { status: 500, body: { error: 'Der Server ist nicht eingerichtet.' } };
   }
 
-  const recipientEmail = (input?.recipientEmail || '').trim();
-  const recipientName = (input?.recipientName || '').trim().slice(0, 120);
+  const rawRecipients = Array.isArray(input?.recipients)
+    ? input.recipients
+    : [{ email: input?.recipientEmail, name: input?.recipientName }];
+  const seen = new Set<string>();
+  const recipients: { email: string; name: string }[] = [];
+  for (const r of rawRecipients) {
+    const email = (r?.email || '').trim();
+    if (!EMAIL_PATTERN.test(email)) {
+      return {
+        status: 400,
+        body: { error: email ? `Ungültige E-Mail-Adresse: ${email}` : 'Bitte eine gültige E-Mail-Adresse angeben.' },
+      };
+    }
+    if (seen.has(email.toLowerCase())) continue;
+    seen.add(email.toLowerCase());
+    recipients.push({ email, name: (r?.name || '').trim().slice(0, 120) });
+  }
   const senderName = (input?.senderName || '').trim().slice(0, 120);
   const rawSubject = (input?.subject || '').trim();
   const rawMessage = (input?.message || '').trim();
 
-  if (!EMAIL_PATTERN.test(recipientEmail)) {
-    return { status: 400, body: { error: 'Bitte eine gültige E-Mail-Adresse angeben.' } };
+  if (recipients.length === 0) {
+    return { status: 400, body: { error: 'Bitte mindestens einen Empfänger angeben.' } };
+  }
+  if (recipients.length > MAX_REQUEST_RECIPIENTS) {
+    return { status: 400, body: { error: `Höchstens ${MAX_REQUEST_RECIPIENTS} Empfänger je Versand.` } };
   }
   if (!rawSubject || rawSubject.length > 200) {
     return { status: 400, body: { error: 'Bitte einen Betreff angeben (höchstens 200 Zeichen).' } };
@@ -191,23 +214,32 @@ export async function handleSendInvoiceRequest(input: SendInvoiceRequestInput, a
     const caller = await verifyBoardCaller(input?.idToken);
     if (caller.ok === false) return caller.result;
 
-    const link = buildGeneralUploadLink(appUrl);
-    if (link.ok === false) return link.result;
+    // Einmal vorab: fehlt der Link-Schluessel, wird gar nichts verschickt
+    const probe = buildGeneralUploadLink(appUrl);
+    if (probe.ok === false) return probe.result;
 
-    const values = { name: recipientName, sender: senderName };
-    const subject = fillInvoiceRequestText(rawSubject, values).replace(/\s+/g, ' ');
-    const message = fillInvoiceRequestText(rawMessage, values);
-    const url = escapeHtml(link.url);
+    let sent = 0;
+    const failed: string[] = [];
+    let firstFailure: Result | null = null;
 
-    const paragraphs = message
-      .split(/\n{2,}/)
-      .map(
-        (p) =>
-          `<p style="font-size: 14px; line-height: 1.6; color: #334155; margin: 0 0 12px;">${escapeHtml(p).replace(/\n/g, '<br>')}</p>`
-      )
-      .join('');
+    for (const recipient of recipients) {
+      const link = buildGeneralUploadLink(appUrl);
+      if (link.ok === false) return link.result;
 
-    const html = layout(`
+      const values = { name: recipient.name, sender: senderName };
+      const subject = fillInvoiceRequestText(rawSubject, values).replace(/\s+/g, ' ');
+      const message = fillInvoiceRequestText(rawMessage, values);
+      const url = escapeHtml(link.url);
+
+      const paragraphs = message
+        .split(/\n{2,}/)
+        .map(
+          (p) =>
+            `<p style="font-size: 14px; line-height: 1.6; color: #334155; margin: 0 0 12px;">${escapeHtml(p).replace(/\n/g, '<br>')}</p>`
+        )
+        .join('');
+
+      const html = layout(`
     ${paragraphs}
     <div style="margin: 20px 0 8px;">${button(url, 'Beleg hochladen')}</div>
     <p style="font-size: 12px; color: #64748b; line-height: 1.5; margin: 12px 0 0;">
@@ -216,13 +248,20 @@ export async function handleSendInvoiceRequest(input: SendInvoiceRequestInput, a
       Der Link ist ${INVOICE_ATTACHMENT_LINK_VALID_DAYS} Tage gültig.
     </p>`);
 
-    const text = `${message}\n\nBeleg hochladen (Foto oder PDF, ohne Anmeldung):\n${link.url}`;
+      const text = `${message}\n\nBeleg hochladen (Foto oder PDF, ohne Anmeldung):\n${link.url}`;
 
-    const result = await sendEmail({ to: [recipientEmail], subject, html, text });
-    if (result.status >= 400) {
-      return { status: result.status, body: result.body };
+      const result = await sendEmail({ to: [recipient.email], subject, html, text });
+      if (result.status >= 400) {
+        failed.push(recipient.email);
+        if (!firstFailure) firstFailure = { status: result.status, body: result.body };
+      } else {
+        sent += 1;
+      }
     }
-    return { status: 200, body: { ok: true } };
+
+    // Ging keine einzige Mail raus, den Fehler des Mailversands melden
+    if (sent === 0 && firstFailure) return firstFailure;
+    return { status: 200, body: { ok: true, sent, failed } };
   } catch (err: any) {
     return { status: 500, body: { error: err?.message || 'Die E-Mail konnte nicht gesendet werden.' } };
   }

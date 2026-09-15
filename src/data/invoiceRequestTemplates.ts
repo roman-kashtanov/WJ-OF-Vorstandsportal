@@ -18,6 +18,17 @@ export interface InvoiceRequestTemplateSettings {
 
 const SIGNATURE = 'Viele Grüße\n{Absender}\nWirtschaftsjunioren Offenbach am Main e. V.';
 
+/** Damit startet „Belege anfragen" - ohne Vorlage. */
+export const DEFAULT_INVOICE_REQUEST_EMAIL = {
+  subject: 'Bitte Belege einreichen',
+  message:
+    'Hallo {Name},\n\n' +
+    'für unsere Buchhaltung benötigen wir noch folgende Belege von dir:\n\n' +
+    '- \n\n' +
+    'Du kannst sie ganz einfach über den Knopf unten hochladen – ein Foto oder PDF genügt, eine Anmeldung ist nicht nötig.\n\n' +
+    `Vielen Dank!\n\n${SIGNATURE}`,
+};
+
 export const DEFAULT_INVOICE_REQUEST_TEMPLATES: InvoiceRequestTemplateSettings = {
   templates: [
     {

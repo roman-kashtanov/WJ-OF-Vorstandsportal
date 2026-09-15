@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
-import { SubsidyPerson, SubsidyPersonType, Subsidy, SubsidyCategory } from '../types';
+import { SubsidyPerson, SubsidyPersonType, Subsidy } from '../types';
 import { formatCurrency } from '../utils/formatters';
 import {
   PERSON_TYPE_LABEL,
@@ -11,7 +11,7 @@ import {
   splitPersonName,
   subsidyKind,
 } from '../utils/subsidies';
-import { SubsidyLimits, CATEGORY_LABEL } from '../data/subsidyCatalogue';
+import { SubsidyLimits, categoryLabel } from '../data/subsidyCatalogue';
 import { isValidIban, formatIban } from '../utils/sepa';
 import { X, UserPlus, Trash2, Pencil, Check, Users2, ChevronDown, Search } from 'lucide-react';
 import { Collapse } from './Collapse';
@@ -40,7 +40,6 @@ interface Props {
 
 type Draft = SubsidyPerson & { firstName: string; lastName: string };
 
-const CATEGORIES: SubsidyCategory[] = ['academy', 'training', 'konferenz', 'sonstiges'];
 
 const emptyDraft = (): Draft => ({
   id: '',
@@ -442,7 +441,7 @@ export const SubsidyPeopleModal: React.FC<Props> = ({
 
               const ratio = limit > 0 ? budget.used / limit : 0;
               const isExpanded = expandedId === p.id;
-              const categories = CATEGORIES.filter((c) => budget.perCategory[c].used > 0);
+              const categories = Object.keys(budget.perCategory).filter((c) => budget.perCategory[c].used > 0);
               const mergeCandidates = rows.filter((r) => r.person.id !== p.id);
 
               return (
@@ -516,7 +515,7 @@ export const SubsidyPeopleModal: React.FC<Props> = ({
                             const over = cat.limit !== Infinity && cat.used > cat.limit;
                             return (
                               <div key={c} className="flex justify-between gap-2 text-slate-600">
-                                <span>{CATEGORY_LABEL[c]}</span>
+                                <span>{categoryLabel(limits, c)}</span>
                                 <span className={over ? 'font-bold text-rose-700' : ''}>
                                   {formatCurrency(cat.used)}
                                   {cat.limit === Infinity ? ' (keine eigene Grenze)' : ` von ${formatCurrency(cat.limit)}`}

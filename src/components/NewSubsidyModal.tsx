@@ -9,7 +9,7 @@ import {
   SubsidyKind,
   Resolution,
 } from '../types';
-import { SubsidyCatalogueEntry, SubsidyLimits, CATEGORY_LABEL } from '../data/subsidyCatalogue';
+import { SubsidyCatalogueEntry, SubsidyLimits } from '../data/subsidyCatalogue';
 import {
   checkSubsidy,
   STATUS_LABEL,

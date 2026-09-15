@@ -17,7 +17,11 @@ import { SubsidyStorage } from '../utils/storage';
 import { generateSubsidyReceiptPdf } from '../utils/subsidyReceipt';
 import { normalizeNameKey, STATUS_LABEL, subsidyKind, KIND_TEXTS } from '../utils/subsidies';
 import { formatCurrency } from '../utils/formatters';
-import { SubsidyCatalogueSettings, DEFAULT_SUBSIDY_CATALOGUE_SETTINGS } from '../data/subsidyCatalogue';
+import {
+  SubsidyCatalogueSettings,
+  DEFAULT_SUBSIDY_CATALOGUE_SETTINGS,
+  normalizeCatalogueSettings,
+} from '../data/subsidyCatalogue';
 import { parseSubsidyBackupCsv } from '../utils/subsidyBackupCsv';
 
 /**
@@ -79,7 +83,7 @@ export function useSubsidies({
   const [subsidyYear, setSubsidyYear] = useState<number>(new Date().getFullYear());
   const [clubAccount, setClubAccount] = useState(() => SubsidyStorage.getClubAccount());
   const [catalogueSettings, setCatalogueSettings] = useState<SubsidyCatalogueSettings>(() =>
-    SubsidyStorage.getCatalogueSettings()
+    normalizeCatalogueSettings(SubsidyStorage.getCatalogueSettings())
   );
   const [isSubsidyModalOpen, setIsSubsidyModalOpen] = useState(false);
   const [editingSubsidy, setEditingSubsidy] = useState<Subsidy | null>(null);
@@ -616,8 +620,9 @@ export function useSubsidies({
    * sieht wie die Admin-Ansicht.
    */
   const handleSaveCatalogueSettings = (settings: SubsidyCatalogueSettings) => {
-    setCatalogueSettings(settings);
-    FirebaseSync.saveSubsidyCatalogueSettings(settings).catch(() => {});
+    const normalized = normalizeCatalogueSettings(settings);
+    setCatalogueSettings(normalized);
+    FirebaseSync.saveSubsidyCatalogueSettings(normalized).catch(() => {});
   };
 
   const handleResetCatalogueToDefault = () => {

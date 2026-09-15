@@ -418,7 +418,12 @@ export interface AppVersionConfig {
 // Grundlage: Zuschuss-Richtlinie 01.2026
 // ---------------------------------------------------------------------------
 
-export type SubsidyCategory = 'academy' | 'training' | 'konferenz' | 'sonstiges';
+/**
+ * Schlüssel einer Zuschuss-Kategorie. Seit v3.30.0 in Einstellungen →
+ * Zuschüsse frei anlegbar (SubsidyLimits.categories); die Richtlinie kennt
+ * 'academy', 'training', 'konferenz', 'sonstiges'.
+ */
+export type SubsidyCategory = string;
 
 /**
  * Zwei Vorgangsarten mit identischem Freigabe-Ablauf (eingereicht -> geprüft

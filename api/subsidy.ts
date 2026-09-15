@@ -3,7 +3,11 @@ import { FirestoreAdmin } from './firestoreAdmin';
 import { verifySubsidyFormCode } from './subsidyAccessCode';
 import { createSubsidyProofToken, verifySubsidyProofToken } from './subsidyProofToken';
 import { sendEmail } from './email';
-import { SUBSIDY_CATALOGUE, SubsidyCatalogueEntry } from '../src/data/subsidyCatalogue';
+import {
+  SUBSIDY_CATALOGUE,
+  SubsidyCatalogueEntry,
+  normalizeSubsidyLimits,
+} from '../src/data/subsidyCatalogue';
 import { isValidIban } from '../src/utils/sepa';
 import { dataUrlBytes, formatBytes, MAX_STORED_BYTES } from '../src/utils/fileStorage';
 import { writeNotification, writeAuditLogEntry } from './notify';
@@ -179,7 +183,14 @@ async function loadCatalogueEntries(): Promise<SubsidyCatalogueEntry[]> {
 
 export async function handleGetSubsidyCatalogue(): Promise<{ status: number; body: any }> {
   const entries = await loadCatalogueEntries();
-  return { status: 200, body: { entries } };
+  // Kategorien nur fuer die Anzeige im Formular (frei anlegbar seit v3.30.0)
+  let limits: any = null;
+  try {
+    limits = (await FirestoreAdmin.getDocument('settings/subsidyCatalogue'))?.limits || null;
+  } catch {
+    // Standardkategorien
+  }
+  return { status: 200, body: { entries, categories: normalizeSubsidyLimits(limits).categories } };
 }
 
 /**

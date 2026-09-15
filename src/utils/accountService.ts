@@ -107,16 +107,20 @@ export async function getInvoiceUploadLink(): Promise<Outcome<{ url: string }>> 
 
 /** "Belege anfragen": E-Mail mit eigenem Text und Beleg-Link (api/invoice.ts handleSendInvoiceRequest). */
 export async function sendInvoiceRequest(input: {
-  recipientEmail: string;
-  recipientName: string;
+  recipients: { name: string; email: string }[];
   senderName: string;
   subject: string;
   message: string;
-}): Promise<Outcome> {
+}): Promise<Outcome<{ sent: number; failed: string[] }>> {
   const idToken = await currentIdToken();
   if (!idToken) return { ok: false, error: NOT_SIGNED_IN };
   const { ok, data } = await postJson('invoice/send-request', { ...input, idToken });
-  return ok ? { ok: true } : { ok: false, error: data?.error || 'Die E-Mail konnte nicht gesendet werden.' };
+  if (!ok) return { ok: false, error: data?.error || 'Die E-Mail konnte nicht gesendet werden.' };
+  return {
+    ok: true,
+    sent: typeof data?.sent === 'number' ? data.sent : input.recipients.length,
+    failed: Array.isArray(data?.failed) ? data.failed : [],
+  };
 }
 
 /** "Passwort vergessen" - antwortet bewusst gleich, egal ob die Adresse freigegeben ist. */

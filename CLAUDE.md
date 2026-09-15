@@ -33,14 +33,16 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
 
 ## Aktueller Stand (15.09.2026)
 
-- Version **v3.29.0**, lokal committet; noch nicht gepusht: v3.25.0 (Reiter
+- Version **v3.30.0**, lokal committet; noch nicht gepusht: v3.25.0 (Reiter
   per Wischen, Budget als aufklappbare Leiste, kleiner Link-Knopf), v3.26.0
   (Belege wie die anderen Bereiche aufgebaut), v3.27.0 (Belege Offen/Archiv,
   Belege-Modul in der Übersicht), v3.28.0 (öffentlicher Beleg-Link, „Belege
-  anfragen" mit Vorlagen), v3.29.0 (Einstellungen → Zuschüsse). Alles bis
-  v3.24.0 ist veröffentlicht.
+  anfragen" mit Vorlagen), v3.29.0 (Einstellungen → Zuschüsse), v3.30.0
+  (Kategorien frei anlegbar, Anfrage ohne Vorlagenzwang, Reiter „Vorlagen").
+  Alles bis v3.24.0 ist veröffentlicht.
 - Nach dem Deploy prüfen: „Beleg-Link kopieren", Beleg darüber einreichen →
-  erscheint unter Belege → Offen; „Belege anfragen" an sich selbst schicken.
+  erscheint unter Belege → Offen; „Belege anfragen" an sich selbst und eine
+  zweite Adresse schicken (zwei getrennte Mails mit eigenem Namen).
 - Weiche Übergänge nur im Chrome-Vorschaufenster geprüft – auf dem iPhone
   (Safari ab iOS 18) noch vom Nutzer zu testen.
 - Offen beim Nutzer: doppelte Personen (Roman Kashtanov 7×, Diana Sajzew 2×)
@@ -2142,3 +2144,51 @@ Live-Portal per Admin-Code gesperrt – der Katalog damit jetzt auch (vorher fre
   „Sonstiges" gelten als bekannt. „Übernehmen" belegt einen neuen Eintrag mit
   Name, Kategorie und zuletzt gewährtem Betrag vor.
 - Speicherlogik unverändert (`handleSaveCatalogueSettings` in `useSubsidies`).
+
+## v3.30.0 - Zuschuss-Kategorien frei anlegbar, „Belege anfragen" überarbeitet, Reiter „Vorlagen"
+
+**Kategorien flexibel** (Nutzer: Grenzen je Kategorie ohne anpassbare
+Kategorien „geht so nicht"). `SubsidyCategory` ist jetzt `string`.
+- Kategorien liegen als `limits.categories` (`SubsidyCategoryDef`: `key`,
+  `label`, `limit` oder `null`, `oncePerMembership`) im Dokument
+  `settings/subsidyCatalogue` – bewusst bei den Grenzen, weil `limits` ohnehin
+  überall hingereicht wird. `perCategoryPerYear` wird daraus abgeleitet und
+  mitgespeichert, damit ältere App-Stände weiterrechnen.
+- **Altbestand ohne `categories`** ergibt über `subsidyCategoriesOf()` die vier
+  Richtlinien-Kategorien mit den gespeicherten Grenzen. Alles, was aus
+  Speicher, Firestore oder dem Editor kommt, läuft durch
+  `normalizeCatalogueSettings()` (useSubsidies, Abo in App.tsx).
+- Anzeige nur noch über `categoryLabel(limits, key)` (kennt auch entfernte
+  Schlüssel); `CATEGORY_LABEL` gibt es nicht mehr. `personBudget` rechnet über
+  alle eingerichteten Kategorien plus solche, die nur noch in Vorgängen
+  vorkommen (ohne Grenze). Die Regel „Veranstaltung nur einmal je Person" hing
+  fest an Academy/Training und ist jetzt der Haken `oncePerMembership`.
+- Editor: Name ändern (Schlüssel bleibt, Zuschüsse behalten ihre Kategorie),
+  Grenze/„kein Limit", Regel, sortieren, hinzufügen, entfernen. Entfernen ist
+  gesperrt, solange Katalog-Veranstaltungen die Kategorie nutzen; bei
+  Zuschüssen mit dieser Kategorie Rückfrage. Neue Schlüssel entstehen beim
+  Speichern aus dem Namen. `/antrag` bekommt die Namen über
+  `subsidy/catalogue` (`categories`).
+
+**„Belege anfragen"** (`RequestInvoicesModal.tsx`, Nutzervorgabe):
+- Startet direkt mit dem Standardtext (`DEFAULT_INVOICE_REQUEST_EMAIL`), keine
+  Vorlagenwahl vorweg. „Vorlage wählen" öffnet im selben Fenster die Liste –
+  übernehmen, bearbeiten, löschen, **neue Vorlage anlegen**. Ersetzt eine
+  Vorlage geänderten Text, kommt eine Rückfrage.
+- Unten „E-Mail als Vorlage speichern" – auch für selbst geschriebene Texte;
+  bei geänderter Vorlage zusätzlich „Vorlage … aktualisieren".
+- Empfänger: Vorstandsmitglieder (mit Adresse) antippen und beliebige weitere
+  Adressen (Name optional) hinzufügen. Server (`handleSendInvoiceRequest`,
+  Feld `recipients`, höchstens 25) schickt **jeder Person eine eigene Mail**
+  mit eigenem `{Name}` und eigenem Link; Antwort `sent`/`failed`. Ging keine
+  Mail raus, kommt der Fehler des Mailversands zurück. Die ältere Form mit
+  einem Empfänger wird weiter angenommen.
+
+**Einstellungen → Vorlagen:** dieselbe Verwaltung
+(`InvoiceRequestTemplateManager.tsx`, gemeinsam mit dem Anfragefenster), dazu
+„Standardvorlagen wiederherstellen", wenn welche gelöscht wurden.
+
+**Getestet:** Kategorie-Logik per Skript (Altbestand, eigene/umbenannte/
+entfernte Kategorien, Grenzwarnung, Regel an/aus), Server mit nachgestellter
+Anmeldung (keine/ungültige/zu viele Empfänger, Dubletten, ältere Form, bis zum
+Mailversand), Render-Tests, Browser (nur ansehen).

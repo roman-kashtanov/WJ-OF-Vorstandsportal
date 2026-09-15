@@ -69,12 +69,27 @@ export const SUBSIDY_CATALOGUE: SubsidyCatalogueEntry[] = [
   },
 ];
 
-export const CATEGORY_LABEL: Record<SubsidyCategory, string> = {
-  academy: 'Academy',
-  training: 'Training',
-  konferenz: 'Konferenz',
-  sonstiges: 'Sonstiges',
-};
+/**
+ * Kategorie mit Jahresgrenze - seit v3.30.0 in Einstellungen → Zuschüsse frei
+ * anlegbar, umbenennbar und entfernbar. Der Schlüssel bleibt beim Umbenennen
+ * gleich, damit bestehende Zuschüsse ihre Kategorie behalten.
+ */
+export interface SubsidyCategoryDef {
+  key: string;
+  label: string;
+  /** Jahresgrenze je Person in dieser Kategorie; `null` = kein Limit */
+  limit: number | null;
+  /** § 5 Abs. 5, § 6 Abs. 3: dieselbe Veranstaltung nur einmal je Person bezuschussen */
+  oncePerMembership?: boolean;
+}
+
+/** Die vier Kategorien der Richtlinie 01.2026 - Standard und Rückfall für Altbestand. */
+export const DEFAULT_SUBSIDY_CATEGORIES: SubsidyCategoryDef[] = [
+  { key: 'academy', label: 'Academy', limit: 200, oncePerMembership: true },
+  { key: 'training', label: 'Training', limit: 75, oncePerMembership: true },
+  { key: 'konferenz', label: 'Konferenz', limit: 200 },
+  { key: 'sonstiges', label: 'Sonstiges', limit: null },
+];
 
 /**
  * Obergrenzen der Richtlinie (§ 5 Abs. 4, § 6 Abs. 2, § 7 Abs. 2, § 8).
@@ -107,6 +122,14 @@ export function catalogueEntry(key?: string): SubsidyCatalogueEntry | undefined 
  * `null` daraus) - hier wird das absichtlich und explizit so gehandhabt.
  */
 export interface SubsidyLimits {
+  /**
+   * Maßgeblich seit v3.30.0: Kategorien samt Grenze. Liegt bewusst hier bei
+   * den Grenzen, weil `limits` ohnehin überall hingereicht wird, wo
+   * Kategorien gebraucht werden. Fehlt bei älteren Dokumenten - dann gelten
+   * die vier Standardkategorien (subsidyCategoriesOf).
+   */
+  categories?: SubsidyCategoryDef[];
+  /** Aus `categories` abgeleitet und mitgespeichert, damit ältere App-Stände weiterrechnen. */
   perCategoryPerYear: Record<SubsidyCategory, number | null>;
   perPersonPerYear: number;
   totalPerYear: number;
@@ -126,9 +149,59 @@ export const DEFAULT_SUBSIDY_LIMITS: SubsidyLimits = {
   },
   perPersonPerYear: SUBSIDY_LIMITS.perPersonPerYear,
   totalPerYear: SUBSIDY_LIMITS.totalPerYear,
+  categories: DEFAULT_SUBSIDY_CATEGORIES,
 };
 
 export const DEFAULT_SUBSIDY_CATALOGUE_SETTINGS: SubsidyCatalogueSettings = {
   entries: SUBSIDY_CATALOGUE,
   limits: DEFAULT_SUBSIDY_LIMITS,
 };
+
+/**
+ * Kategorien der Grenzen. Ältere Dokumente ohne `categories`: die vier
+ * Richtlinien-Kategorien mit den dort gespeicherten Grenzen.
+ */
+export function subsidyCategoriesOf(limits?: Partial<SubsidyLimits> | null): SubsidyCategoryDef[] {
+  if (limits && Array.isArray(limits.categories) && limits.categories.length > 0) {
+    return limits.categories.map((c) => ({ ...c, limit: c.limit ?? null }));
+  }
+  const stored = (limits?.perCategoryPerYear || {}) as Record<string, number | null | undefined>;
+  return DEFAULT_SUBSIDY_CATEGORIES.map((c) => ({
+    ...c,
+    limit: c.key in stored ? stored[c.key] ?? null : c.limit,
+  }));
+}
+
+/** Anzeigename einer Kategorie - auch für Schlüssel, die es nicht mehr gibt. */
+export function categoryLabel(limits: Partial<SubsidyLimits> | null | undefined, key: string): string {
+  const def =
+    subsidyCategoriesOf(limits).find((c) => c.key === key) ||
+    DEFAULT_SUBSIDY_CATEGORIES.find((c) => c.key === key);
+  if (def) return def.label;
+  return key ? key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ') : '–';
+}
+
+/** Grenzen vollständig machen: Kategorienliste vorhanden, perCategoryPerYear passend dazu. */
+export function normalizeSubsidyLimits(limits?: Partial<SubsidyLimits> | null): SubsidyLimits {
+  const categories = subsidyCategoriesOf(limits);
+  return {
+    totalPerYear:
+      typeof limits?.totalPerYear === 'number' ? limits.totalPerYear : DEFAULT_SUBSIDY_LIMITS.totalPerYear,
+    perPersonPerYear:
+      typeof limits?.perPersonPerYear === 'number'
+        ? limits.perPersonPerYear
+        : DEFAULT_SUBSIDY_LIMITS.perPersonPerYear,
+    categories,
+    perCategoryPerYear: Object.fromEntries(categories.map((c) => [c.key, c.limit])),
+  };
+}
+
+/** Für alles, was aus Speicher, Firestore oder dem Editor kommt. */
+export function normalizeCatalogueSettings(
+  settings?: Partial<SubsidyCatalogueSettings> | null
+): SubsidyCatalogueSettings {
+  return {
+    entries: Array.isArray(settings?.entries) ? settings!.entries : SUBSIDY_CATALOGUE,
+    limits: normalizeSubsidyLimits(settings?.limits),
+  };
+}

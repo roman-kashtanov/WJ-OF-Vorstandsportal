@@ -29,8 +29,11 @@ import {
   Lock,
   ArrowRight,
   History as HistoryIcon,
-  HandCoins
+  HandCoins,
+  FileText
 } from 'lucide-react';
+import { InvoiceRequestTemplate } from '../data/invoiceRequestTemplates';
+import { InvoiceRequestTemplateManager } from './InvoiceRequestTemplateManager';
 import { SubsidyCatalogueSettings } from '../data/subsidyCatalogue';
 import { Subsidy } from '../types';
 import { SubsidyCatalogueEditor } from './SubsidyCatalogueEditor';
@@ -54,7 +57,15 @@ import { firebaseConfig } from '../lib/firebase';
 import { RoleCatalogueSettings } from '../data/roleCatalogue';
 import { Collapse } from './Collapse';
 
-export type SettingsTab = 'members' | 'security' | 'notifications' | 'system' | 'teams' | 'subsidies' | 'history';
+export type SettingsTab =
+  | 'members'
+  | 'security'
+  | 'notifications'
+  | 'system'
+  | 'teams'
+  | 'subsidies'
+  | 'templates'
+  | 'history';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -86,6 +97,9 @@ interface SettingsModalProps {
   onSaveSubsidyCatalogue: (settings: SubsidyCatalogueSettings) => void;
   onResetSubsidyCatalogue: () => void;
   subsidies: Subsidy[];
+  /** Reiter "Vorlagen": E-Mail-Vorlagen fuer "Belege anfragen". */
+  invoiceRequestTemplates: InvoiceRequestTemplate[];
+  onSaveInvoiceRequestTemplates: (templates: InvoiceRequestTemplate[]) => void;
 }
 
 
@@ -118,6 +132,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onSaveSubsidyCatalogue,
   onResetSubsidyCatalogue,
   subsidies,
+  invoiceRequestTemplates,
+  onSaveInvoiceRequestTemplates,
 }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab || 'members');
 
@@ -855,6 +871,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           >
             <HandCoins className="w-4 h-4" />
             <span>Zuschüsse</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('templates')}
+            className={`pb-2.5 px-3 border-b-2 font-bold cursor-pointer transition-colors flex items-center space-x-1.5 whitespace-nowrap ${
+              activeTab === 'templates'
+                ? 'border-[#003594] text-[#003594]'
+                : 'border-transparent text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            <span>Vorlagen</span>
           </button>
 
           <button
@@ -1921,6 +1950,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 subsidies={subsidies}
                 onSave={onSaveSubsidyCatalogue}
                 onResetToDefault={onResetSubsidyCatalogue}
+              />
+            </div>
+          )}
+
+          {/* TAB: VORLAGEN - E-Mail-Vorlagen fuer "Belege anfragen" */}
+          {activeTab === 'templates' && (
+            <div key="templates" className="space-y-3 wj-expand">
+              <div>
+                <h4 className="font-bold text-slate-900 text-sm">Vorlagen für „Belege anfragen"</h4>
+                <p className="text-slate-500 mt-0.5 leading-relaxed">
+                  Im Bereich Belege unter „Belege anfragen" → „Vorlage wählen" abrufbar. Die Vorlagen gelten für
+                  den ganzen Vorstand.
+                </p>
+              </div>
+              <InvoiceRequestTemplateManager
+                templates={invoiceRequestTemplates}
+                onSave={onSaveInvoiceRequestTemplates}
               />
             </div>
           )}

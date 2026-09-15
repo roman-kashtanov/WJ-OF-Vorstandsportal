@@ -42,6 +42,7 @@ import { SubsidiesView } from './components/SubsidiesView';
 import { NewSubsidyModal } from './components/NewSubsidyModal';
 import { SubsidyPeopleModal } from './components/SubsidyPeopleModal';
 import type { SettingsTab } from './components/SettingsModal';
+import { normalizeCatalogueSettings } from './data/subsidyCatalogue';
 import { SubsidyPayoutModal } from './components/SubsidyPayoutModal';
 import { BundleSubsidiesModal } from './components/BundleSubsidiesModal';
 import { subsidyKind } from './utils/subsidies';
@@ -401,7 +402,7 @@ export default function App() {
     });
 
     const unsubCatalogue = FirebaseSync.subscribeSubsidyCatalogueSettings((remoteCatalogue) => {
-      if (remoteCatalogue) setCatalogueSettings(remoteCatalogue);
+      if (remoteCatalogue) setCatalogueSettings(normalizeCatalogueSettings(remoteCatalogue));
     });
 
     const unsubRoleCatalogue = FirebaseSync.subscribeRoleCatalogue((remoteRoles) => {
@@ -1378,6 +1379,8 @@ export default function App() {
         onSaveSubsidyCatalogue={handleSaveCatalogueSettings}
         onResetSubsidyCatalogue={handleResetCatalogueToDefault}
         subsidies={subsidies}
+        invoiceRequestTemplates={invoiceRequestTemplates.templates}
+        onSaveInvoiceRequestTemplates={handleSaveInvoiceRequestTemplates}
       />
 
       <TeamsSettingsModal
@@ -1473,7 +1476,6 @@ export default function App() {
         onClose={() => setIsInvoiceRequestModalOpen(false)}
         currentMember={currentMember}
         members={members}
-        people={subsidyPeople}
         templates={invoiceRequestTemplates.templates}
         onSaveTemplates={handleSaveInvoiceRequestTemplates}
       />
