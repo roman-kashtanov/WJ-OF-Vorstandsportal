@@ -31,8 +31,13 @@ import {
   MinusCircle,
   RotateCcw,
   Eye,
-  Archive
+  Archive,
+  Link as LinkIcon,
+  Check,
+  Mail
 } from 'lucide-react';
+import { getInvoiceUploadLink } from '../utils/accountService';
+import { copyPendingText } from '../utils/clipboard';
 import { Collapse } from './Collapse';
 import { StageTabs } from './StageTabs';
 import { ArchiveTree, ArchiveLevel } from './ArchiveTree';
@@ -145,8 +150,44 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
   onCreateFolder,
   onDeleteFolder,
   onUpdateInvoiceFolder,
+  onOpenInvoiceRequestModal,
   initialSection,
 }) => {
+  /**
+   * "Beleg-Link kopieren": allgemeiner Link ohne Beschluss, den der Server
+   * erzeugt (180 Tage gueltig). `manual` = Kopieren klappte nicht, der Link
+   * wird zum Markieren angezeigt.
+   */
+  const [uploadLink, setUploadLink] = useState<{ status: 'idle' | 'busy' | 'done' | 'manual'; url?: string }>({
+    status: 'idle',
+  });
+
+  const handleCopyUploadLink = async () => {
+    if (uploadLink.status === 'busy') return;
+    setUploadLink({ status: 'busy' });
+    const link = getInvoiceUploadLink().then((r) => {
+      if (r.ok === false) throw new Error(r.error);
+      return r.url;
+    });
+    const copied = await copyPendingText(link);
+
+    let url: string;
+    try {
+      url = await link;
+    } catch (err: any) {
+      setUploadLink({ status: 'idle' });
+      alert(err?.message || 'Der Beleg-Link konnte nicht erzeugt werden.');
+      return;
+    }
+
+    if (!copied) {
+      setUploadLink({ status: 'manual', url });
+      return;
+    }
+    setUploadLink({ status: 'done' });
+    window.setTimeout(() => setUploadLink((prev) => (prev.status === 'done' ? { status: 'idle' } : prev)), 2500);
+  };
+
   const openCount = invoices.filter((i) => invoiceSectionOf(i) === 'offen').length;
 
   const [section, setSection] = useState<InvoiceSectionKey>(() => {
@@ -453,6 +494,63 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
             <span>Hochladen</span>
           </button>
         </div>
+      </div>
+
+      {/* Öffentlicher Beleg-Link und Anfrage per E-Mail - kleine Knöpfe wie
+          der Antragslink bei den Zuschüssen. */}
+      <div className="-mt-1 space-y-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={handleCopyUploadLink}
+            disabled={uploadLink.status === 'busy'}
+            className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold inline-flex items-center gap-1.5 transition-colors duration-200 cursor-pointer disabled:opacity-60 ${
+              uploadLink.status === 'done'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            {uploadLink.status === 'done' ? (
+              <Check className="w-3.5 h-3.5" strokeWidth={2} />
+            ) : (
+              <LinkIcon className="w-3.5 h-3.5" strokeWidth={1.75} />
+            )}
+            {uploadLink.status === 'done'
+              ? 'Link kopiert'
+              : uploadLink.status === 'busy'
+              ? 'Link wird erstellt …'
+              : 'Beleg-Link kopieren'}
+          </button>
+          {onOpenInvoiceRequestModal && (
+            <button
+              type="button"
+              onClick={onOpenInvoiceRequestModal}
+              className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-[11px] font-semibold inline-flex items-center gap-1.5 transition-colors duration-200 cursor-pointer"
+            >
+              <Mail className="w-3.5 h-3.5" strokeWidth={1.75} />
+              Belege anfragen
+            </button>
+          )}
+        </div>
+
+        <Collapse open={uploadLink.status === 'manual'}>
+          <div className="p-2.5 rounded-xl border border-amber-200 bg-amber-50 space-y-1.5 text-[11px] text-amber-900">
+            <div>Kopieren hat nicht geklappt – bitte den Link markieren und kopieren:</div>
+            <input
+              readOnly
+              value={uploadLink.url || ''}
+              onFocus={(e) => e.currentTarget.select()}
+              className="w-full px-2 py-1.5 bg-white border border-amber-200 rounded-lg text-base sm:text-[11px] font-mono text-slate-700"
+            />
+            <button
+              type="button"
+              onClick={() => setUploadLink({ status: 'idle' })}
+              className="font-bold hover:underline cursor-pointer"
+            >
+              Schließen
+            </button>
+          </div>
+        </Collapse>
       </div>
 
       {/* Reiter - per Tippen oder Wischen */}

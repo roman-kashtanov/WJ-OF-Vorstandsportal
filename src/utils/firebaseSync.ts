@@ -27,6 +27,7 @@ import {
 } from '../types';
 import { SubsidyCatalogueSettings } from '../data/subsidyCatalogue';
 import { RoleCatalogueSettings } from '../data/roleCatalogue';
+import { InvoiceRequestTemplateSettings } from '../data/invoiceRequestTemplates';
 
 export interface FirebaseSyncStatus {
   isConnected: boolean;
@@ -571,6 +572,38 @@ export const FirebaseSync = {
       updateStatus({ isSyncing: false, lastSyncedAt: new Date().toISOString(), isConnected: true, error: null });
     } catch (err: any) {
       console.warn('Failed to save role catalogue to Firebase:', err.message);
+      updateStatus({ isSyncing: false, error: err.message });
+    }
+  },
+
+  /** Vorlagen fuer "Belege anfragen" - gleiches Muster wie der Rollen-Katalog. */
+  subscribeInvoiceRequestTemplates(callback: (settings: InvoiceRequestTemplateSettings) => void) {
+    try {
+      const docRef = doc(db, 'settings', 'invoiceRequestTemplates');
+      return onSnapshot(
+        docRef,
+        (snap) => {
+          if (snap.exists()) {
+            callback(snap.data() as InvoiceRequestTemplateSettings);
+          }
+        },
+        (err) => {
+          console.warn('Firebase InvoiceRequestTemplates subscription warning:', err.message);
+        }
+      );
+    } catch (e) {
+      return () => {};
+    }
+  },
+
+  async saveInvoiceRequestTemplates(settings: InvoiceRequestTemplateSettings) {
+    try {
+      updateStatus({ isSyncing: true });
+      const payload = cleanData(settings);
+      await setDoc(doc(db, 'settings', 'invoiceRequestTemplates'), payload, { merge: true });
+      updateStatus({ isSyncing: false, lastSyncedAt: new Date().toISOString(), isConnected: true, error: null });
+    } catch (err: any) {
+      console.warn('Failed to save invoice request templates to Firebase:', err.message);
       updateStatus({ isSyncing: false, error: err.message });
     }
   },

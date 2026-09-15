@@ -17,6 +17,8 @@ import {
   handleRequestInvoiceAttachmentLink,
   handleGetInvoiceAttachmentStatus,
   handleSubmitInvoiceAttachment,
+  handleGetGeneralUploadLink,
+  handleSendInvoiceRequest,
 } from './invoice';
 
 export interface ApiResponse {
@@ -158,6 +160,18 @@ export async function handleApiRequest(
 
   if (method === 'POST' && route === 'invoice/request-link') {
     const result = await handleRequestInvoiceAttachmentLink(payload || {}, origin || '/');
+    return { status: result.status, body: result.body };
+  }
+
+  // Allgemeiner Beleg-Link ohne Beschluss (nur Vorstand)
+  if (method === 'POST' && route === 'invoice/upload-link') {
+    const result = await handleGetGeneralUploadLink(payload || {}, origin || '/');
+    return { status: result.status, body: result.body };
+  }
+
+  // "Belege anfragen": E-Mail mit eigenem Text und Beleg-Link (nur Vorstand)
+  if (method === 'POST' && route === 'invoice/send-request') {
+    const result = await handleSendInvoiceRequest(payload || {}, origin || '/');
     return { status: result.status, body: result.body };
   }
 

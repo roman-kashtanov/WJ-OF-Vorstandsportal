@@ -17,6 +17,10 @@ import {
 import { AppStorage } from '../utils/storage';
 import { FirebaseSync } from '../utils/firebaseSync';
 import { formatDate } from '../utils/formatters';
+import {
+  InvoiceRequestTemplate,
+  InvoiceRequestTemplateSettings,
+} from '../data/invoiceRequestTemplates';
 
 /**
  * Kapselt den Belege-Bereich (Rechnungen, Ordner, Anforderungen), 1:1 aus
@@ -60,6 +64,10 @@ export function useInvoices({
 }: UseInvoicesParams) {
   const [invoices, setInvoices] = useState<Invoice[]>(() => AppStorage.getInvoices());
   const [folders, setFolders] = useState<InvoiceFolder[]>(() => AppStorage.getInvoiceFolders());
+  /** Vorlagen fuer "Belege anfragen" - geteilt ueber settings/invoiceRequestTemplates. */
+  const [invoiceRequestTemplates, setInvoiceRequestTemplates] = useState<InvoiceRequestTemplateSettings>(() =>
+    AppStorage.getInvoiceRequestTemplates()
+  );
   const [invoiceRequests, setInvoiceRequests] = useState<InvoiceRequest[]>(() =>
     AppStorage.getInvoiceRequests()
   );
@@ -74,6 +82,10 @@ export function useInvoices({
   useEffect(() => {
     AppStorage.saveInvoiceFolders(folders);
   }, [folders]);
+
+  useEffect(() => {
+    AppStorage.saveInvoiceRequestTemplates(invoiceRequestTemplates);
+  }, [invoiceRequestTemplates]);
 
   useEffect(() => {
     AppStorage.saveInvoiceRequests(invoiceRequests);
@@ -167,6 +179,13 @@ export function useInvoices({
         return updatedInv;
       })
     );
+  };
+
+  /** Vorlagen fuer "Belege anfragen" speichern - geteilt fuer den ganzen Vorstand. */
+  const handleSaveInvoiceRequestTemplates = (templates: InvoiceRequestTemplate[]) => {
+    const settings: InvoiceRequestTemplateSettings = { templates };
+    setInvoiceRequestTemplates(settings);
+    FirebaseSync.saveInvoiceRequestTemplates(settings).catch(() => {});
   };
 
   const handleCreateFolder = (name: string, color?: string, icon?: string) => {
@@ -304,5 +323,8 @@ export function useInvoices({
     handleUpdateInvoiceRecurrence,
     handleUpdateInvoiceStatus,
     handleCreateInvoiceRequest,
+    invoiceRequestTemplates,
+    setInvoiceRequestTemplates,
+    handleSaveInvoiceRequestTemplates,
   };
 }

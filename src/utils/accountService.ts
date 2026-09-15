@@ -93,6 +93,32 @@ export async function getSubsidyProofLink(
   return { ok: false, error: data?.error || 'Der Nachweis-Link konnte nicht erzeugt werden.' };
 }
 
+/**
+ * Allgemeiner Beleg-Link ohne Beschluss (api/invoice.ts
+ * handleGetGeneralUploadLink, nur fuer den Vorstand) - zum Weiterleiten.
+ */
+export async function getInvoiceUploadLink(): Promise<Outcome<{ url: string }>> {
+  const idToken = await currentIdToken();
+  if (!idToken) return { ok: false, error: NOT_SIGNED_IN };
+  const { ok, data } = await postJson('invoice/upload-link', { idToken });
+  if (ok && data?.url) return { ok: true, url: data.url };
+  return { ok: false, error: data?.error || 'Der Beleg-Link konnte nicht erzeugt werden.' };
+}
+
+/** "Belege anfragen": E-Mail mit eigenem Text und Beleg-Link (api/invoice.ts handleSendInvoiceRequest). */
+export async function sendInvoiceRequest(input: {
+  recipientEmail: string;
+  recipientName: string;
+  senderName: string;
+  subject: string;
+  message: string;
+}): Promise<Outcome> {
+  const idToken = await currentIdToken();
+  if (!idToken) return { ok: false, error: NOT_SIGNED_IN };
+  const { ok, data } = await postJson('invoice/send-request', { ...input, idToken });
+  return ok ? { ok: true } : { ok: false, error: data?.error || 'Die E-Mail konnte nicht gesendet werden.' };
+}
+
 /** "Passwort vergessen" - antwortet bewusst gleich, egal ob die Adresse freigegeben ist. */
 export async function requestPasswordReset(email: string): Promise<Outcome> {
   const { ok, data } = await postJson('auth/password-reset', { email });

@@ -16,7 +16,8 @@ export function escapeHtml(value: string): string {
 
 const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 
-function layout(inner: string): string {
+/** Gemeinsamer Rahmen der Portal-Mails (auch fuer "Belege anfragen", api/invoice.ts). */
+export function layout(inner: string): string {
   return `
 <div style="font-family: ${FONT}; color: #0f172a; max-width: 560px; margin: 0 auto; background: #f1f5f9; padding: 16px;">
   <div style="background: #003594; color: #ffffff; padding: 20px 24px; border-radius: 16px 16px 0 0;">
@@ -32,7 +33,7 @@ function layout(inner: string): string {
 </div>`;
 }
 
-function button(href: string, label: string): string {
+export function button(href: string, label: string): string {
   return `<a href="${href}" style="display: inline-block; padding: 14px 28px; background: #003594; color: #ffffff; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 15px;">${label}</a>`;
 }
 

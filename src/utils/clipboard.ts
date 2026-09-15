@@ -18,9 +18,12 @@ export async function copyPendingText(text: Promise<string>): Promise<boolean> {
       typeof navigator.clipboard?.write === 'function' &&
       window.isSecureContext
     ) {
-      const item = new ClipboardItem({
-        'text/plain': text.then((t) => new Blob([t], { type: 'text/plain' })),
-      });
+      const blob = text.then((t) => new Blob([t], { type: 'text/plain' }));
+      // Lehnt der Server ab, bricht der Kopiervorgang ab - der Aufrufer meldet
+      // den Fehler selbst. Ohne diesen Fang meldete der Browser zusaetzlich
+      // einen unbehandelten Fehler.
+      blob.catch(() => {});
+      const item = new ClipboardItem({ 'text/plain': blob });
       await navigator.clipboard.write([item]);
       return true;
     }

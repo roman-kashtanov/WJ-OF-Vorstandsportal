@@ -33,10 +33,13 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
 
 ## Aktueller Stand (15.09.2026)
 
-- Version **v3.27.0**, lokal committet; noch nicht gepusht: v3.25.0 (Reiter
+- Version **v3.28.0**, lokal committet; noch nicht gepusht: v3.25.0 (Reiter
   per Wischen, Budget als aufklappbare Leiste, kleiner Link-Knopf), v3.26.0
   (Belege wie die anderen Bereiche aufgebaut), v3.27.0 (Belege Offen/Archiv,
-  Belege-Modul in der Übersicht). Alles bis v3.24.0 ist veröffentlicht.
+  Belege-Modul in der Übersicht), v3.28.0 (öffentlicher Beleg-Link, „Belege
+  anfragen" mit Vorlagen). Alles bis v3.24.0 ist veröffentlicht.
+- Nach dem Deploy prüfen: „Beleg-Link kopieren", Beleg darüber einreichen →
+  erscheint unter Belege → Offen; „Belege anfragen" an sich selbst schicken.
 - Weiche Übergänge nur im Chrome-Vorschaufenster geprüft – auf dem iPhone
   (Safari ab iOS 18) noch vom Nutzer zu testen.
 - Offen beim Nutzer: doppelte Personen (Roman Kashtanov 7×, Diana Sajzew 2×)
@@ -2072,3 +2075,47 @@ aussieht. Für weitere Archive diesen Baustein verwenden.
 **Übersicht:** Modul „Belege" mit der Zahl offener Belege
 (`countOpenInvoices`), nur sichtbar, wenn welche offen sind; Sprung in
 Belege → Offen (`OverviewTarget` um `tab: 'invoices'` erweitert).
+
+## v3.28.0 - Öffentlicher Beleg-Link, „Belege anfragen" mit Vorlagen
+
+**Beleg-Link** (Belege, kleiner Knopf „Beleg-Link kopieren" unter der
+Überschrift): allgemeiner Link `/beleg?t=…` **ohne Beschluss**. Ein darüber
+eingereichter Beleg landet ohne Beschluss unter Belege → Offen (mit
+Benachrichtigung und Historie). Umsetzung:
+- `createGeneralInvoiceUploadToken()` (`api/invoiceAttachmentToken.ts`):
+  gleicher Schlüssel `INVOICE_ATTACHMENT_LINK_SECRET`, Nutzdaten `g: 1` statt
+  Beschluss `r`, 180 Tage gültig. Die Prüfung verlangt `r` oder `g`.
+- `handleGetGeneralUploadLink` (Route `invoice/upload-link`) nur mit
+  `verifyBoardCaller`; jeder Tipp erzeugt einen frischen Link. Kopieren über
+  `copyPendingText` wie beim Nachweis-Link, sonst Link zum Markieren.
+- **Bewusst ohne Zugangscode** (anders als `/antrag`): Der Link geht auch an
+  Externe (Dienstleister), und die App kennt den Code nicht (nur Hash), könnte
+  ihn also nicht in die Anfrage-Mail schreiben. Schlimmstenfalls landen
+  unerwünschte Belege unter „Offen".
+- `/beleg` (`InvoiceAttachmentUploadPage`) erkennt den allgemeinen Link
+  (`general: true` aus `invoice/attachment`), zeigt „Beleg einreichen" und ein
+  optionales Feld „Hinweis an den Vorstand" (`notes`, auch beim Beschluss-Link).
+  Serverseitig ist die Datei jetzt Pflicht (die Seite verlangte sie schon).
+
+**Belege anfragen** (`RequestInvoicesModal.tsx`, ersetzt das alte, nur
+simulierte `InvoiceRequestModal`): ein Fenster, drei Schritte – Vorlage wählen
+(oder ohne Vorlage) → Empfänger (Auswahl aus Vorstand und Zuschuss-Personen
+mit E-Mail, oder frei), Betreff, Text, Vorschau → Bestätigung. Versand über
+`handleSendInvoiceRequest` (Route `invoice/send-request`, nur Vorstand): Text
+als Absätze im Portal-Mail-Rahmen (`layout`/`button` aus `api/authEmails.ts`,
+jetzt exportiert), darunter der Knopf „Beleg hochladen" mit frischem
+allgemeinem Link. Platzhalter `{Name}`/`{Absender}` füllt
+`utils/invoiceRequestText.ts` – dieselbe Funktion für Vorschau und Server.
+
+**Vorlagen:** geteilt über `settings/invoiceRequestTemplates`
+(`src/data/invoiceRequestTemplates.ts`, drei Standardvorlagen; Sync wie der
+Rollen-Katalog, Abo im zentralen Sync-Effekt, State in `useInvoices`). Im
+Fenster: löschen (Schritt 1), „Vorlage … aktualisieren" und „Als neue Vorlage
+speichern" (Schritt 2).
+
+**Getestet:** Server mit nachgestellter Anmeldung/Datenbank (401/403, gültiger
+allgemeiner Link, Beleg ohne Beschluss samt Hinweis, Beschluss-Link
+unverändert verknüpft, Pflichtdatei, Anfrage-Prüfungen bis zum Mailversand),
+Platzhalter, Render-Test von Fenster und Knöpfen, Browser (nur ansehen).
+Echter Versand und Kopieren erst nach dem Deploy (lokal fehlen Dienstkonto,
+Link-Schlüssel und Mailzugang).

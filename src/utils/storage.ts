@@ -18,6 +18,10 @@ import { INITIAL_BOARD_MEMBERS, INITIAL_RESOLUTIONS, INITIAL_INVOICES, INITIAL_I
 import { normalizeSecuritySettings } from './security';
 import { SubsidyCatalogueSettings, DEFAULT_SUBSIDY_CATALOGUE_SETTINGS } from '../data/subsidyCatalogue';
 import { RoleCatalogueSettings, DEFAULT_ROLE_CATALOGUE } from '../data/roleCatalogue';
+import {
+  InvoiceRequestTemplateSettings,
+  DEFAULT_INVOICE_REQUEST_TEMPLATES,
+} from '../data/invoiceRequestTemplates';
 
 const INITIAL_NOTIFICATIONS: InAppNotification[] = [];
 
@@ -71,6 +75,7 @@ const STORAGE_KEYS = {
   CLUB_ACCOUNT: 'wj_offenbach_club_account_v1',
   SUBSIDY_CATALOGUE: 'wj_offenbach_subsidy_catalogue_v1',
   ROLE_CATALOGUE: 'wj_offenbach_role_catalogue_v1',
+  INVOICE_REQUEST_TEMPLATES: 'wj_offenbach_invoice_request_templates_v1',
   AUDIT_LOG: 'wj_offenbach_audit_log_v1',
 };
 
@@ -490,6 +495,19 @@ export const AppStorage = {
   saveRoleCatalogue(settings: RoleCatalogueSettings) {
     try {
       localStorage.setItem(STORAGE_KEYS.ROLE_CATALOGUE, JSON.stringify(settings));
+    } catch {}
+  },
+  /** Vorlagen fuer "Belege anfragen". */
+  getInvoiceRequestTemplates(): InvoiceRequestTemplateSettings {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.INVOICE_REQUEST_TEMPLATES);
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return DEFAULT_INVOICE_REQUEST_TEMPLATES;
+  },
+  saveInvoiceRequestTemplates(settings: InvoiceRequestTemplateSettings) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.INVOICE_REQUEST_TEMPLATES, JSON.stringify(settings));
     } catch {}
   },
 };

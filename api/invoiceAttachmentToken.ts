@@ -12,8 +12,10 @@ import crypto from 'crypto';
  */
 
 export interface InvoiceAttachmentPayload {
-  /** Beschluss */
-  r: string;
+  /** Beschluss - fehlt beim allgemeinen Beleg-Link */
+  r?: string;
+  /** 1 = allgemeiner Beleg-Link ohne Beschluss (v3.28.0) */
+  g?: 1;
   /** Ablauf (Unix-Sekunden) */
   e: number;
   /** Zufallskennung, nur zur Eindeutigkeit des Tokens */
@@ -51,6 +53,24 @@ export function createInvoiceAttachmentToken(resolutionId: string): string | nul
   return `${data}.${sign(data, secret)}`;
 }
 
+/**
+ * Allgemeiner Beleg-Link ohne Beschluss ("Beleg-Link kopieren", "Belege
+ * anfragen"): der eingereichte Beleg landet unter Belege → Offen.
+ */
+export function createGeneralInvoiceUploadToken(): string | null {
+  const secret = getSecret();
+  if (!secret) return null;
+
+  const payload: InvoiceAttachmentPayload = {
+    g: 1,
+    e: Math.floor(Date.now() / 1000) + INVOICE_ATTACHMENT_LINK_VALID_DAYS * 24 * 60 * 60,
+    n: crypto.randomBytes(9).toString('hex'),
+  };
+
+  const data = base64url(JSON.stringify(payload));
+  return `${data}.${sign(data, secret)}`;
+}
+
 export type VerifyResult =
   | { ok: true; payload: InvoiceAttachmentPayload }
   | { ok: false; reason: 'no_secret' | 'malformed' | 'bad_signature' | 'expired' };
@@ -78,7 +98,7 @@ export function verifyInvoiceAttachmentToken(token: string): VerifyResult {
     return { ok: false, reason: 'malformed' };
   }
 
-  if (!payload?.r || !payload?.e || !payload?.n) {
+  if ((!payload?.r && payload?.g !== 1) || !payload?.e || !payload?.n) {
     return { ok: false, reason: 'malformed' };
   }
   if (payload.e < Math.floor(Date.now() / 1000)) {

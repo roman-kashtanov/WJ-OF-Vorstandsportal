@@ -34,7 +34,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { TeamsSettingsModal } from './components/TeamsSettingsModal';
 import { QuickAgendaModal } from './components/QuickAgendaModal';
 import { EmailVoteModal } from './components/EmailVoteModal';
-import { InvoiceRequestModal } from './components/InvoiceRequestModal';
+import { RequestInvoicesModal } from './components/RequestInvoicesModal';
 import { ForceUpdateModal } from './components/ForceUpdateModal';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { BiometricLock } from './components/BiometricLock';
@@ -410,6 +410,10 @@ export default function App() {
       if (remoteRoles) setRoleCatalogue(remoteRoles);
     });
 
+    const unsubInvoiceRequestTemplates = FirebaseSync.subscribeInvoiceRequestTemplates((remote) => {
+      if (remote && Array.isArray(remote.templates)) setInvoiceRequestTemplates(remote);
+    });
+
     // Benachrichtigungen und Revisionshistorie fuer oeffentliche/externe
     // Vorgaenge (siehe api/*.ts) - anders als applyRemote() oben nur neue
     // IDs vorne einfuegen statt die ganze Liste zu ersetzen: beides sind
@@ -467,6 +471,7 @@ export default function App() {
       unsubMeetingConfig();
       unsubCatalogue();
       unsubRoleCatalogue();
+      unsubInvoiceRequestTemplates();
       unsubNotifications();
       unsubAuditLog();
     };
@@ -649,7 +654,9 @@ export default function App() {
     handleUpdateInvoiceFolder,
     handleUpdateInvoiceRecurrence,
     handleUpdateInvoiceStatus,
-    handleCreateInvoiceRequest,
+    invoiceRequestTemplates,
+    setInvoiceRequestTemplates,
+    handleSaveInvoiceRequestTemplates,
   } = useInvoices({
     currentMember,
     setResolutions,
@@ -1465,13 +1472,14 @@ export default function App() {
         }}
       />
 
-      <InvoiceRequestModal
+      <RequestInvoicesModal
         isOpen={isInvoiceRequestModalOpen}
         onClose={() => setIsInvoiceRequestModalOpen(false)}
-        members={members}
-        resolutions={resolutions}
         currentMember={currentMember}
-        onSubmitRequest={handleCreateInvoiceRequest}
+        members={members}
+        people={subsidyPeople}
+        templates={invoiceRequestTemplates.templates}
+        onSaveTemplates={handleSaveInvoiceRequestTemplates}
       />
 
       {/* Force Update Modal (Triggered automatically if versionConfig enforces it) */}

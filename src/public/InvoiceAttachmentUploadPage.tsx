@@ -44,6 +44,9 @@ export const InvoiceAttachmentUploadPage: React.FC = () => {
   const token = new URLSearchParams(window.location.search).get('t') || '';
   const [state, setState] = useState<State>('loading');
   const [resolutionLabel, setResolutionLabel] = useState('');
+  /** Allgemeiner Beleg-Link ohne Beschluss (v3.28.0) */
+  const [general, setGeneral] = useState(false);
+  const [notes, setNotes] = useState('');
 
   const [title, setTitle] = useState('');
   const [vendor, setVendor] = useState('');
@@ -69,9 +72,12 @@ export const InvoiceAttachmentUploadPage: React.FC = () => {
         setState('invalid');
         return;
       }
-      setResolutionLabel(
-        `${data.resolutionNumber || ''}${data.resolutionTitle ? ` – ${data.resolutionTitle}` : ''}`
-      );
+      setGeneral(data.general === true);
+      if (!data.general) {
+        setResolutionLabel(
+          `${data.resolutionNumber || ''}${data.resolutionTitle ? ` – ${data.resolutionTitle}` : ''}`
+        );
+      }
       setState('ready');
     });
   }, [token]);
@@ -113,6 +119,7 @@ export const InvoiceAttachmentUploadPage: React.FC = () => {
         date,
         category,
         submittedByName: submittedByName.trim() || undefined,
+        notes: notes.trim() || undefined,
         file,
       });
       if (!ok) {
@@ -132,7 +139,7 @@ export const InvoiceAttachmentUploadPage: React.FC = () => {
       <div className="w-full max-w-md">
         <div className="text-center mb-6">
           <div className="text-2xl font-extrabold text-[#003594] tracking-tight">WJOF.</div>
-          <div className="text-xs text-slate-400 mt-0.5">Beleg nachreichen</div>
+          <div className="text-xs text-slate-400 mt-0.5">{general ? 'Beleg einreichen' : 'Beleg nachreichen'}</div>
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -155,9 +162,16 @@ export const InvoiceAttachmentUploadPage: React.FC = () => {
               <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#003594] flex items-center justify-center mx-auto">
                 <Receipt className="w-6 h-6" strokeWidth={1.75} />
               </div>
-              <h1 className="font-bold text-slate-900 text-base text-center">Beleg nachreichen</h1>
+              <h1 className="font-bold text-slate-900 text-base text-center">
+                {general ? 'Beleg einreichen' : 'Beleg nachreichen'}
+              </h1>
               {resolutionLabel && (
                 <p className="text-xs text-slate-500 text-center">Zu Beschluss: {resolutionLabel}</p>
+              )}
+              {general && (
+                <p className="text-xs text-slate-500 text-center">
+                  Foto oder PDF genügt – der Beleg geht direkt an den Vorstand.
+                </p>
               )}
 
               <div>
@@ -232,6 +246,20 @@ export const InvoiceAttachmentUploadPage: React.FC = () => {
                   value={submittedByName}
                   onChange={(e) => setSubmittedByName(e.target.value)}
                   className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-[#003594]"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-900 text-xs block mb-1.5">
+                  Hinweis an den Vorstand <span className="font-normal text-slate-400">(optional)</span>
+                </label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={2}
+                  maxLength={1000}
+                  placeholder="z. B. wofür der Beleg ist"
+                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-[#003594] resize-none"
                 />
               </div>
 
