@@ -36,24 +36,25 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
 - **Nie ganze Sammlungen aus dem lokalen Stand zurückschreiben** und
   Firestore-Abos immer an die Firebase-Anmeldung koppeln (siehe v3.17.6, v3.18.0).
 
-## Aktueller Stand (15.09.2026)
+## Aktueller Stand (16.09.2026)
 
-- Version **v4.0.0**, lokal committet; noch nicht gepusht: v3.25.0 (Reiter
-  per Wischen, Budget als aufklappbare Leiste, kleiner Link-Knopf), v3.26.0
-  (Belege wie die anderen Bereiche aufgebaut), v3.27.0 (Belege Offen/Archiv,
-  Belege-Modul in der Übersicht), v3.28.0 (öffentlicher Beleg-Link, „Belege
-  anfragen" mit Vorlagen), v3.29.0 (Einstellungen → Zuschüsse), v3.30.0
-  (Kategorien frei anlegbar, Anfrage ohne Vorlagenzwang, Reiter „Vorlagen"),
-  v3.31.0 (Bestätigungsmails, automatische Erinnerungen, Nachweise bei späten
-  Anträgen Pflicht), v3.32.0 (E-Mails an den Vorstand je Person und Ereignis
-  einstellbar), v4.0.0 (Versionsverlauf in der App und als CHANGELOG.md).
-  Alles bis v3.24.0 ist veröffentlicht.
-- **Nach dem Deploy von v3.31.0 prüfen:** In Netlify unter *Functions* muss
-  `reminders` als *Scheduled function* erscheinen (läuft 18 und 19 Uhr UTC).
-  Sofort testbar über Einstellungen → Zuschüsse → „Jetzt prüfen".
-- Nach dem Deploy prüfen: „Beleg-Link kopieren", Beleg darüber einreichen →
-  erscheint unter Belege → Offen; „Belege anfragen" an sich selbst und eine
-  zweite Adresse schicken (zwei getrennte Mails mit eigenem Namen).
+- Version **v4.0.0** – am 16.09.2026 gepusht, damit ist alles bis
+  einschließlich v4.0.0 veröffentlicht (v3.25.0 bis v4.0.0 gingen in einem
+  Rutsch raus, Einzelheiten im Versionsverlauf: `CHANGELOG.md` bzw. in der App
+  über die Versionsnummer).
+- **Nach diesem Deploy zu prüfen (offen):**
+  - Netlify → *Functions*: `reminders` muss als *Scheduled function*
+    auftauchen (läuft 18 und 19 Uhr UTC = 20 Uhr deutscher Zeit). Sofort
+    testbar über Einstellungen → Zuschüsse → „Jetzt prüfen".
+  - Einstellungen → Benachrichtigungen: festlegen, wer welche E-Mails bekommt.
+    Ohne Auswahl bleibt es beim alten Verhalten (Zuschuss und Auslage an die
+    hinterlegte Admin-Adresse), Belege lösen dann gar keine E-Mail aus.
+  - „Beleg-Link kopieren", Beleg darüber einreichen → erscheint unter Belege →
+    Offen; „Belege anfragen" an sich selbst und eine zweite Adresse schicken
+    (zwei getrennte Mails mit eigenem Namen).
+  - Öffentlichen Zuschuss-Antrag einreichen: Bestätigungsmail mit Link muss
+    ankommen; bei einer Veranstaltung in der Vergangenheit verlangt das
+    Formular beide Nachweise sofort.
 - Weiche Übergänge nur im Chrome-Vorschaufenster geprüft – auf dem iPhone
   (Safari ab iOS 18) noch vom Nutzer zu testen.
 - Offen beim Nutzer: doppelte Personen (Roman Kashtanov 7×, Diana Sajzew 2×)
