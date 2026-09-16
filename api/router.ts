@@ -13,6 +13,7 @@ import {
   handleGetProofLink,
   handleGetSubsidyCatalogue,
 } from './subsidy';
+import { handleRunReminders } from './reminders';
 import {
   handleRequestInvoiceAttachmentLink,
   handleGetInvoiceAttachmentStatus,
@@ -160,6 +161,13 @@ export async function handleApiRequest(
 
   if (method === 'POST' && route === 'invoice/request-link') {
     const result = await handleRequestInvoiceAttachmentLink(payload || {}, origin || '/');
+    return { status: result.status, body: result.body };
+  }
+
+  // Erinnerungen an fehlende Zuschuss-Unterlagen von Hand prüfen (nur Vorstand);
+  // automatisch läuft das täglich über netlify/functions/reminders.mts
+  if (method === 'POST' && route === 'reminders/run') {
+    const result = await handleRunReminders(payload || {}, origin || '/');
     return { status: result.status, body: result.body };
   }
 

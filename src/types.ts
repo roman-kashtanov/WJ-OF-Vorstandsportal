@@ -535,6 +535,14 @@ export interface Subsidy {
   costProofNote?: string;
   costProofFile?: SubsidyProofFile;
   note?: string;
+  /**
+   * Automatische Erinnerungen an den Antragsteller (api/reminders.ts):
+   * am Veranstaltungstag um 20 Uhr und eine Woche danach - nur bei
+   * Anträgen, die vor der Veranstaltung eingereicht wurden. Der Zeitstempel
+   * verhindert, dass dieselbe Erinnerung mehrfach rausgeht.
+   */
+  remindedOnEventDayAt?: string;
+  remindedAfterEventAt?: string;
   /** Haushaltsjahr - das Budget verfällt zum 01.01. */
   year: number;
   createdAt: string;

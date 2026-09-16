@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { SubsidyCatalogueEntry, SubsidyCategoryDef, categoryLabel } from '../data/subsidyCatalogue';
 import { isValidIban } from '../utils/sepa';
 import { prepareFileForStorage } from '../utils/fileStorage';
@@ -130,6 +130,19 @@ export const SubsidyApplicationPage: React.FC = () => {
     }
   };
 
+  /**
+   * Liegt die Veranstaltung in der Vergangenheit, sind beide Nachweise
+   * Pflicht (siehe api/subsidy.ts) - der Link zum Nachreichen ergibt nur bei
+   * künftigen Terminen Sinn.
+   */
+  const eventInPast = !!eventDate && eventDate < new Date().toISOString().slice(0, 10);
+  useEffect(() => {
+    if (eventInPast) {
+      setAttendanceUploadNow(true);
+      setCostUploadNow(true);
+    }
+  }, [eventInPast]);
+
   const ibanValid = !iban || isValidIban(iban);
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(personEmail.trim());
   const canSubmit =
@@ -140,7 +153,8 @@ export const SubsidyApplicationPage: React.FC = () => {
     isValidIban(iban) &&
     !!eventKey &&
     !!eventDate &&
-    actualCostNumber > 0;
+    actualCostNumber > 0 &&
+    (!eventInPast || (!!attendanceProofFile && !!costProofFile));
 
   const downloadBackupCsv = () => {
     downloadSubsidyBackupCsv(
@@ -402,18 +416,32 @@ export const SubsidyApplicationPage: React.FC = () => {
                 />
               </div>
 
+              {eventInPast && (
+                <div className="text-[11px] leading-relaxed text-amber-900 bg-amber-50 border border-amber-200 rounded-xl p-2.5">
+                  Die Veranstaltung liegt bereits in der Vergangenheit. Bitte <strong>beide Nachweise
+                  direkt hochladen</strong> – nachreichen ist nur möglich, solange die Veranstaltung noch
+                  bevorsteht.
+                </div>
+              )}
+
               <div className="pt-1">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-bold text-slate-900 text-xs">Teilnahmenachweis</span>
-                  <label className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                    <input
-                      type="checkbox"
-                      checked={attendanceUploadNow}
-                      onChange={(e) => setAttendanceUploadNow(e.target.checked)}
-                      className="rounded text-[#003594]"
-                    />
-                    Jetzt hochladen
-                  </label>
+                  <span className="font-bold text-slate-900 text-xs">
+                    Teilnahmenachweis{eventInPast ? ' *' : ''}
+                  </span>
+                  {eventInPast ? (
+                    <span className="text-[11px] font-bold text-amber-700">Pflicht</span>
+                  ) : (
+                    <label className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                      <input
+                        type="checkbox"
+                        checked={attendanceUploadNow}
+                        onChange={(e) => setAttendanceUploadNow(e.target.checked)}
+                        className="rounded text-[#003594]"
+                      />
+                      Jetzt hochladen
+                    </label>
+                  )}
                 </div>
 
                 {attendanceUploadNow ? (
@@ -452,16 +480,22 @@ export const SubsidyApplicationPage: React.FC = () => {
 
               <div className="pt-1">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-bold text-slate-900 text-xs">Kostennachweis (Rechnung)</span>
-                  <label className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                    <input
-                      type="checkbox"
-                      checked={costUploadNow}
-                      onChange={(e) => setCostUploadNow(e.target.checked)}
-                      className="rounded text-[#003594]"
-                    />
-                    Jetzt hochladen
-                  </label>
+                  <span className="font-bold text-slate-900 text-xs">
+                    Kostennachweis (Rechnung){eventInPast ? ' *' : ''}
+                  </span>
+                  {eventInPast ? (
+                    <span className="text-[11px] font-bold text-amber-700">Pflicht</span>
+                  ) : (
+                    <label className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                      <input
+                        type="checkbox"
+                        checked={costUploadNow}
+                        onChange={(e) => setCostUploadNow(e.target.checked)}
+                        className="rounded text-[#003594]"
+                      />
+                      Jetzt hochladen
+                    </label>
+                  )}
                 </div>
 
                 {costUploadNow ? (
@@ -544,8 +578,8 @@ export const SubsidyApplicationPage: React.FC = () => {
               {proofUploadUrl && (
                 <div className="text-left bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
                   <p className="text-[11px] font-bold text-amber-900">
-                    Bitte diesen Link aufbewahren – damit kannst du später deine Nachweise
-                    nachreichen:
+                    Bitte diesen Link aufbewahren – er zeigt dir jederzeit, welche Unterlagen
+                    vorliegen, und fehlende kannst du dort nachreichen:
                   </p>
                   <div className="flex items-center gap-2">
                     <input

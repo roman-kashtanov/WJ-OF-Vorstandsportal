@@ -11,7 +11,8 @@ import {
   subsidyCategoriesOf,
 } from '../data/subsidyCatalogue';
 import { formatCurrency } from '../utils/formatters';
-import { Plus, Trash2, Pencil, RotateCcw, CornerDownRight, ArrowUp, ArrowDown } from 'lucide-react';
+import { checkSubsidyReminders } from '../utils/accountService';
+import { Plus, Trash2, Pencil, RotateCcw, CornerDownRight, ArrowUp, ArrowDown, Send } from 'lucide-react';
 
 /**
  * Einstellungen → Zuschüsse: Kategorien mit Jahresgrenzen (frei anlegbar,
@@ -80,6 +81,32 @@ export const SubsidyCatalogueEditor: React.FC<Props> = ({ settings, subsidies, o
   const [limitsDirty, setLimitsDirty] = useState(false);
   const [limitsSaved, setLimitsSaved] = useState(false);
   const [limitsError, setLimitsError] = useState('');
+  const [reminderBusy, setReminderBusy] = useState(false);
+  const [reminderNotice, setReminderNotice] = useState('');
+
+  /** Erinnerungen sofort prüfen - fällige gehen dabei wirklich raus. */
+  const runReminders = async () => {
+    if (
+      !confirm(
+        'Jetzt prüfen, ob Erinnerungen fällig sind? Fällige Erinnerungen werden dabei wirklich per E-Mail verschickt.'
+      )
+    )
+      return;
+    setReminderBusy(true);
+    setReminderNotice('');
+    const result = await checkSubsidyReminders();
+    setReminderBusy(false);
+    if (result.ok === false) {
+      setReminderNotice(result.error);
+      return;
+    }
+    const parts = [
+      result.sent === 0 ? 'Nichts fällig' : `${result.sent} Erinnerung${result.sent === 1 ? '' : 'en'} verschickt`,
+      result.withoutEmail > 0 ? `${result.withoutEmail} ohne E-Mail-Adresse` : '',
+      result.failed.length > 0 ? `nicht zugestellt: ${result.failed.join(', ')}` : '',
+    ].filter(Boolean);
+    setReminderNotice(parts.join(' · '));
+  };
 
   useEffect(() => {
     if (!limitsDirty) setLimitsDraft(draftOf(settings.limits));
@@ -645,6 +672,28 @@ export const SubsidyCatalogueEditor: React.FC<Props> = ({ settings, subsidies, o
           ))}
         </div>
       )}
+
+      {/* Automatische Erinnerungen */}
+      <div className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-2">
+        <div className="font-bold text-slate-900 text-sm">Erinnerungen an fehlende Unterlagen</div>
+        <p className="text-slate-500 leading-relaxed">
+          Gehen automatisch raus: am Veranstaltungstag um 20 Uhr und eine Woche danach – nur bei
+          Anträgen, die vor der Veranstaltung gestellt wurden und bei denen noch ein Nachweis fehlt.
+          Jede Erinnerung kommt höchstens einmal.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={runReminders}
+            disabled={reminderBusy}
+            className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-bold text-[11px] flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+          >
+            <Send className="w-3.5 h-3.5" strokeWidth={1.75} />
+            {reminderBusy ? 'Wird geprüft …' : 'Jetzt prüfen'}
+          </button>
+          {reminderNotice && <span className="text-[11px] font-semibold text-slate-600">{reminderNotice}</span>}
+        </div>
+      </div>
 
       <button
         type="button"

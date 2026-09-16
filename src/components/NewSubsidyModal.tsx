@@ -488,7 +488,12 @@ export const NewSubsidyModal: React.FC<Props> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setProofFile(undefined)}
+                      onClick={() => {
+                        // Ohne Datei ist der Nachweis wieder offen - sonst zeigt
+                        // der Nachweis-Link "liegt bereits vor", obwohl nichts da ist
+                        setProofFile(undefined);
+                        setProofState('offen');
+                      }}
                       className="p-1 text-slate-400 hover:text-rose-600 shrink-0 cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
@@ -576,7 +581,10 @@ export const NewSubsidyModal: React.FC<Props> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setCostProofFile(undefined)}
+                      onClick={() => {
+                        setCostProofFile(undefined);
+                        setCostProofState('offen');
+                      }}
                       className="p-1 text-slate-400 hover:text-rose-600 shrink-0 cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />

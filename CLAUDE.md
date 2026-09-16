@@ -33,13 +33,17 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
 
 ## Aktueller Stand (15.09.2026)
 
-- Version **v3.30.0**, lokal committet; noch nicht gepusht: v3.25.0 (Reiter
+- Version **v3.31.0**, lokal committet; noch nicht gepusht: v3.25.0 (Reiter
   per Wischen, Budget als aufklappbare Leiste, kleiner Link-Knopf), v3.26.0
   (Belege wie die anderen Bereiche aufgebaut), v3.27.0 (Belege Offen/Archiv,
   Belege-Modul in der Übersicht), v3.28.0 (öffentlicher Beleg-Link, „Belege
   anfragen" mit Vorlagen), v3.29.0 (Einstellungen → Zuschüsse), v3.30.0
-  (Kategorien frei anlegbar, Anfrage ohne Vorlagenzwang, Reiter „Vorlagen").
-  Alles bis v3.24.0 ist veröffentlicht.
+  (Kategorien frei anlegbar, Anfrage ohne Vorlagenzwang, Reiter „Vorlagen"),
+  v3.31.0 (Bestätigungsmails, automatische Erinnerungen, Nachweise bei späten
+  Anträgen Pflicht). Alles bis v3.24.0 ist veröffentlicht.
+- **Nach dem Deploy von v3.31.0 prüfen:** In Netlify unter *Functions* muss
+  `reminders` als *Scheduled function* erscheinen (läuft 18 und 19 Uhr UTC).
+  Sofort testbar über Einstellungen → Zuschüsse → „Jetzt prüfen".
 - Nach dem Deploy prüfen: „Beleg-Link kopieren", Beleg darüber einreichen →
   erscheint unter Belege → Offen; „Belege anfragen" an sich selbst und eine
   zweite Adresse schicken (zwei getrennte Mails mit eigenem Namen).
@@ -2192,3 +2196,52 @@ Kategorien „geht so nicht"). `SubsidyCategory` ist jetzt `string`.
 entfernte Kategorien, Grenzwarnung, Regel an/aus), Server mit nachgestellter
 Anmeldung (keine/ungültige/zu viele Empfänger, Dubletten, ältere Form, bis zum
 Mailversand), Render-Tests, Browser (nur ansehen).
+
+## v3.31.0 - Bestätigungsmails, automatische Erinnerungen, Nachweise bei späten Anträgen Pflicht
+
+**Eingangsbestätigung** (`api/subsidyEmails.ts`, neu – nutzt `layout`/`button`
+aus `authEmails.ts`): Zuschuss und Auslage schicken dem Einreicher jetzt immer
+eine Bestätigung mit den eingereichten Daten. Sie geht **erst nach dem
+erfolgreichen Schreiben in Firestore** raus, ist also zugleich Quittung.
+Beim Zuschuss ist **immer** der `/nachweis`-Link dabei – auch wenn nichts
+fehlt, weil er den aktuellen Stand zeigt. Die frühere Mail „Dein
+Nachweis-Link" (nur bei fehlenden Nachweisen) entfällt.
+
+**Späte Anträge** (`handleSubmitSubsidy` + `/antrag`): Liegt das
+Veranstaltungsdatum **vor heute**, sind Teilnahme- und Kostennachweis Pflicht;
+ohne sie lässt sich der Antrag nicht absenden (serverseitig und im Formular,
+dort „Pflicht" statt der Auswahl „Jetzt hochladen"). Nachreichen gibt es damit
+nur für Termine, die noch bevorstehen. Der Veranstaltungstag selbst zählt
+noch als „nicht vergangen".
+
+**Automatische Erinnerungen** (`api/reminders.ts` +
+`netlify/functions/reminders.mts`): erste Stelle im Projekt, die **ohne Zutun
+eines Nutzers** läuft. Netlify plant in UTC, deshalb Zeitplan `0 18,19 * * *`
+und im Code die Prüfung auf 20 Uhr deutscher Zeit (`berlinHour`, bewusst
+`en-GB`/`h23` – die deutsche Schreibweise liefert „20 Uhr" statt „20"). Zwei
+Erinnerungen je Zuschuss: am Veranstaltungstag und sieben Tage danach.
+Bedingungen: nur Zuschüsse (keine Auslagen), nur **vor** der Veranstaltung
+eingereicht, noch ein Nachweis offen, nicht in einem Beschluss/bezahlt/
+abgelehnt. Verschickte Erinnerungen werden am Vorgang vermerkt
+(`remindedOnEventDayAt`, `remindedAfterEventAt`), damit nichts doppelt kommt.
+Manuell prüfbar über Einstellungen → Zuschüsse → „Jetzt prüfen" (Route
+`reminders/run`, nur Vorstand, `verifyBoardCaller`).
+
+**Fehler behoben:** Im Erfassungsfenster löschte der Papierkorb zwar die
+Nachweisdatei, der Status blieb aber auf „Hier abgelegt". Der Nachweis-Link
+meldete dann „liegt bereits vor", obwohl nichts gespeichert war, und die
+Person konnte nichts hochladen. Löschen setzt den Status jetzt auf „Offen".
+
+**Zur Einordnung des Nachweis-Links** (Nutzerfrage): Der Link trägt nur eine
+signierte Kennung; die Seite fragt bei **jedem Öffnen** den Live-Stand ab.
+Setzt der Vorstand einen Nachweis auf „Offen", kann über denselben alten Link
+wieder hochgeladen werden. Ein bereits hochgeladener Nachweis lässt sich über
+den Link nicht überschreiben (Schutz seit v3.7.2); gesperrt ist er, sobald der
+Zuschuss in einem Beschluss, bezahlt oder abgelehnt ist.
+
+**Getestet:** Einreichung mit nachgestellter Datenbank (vergangene
+Veranstaltung ohne/mit Nachweisen, künftige Veranstaltung, Auslage ohne/mit
+Beleg, Link gültig signiert), Mailtexte, Erinnerungs-Auswahl (Veranstaltungstag,
+eine Woche danach, bereits erinnert, nachträglich eingereicht, vollständig, im
+Beschluss, bezahlt, Auslage, ohne E-Mail-Adresse, Sommer-/Winterzeit,
+Uhrzeit-Sperre). Echter Versand erst nach dem Deploy prüfbar.

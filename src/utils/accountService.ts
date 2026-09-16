@@ -123,6 +123,29 @@ export async function sendInvoiceRequest(input: {
   };
 }
 
+/**
+ * Erinnerungen an fehlende Zuschuss-Unterlagen sofort prüfen (Einstellungen →
+ * Zuschüsse). Läuft sonst täglich automatisch um 20 Uhr; fällige
+ * Erinnerungen gehen dabei wirklich raus (api/reminders.ts).
+ */
+export async function checkSubsidyReminders(): Promise<
+  Outcome<{ sent: number; checked: number; withoutEmail: number; failed: string[] }>
+> {
+  const idToken = await currentIdToken();
+  if (!idToken) return { ok: false, error: NOT_SIGNED_IN };
+  const { ok, data } = await postJson('reminders/run', { idToken });
+  if (ok && data?.ok) {
+    return {
+      ok: true,
+      sent: data.sent || 0,
+      checked: data.checked || 0,
+      withoutEmail: data.withoutEmail || 0,
+      failed: Array.isArray(data.failed) ? data.failed : [],
+    };
+  }
+  return { ok: false, error: data?.error || 'Die Erinnerungen konnten nicht geprüft werden.' };
+}
+
 /** "Passwort vergessen" - antwortet bewusst gleich, egal ob die Adresse freigegeben ist. */
 export async function requestPasswordReset(email: string): Promise<Outcome> {
   const { ok, data } = await postJson('auth/password-reset', { email });

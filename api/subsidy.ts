@@ -1,8 +1,13 @@
 import crypto from 'crypto';
 import { FirestoreAdmin } from './firestoreAdmin';
 import { verifySubsidyFormCode } from './subsidyAccessCode';
-import { createSubsidyProofToken, verifySubsidyProofToken } from './subsidyProofToken';
+import {
+  createSubsidyProofToken,
+  verifySubsidyProofToken,
+  PROOF_LINK_VALID_DAYS,
+} from './subsidyProofToken';
 import { sendEmail } from './email';
+import { subsidyConfirmationEmail, expenseConfirmationEmail } from './subsidyEmails';
 import {
   SUBSIDY_CATALOGUE,
   SubsidyCatalogueEntry,
@@ -276,6 +281,20 @@ export async function handleSubmitSubsidy(
     return { status: 400, body: { error: 'Bitte die tatsächlichen Kosten angeben.' } };
   }
 
+  // Liegt die Veranstaltung schon hinter uns, muessen beide Nachweise sofort
+  // mitkommen (Nutzervorgabe v3.31.0) - nachreichen ueber den Link gibt es
+  // nur fuer Termine, die noch bevorstehen.
+  const eventInPast = eventDate < new Date().toISOString().slice(0, 10);
+  if (eventInPast && (!input.attendanceProofFile || !input.costProofFile)) {
+    return {
+      status: 400,
+      body: {
+        error:
+          'Die Veranstaltung liegt bereits in der Vergangenheit. Bitte Teilnahmenachweis und Kostennachweis (Rechnung) direkt mit hochladen.',
+      },
+    };
+  }
+
   const attendanceProofError = validateProofFile(input.attendanceProofFile);
   if (attendanceProofError) return { status: 400, body: { error: attendanceProofError } };
   const costProofError = validateProofFile(input.costProofFile);
@@ -347,20 +366,24 @@ export async function handleSubmitSubsidy(
 
     const missing = missingProofLabels(hasAttendanceProof, hasCostProof);
 
-    let proofUploadUrl: string | undefined;
-    if (missing.length > 0) {
-      const token = createSubsidyProofToken(subsidyId);
-      if (token) {
-        proofUploadUrl = `${appUrl.replace(/\/$/, '')}/nachweis?t=${token}`;
-        const missingText = missing.join(' und ');
-        await sendEmail({
-          to: [personEmail],
-          subject: 'Dein Nachweis-Link – Wirtschaftsjunioren Offenbach',
-          html: `<p>Hallo ${personName},</p><p>vielen Dank für deinen Zuschuss-Antrag (${entry.label}). Es fehlt uns noch: <strong>${missingText}</strong>. Bitte über folgenden Link nachreichen:</p><p><a href="${proofUploadUrl}">${proofUploadUrl}</a></p><p>Bitte diesen Link aufbewahren.</p>`,
-          text: `Hallo ${personName}, es fehlt uns noch: ${missingText}. Bitte über diesen Link nachreichen: ${proofUploadUrl}`,
-        }).catch(() => {});
-      }
-    }
+    // Eingangsbestätigung - immer, und immer erst jetzt: der Antrag steht zu
+    // diesem Zeitpunkt bereits in der Datenbank. Der Link geht auch dann mit,
+    // wenn nichts fehlt; dort sieht die Person jederzeit den aktuellen Stand.
+    const token = createSubsidyProofToken(subsidyId);
+    const proofUploadUrl = token ? `${appUrl.replace(/\/$/, '')}/nachweis?t=${token}` : undefined;
+    await sendEmail({
+      to: [personEmail],
+      ...subsidyConfirmationEmail({
+        personName,
+        eventName: entry.label,
+        eventDate,
+        amount,
+        actualCost,
+        missing,
+        proofUrl: proofUploadUrl,
+        validDays: PROOF_LINK_VALID_DAYS,
+      }),
+    }).catch(() => {});
 
     // Vorstand informieren, damit niemand die App aktiv beobachten muss.
     const settings = await FirestoreAdmin.getDocument('settings/security').catch(() => null);
@@ -797,6 +820,13 @@ export async function handleSubmitExpense(
       year: new Date().getFullYear(),
       createdAt: now,
     });
+
+    // Eingangsbestätigung an den Einreicher - erst jetzt, die Auslage steht
+    // bereits in der Datenbank.
+    await sendEmail({
+      to: [personEmail],
+      ...expenseConfirmationEmail({ personName, label, expenseDate, amount }),
+    }).catch(() => {});
 
     const settings = await FirestoreAdmin.getDocument('settings/security').catch(() => null);
     const adminEmail = settings?.adminEmail;
