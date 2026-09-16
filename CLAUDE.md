@@ -19,6 +19,11 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
   Ausnahme: Er verlangt den Push ausdrücklich.
 - **Versionsnummer bei jeder Code-Änderung erhöhen** (`npm version patch|minor
   --no-git-tag-version`) und am Ende „Aktuelle Version: vX.Y.Z" nennen.
+- **Versionsverlauf mitführen:** zu jeder neuen Version oben in
+  `src/data/changelog.ts` einen Eintrag ergänzen (in der Sprache des
+  Vorstands, keine Entwickler-Begriffe) und danach `npm run changelog`
+  ausführen – das schreibt `CHANGELOG.md` neu. Dieselben Einträge zeigt die
+  App unter Einstellungen → System und beim Klick auf die Versionsnummer.
 - **Lokal testen** mit `preview_start` Name `vorstandsportal` (Port 3007) und dem
   Knopf „Entwickler-Login (nur lokal)" (Zugangsdaten in `.env.local`, meldet
   als „WJ OF (Entwickler)" an). Lokal = **echte Daten**: nur ansehen, nichts
@@ -33,7 +38,7 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
 
 ## Aktueller Stand (15.09.2026)
 
-- Version **v3.32.0**, lokal committet; noch nicht gepusht: v3.25.0 (Reiter
+- Version **v4.0.0**, lokal committet; noch nicht gepusht: v3.25.0 (Reiter
   per Wischen, Budget als aufklappbare Leiste, kleiner Link-Knopf), v3.26.0
   (Belege wie die anderen Bereiche aufgebaut), v3.27.0 (Belege Offen/Archiv,
   Belege-Modul in der Übersicht), v3.28.0 (öffentlicher Beleg-Link, „Belege
@@ -41,7 +46,8 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
   (Kategorien frei anlegbar, Anfrage ohne Vorlagenzwang, Reiter „Vorlagen"),
   v3.31.0 (Bestätigungsmails, automatische Erinnerungen, Nachweise bei späten
   Anträgen Pflicht), v3.32.0 (E-Mails an den Vorstand je Person und Ereignis
-  einstellbar). Alles bis v3.24.0 ist veröffentlicht.
+  einstellbar), v4.0.0 (Versionsverlauf in der App und als CHANGELOG.md).
+  Alles bis v3.24.0 ist veröffentlicht.
 - **Nach dem Deploy von v3.31.0 prüfen:** In Netlify unter *Functions* muss
   `reminders` als *Scheduled function* erscheinen (läuft 18 und 19 Uhr UTC).
   Sofort testbar über Einstellungen → Zuschüsse → „Jetzt prüfen".
@@ -2276,3 +2282,27 @@ Beleg** (über einen Beleg-Link), **Nachweis nachgereicht**.
 **Getestet:** Empfänger-Ermittlung mit nachgestellter Datenbank (ohne
 Einstellung, Auswahl je Ereignis, Person ohne Adresse, doppelte Adresse,
 alles abgewählt) und der Mailaufbau samt Maskierung.
+
+## v4.0.0 - Versionsverlauf in der App und als Datei
+
+Nutzerwunsch: nachvollziehen können, was sich von Version zu Version geändert
+hat – und endlich eine 4 vorne.
+
+**Eine Quelle, zwei Ausgaben:** `src/data/changelog.ts` (neueste Version
+zuerst, bewusst in der Sprache des Vorstands). Daraus
+- zeigt `components/ChangelogList.tsx` den Verlauf in **Einstellungen →
+  System** (unten) und im Fenster `ChangelogModal.tsx` hinter der
+  **Versionsnummer in der Fußzeile** – dort ohne Admin-Code, damit jedes
+  Vorstandsmitglied nachlesen kann;
+- erzeugt **`npm run changelog`** (`scripts/write-changelog.ts`) die Datei
+  **CHANGELOG.md** im Projekt.
+
+Die installierte Version ist markiert und aufgeklappt; ältere Versionen
+erscheinen erst auf Tipp („N ältere Versionen anzeigen").
+
+**Pflicht bei jeder neuen Version:** Eintrag oben in `changelog.ts` ergänzen
+und `npm run changelog` laufen lassen (steht auch in den Arbeitsregeln).
+
+Der Verlauf ist bis v3.1.2 zurück nachgetragen (33 Einträge); Datumsangaben
+gibt es erst ab v3.25.0, vorher wurden sie nicht mitgeführt und werden bewusst
+nicht erfunden.

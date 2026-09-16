@@ -43,6 +43,7 @@ import { NewSubsidyModal } from './components/NewSubsidyModal';
 import { SubsidyPeopleModal } from './components/SubsidyPeopleModal';
 import type { SettingsTab } from './components/SettingsModal';
 import { normalizeCatalogueSettings } from './data/subsidyCatalogue';
+import { ChangelogModal } from './components/ChangelogModal';
 import { SubsidyPayoutModal } from './components/SubsidyPayoutModal';
 import { BundleSubsidiesModal } from './components/BundleSubsidiesModal';
 import { subsidyKind } from './utils/subsidies';
@@ -495,6 +496,8 @@ export default function App() {
   const [overviewTarget, setOverviewTarget] = useState<OverviewTarget | null>(null);
   /** Personenuebersicht direkt bei einer Person oeffnen (aus der Budget-Leiste). */
   const [peopleFocusId, setPeopleFocusId] = useState<string | null>(null);
+  /** Versionsverlauf hinter der Versionsnummer in der Fußzeile (ohne Code-Abfrage). */
+  const [isChangelogOpen, setIsChangelogOpen] = useState(false);
   useEffect(() => {
     setOverviewTarget(null);
   }, [activeTab]);
@@ -1105,7 +1108,14 @@ export default function App() {
           <div className="flex items-center space-x-2">
             <span className="font-semibold text-slate-700">Wirtschaftsjunioren Offenbach am Main e.V.</span>
             <span className="text-slate-300">•</span>
-            <span className="text-slate-400">v{CURRENT_APP_VERSION}</span>
+            <button
+              type="button"
+              onClick={() => setIsChangelogOpen(true)}
+              className="text-slate-400 hover:text-[#003594] hover:underline transition-colors cursor-pointer"
+              title="Versionsverlauf ansehen"
+            >
+              v{CURRENT_APP_VERSION}
+            </button>
           </div>
 
           <div className="flex items-center space-x-3 text-xs">
@@ -1482,6 +1492,8 @@ export default function App() {
           });
         }}
       />
+
+      <ChangelogModal isOpen={isChangelogOpen} onClose={() => setIsChangelogOpen(false)} />
 
       <RequestInvoicesModal
         isOpen={isInvoiceRequestModalOpen}

@@ -48,6 +48,7 @@ import { useModalTransition } from '../hooks/useModalTransition';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { hashPasscode, verifyDeleteCode, verifyPasscode } from '../utils/security';
 import { RevisionHistory } from './RevisionHistory';
+import { ChangelogList } from './ChangelogList';
 import { CURRENT_APP_VERSION } from '../constants/version';
 import {
   subscribeToPushServer,
@@ -1785,6 +1786,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     Test-E-Mail
                   </button>
                 </div>
+              </div>
+
+              {/* Versionsverlauf - gepflegt in src/data/changelog.ts */}
+              <div className="pt-3 border-t border-slate-200 space-y-2">
+                <div>
+                  <span className="font-bold text-slate-900 text-sm">Versionsverlauf</span>
+                  <p className="text-[11px] text-slate-500 leading-relaxed mt-0.5">
+                    Was in welcher Version dazugekommen ist. Denselben Verlauf öffnet ein Klick auf die
+                    Versionsnummer unten auf der Seite.
+                  </p>
+                </div>
+                <ChangelogList />
               </div>
             </div>
           )}
