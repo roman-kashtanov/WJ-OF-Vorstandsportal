@@ -22,6 +22,7 @@ import {
   InvoiceRequestTemplateSettings,
   DEFAULT_INVOICE_REQUEST_TEMPLATES,
 } from '../data/invoiceRequestTemplates';
+import { BoardEmailSettings, DEFAULT_BOARD_EMAIL_SETTINGS } from '../data/boardEmailSettings';
 
 const INITIAL_NOTIFICATIONS: InAppNotification[] = [];
 
@@ -76,6 +77,7 @@ const STORAGE_KEYS = {
   SUBSIDY_CATALOGUE: 'wj_offenbach_subsidy_catalogue_v1',
   ROLE_CATALOGUE: 'wj_offenbach_role_catalogue_v1',
   INVOICE_REQUEST_TEMPLATES: 'wj_offenbach_invoice_request_templates_v1',
+  BOARD_EMAILS: 'wj_offenbach_board_emails_v1',
   AUDIT_LOG: 'wj_offenbach_audit_log_v1',
 };
 
@@ -508,6 +510,19 @@ export const AppStorage = {
   saveInvoiceRequestTemplates(settings: InvoiceRequestTemplateSettings) {
     try {
       localStorage.setItem(STORAGE_KEYS.INVOICE_REQUEST_TEMPLATES, JSON.stringify(settings));
+    } catch {}
+  },
+  /** Wer bekommt bei welchem Ereignis eine E-Mail (geteilt, settings/boardEmails). */
+  getBoardEmailSettings(): BoardEmailSettings {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.BOARD_EMAILS);
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return DEFAULT_BOARD_EMAIL_SETTINGS;
+  },
+  saveBoardEmailSettings(settings: BoardEmailSettings) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.BOARD_EMAILS, JSON.stringify(settings));
     } catch {}
   },
 };

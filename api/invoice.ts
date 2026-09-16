@@ -12,6 +12,7 @@ import { escapeHtml, layout, button } from './authEmails';
 import { dataUrlBytes, formatBytes, MAX_STORED_BYTES } from '../src/utils/fileStorage';
 import { fillInvoiceRequestText } from '../src/utils/invoiceRequestText';
 import { writeNotification, writeAuditLogEntry } from './notify';
+import { notifyBoardByEmail, boardMail } from './boardNotify';
 
 /**
  * Oeffentliche Beleg-Links (/beleg) - ohne Anmeldung, nach demselben
@@ -387,6 +388,17 @@ export async function handleSubmitInvoiceAttachment(input: SubmitInvoiceAttachme
         action: 'Beleg über den Beleg-Link eingereicht',
         actorName: submittedByName,
       });
+      await notifyBoardByEmail(
+        'invoice',
+        boardMail({
+          title: `Neuer Beleg: ${title}`,
+          lines: [
+            `${submittedByName} hat einen Beleg über ${amount.toFixed(2)} € eingereicht.`,
+            `${vendor} · ${date}${notes ? ` · Hinweis: ${notes}` : ''}`,
+          ],
+          where: 'Im Vorstandsportal unter Belege → Offen zu finden.',
+        })
+      );
       return { status: 200, body: { ok: true } };
     }
 
@@ -419,6 +431,17 @@ export async function handleSubmitInvoiceAttachment(input: SubmitInvoiceAttachme
       action: `Beleg nachgereicht: ${invoice.invoiceNumber}`,
       actorName: submittedByName,
     });
+    await notifyBoardByEmail(
+      'invoice',
+      boardMail({
+        title: `Neuer Beleg zu ${resolutionLabel}`,
+        lines: [
+          `${submittedByName} hat einen Beleg über ${amount.toFixed(2)} € nachgereicht: "${title}".`,
+          `${vendor} · ${date}${notes ? ` · Hinweis: ${notes}` : ''}`,
+        ],
+        where: 'Im Vorstandsportal unter Belege → Archiv und am Beschluss zu finden.',
+      })
+    );
 
     return { status: 200, body: { ok: true } };
   } catch (err: any) {

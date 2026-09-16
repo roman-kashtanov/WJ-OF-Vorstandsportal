@@ -33,14 +33,15 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
 
 ## Aktueller Stand (15.09.2026)
 
-- Version **v3.31.0**, lokal committet; noch nicht gepusht: v3.25.0 (Reiter
+- Version **v3.32.0**, lokal committet; noch nicht gepusht: v3.25.0 (Reiter
   per Wischen, Budget als aufklappbare Leiste, kleiner Link-Knopf), v3.26.0
   (Belege wie die anderen Bereiche aufgebaut), v3.27.0 (Belege Offen/Archiv,
   Belege-Modul in der Übersicht), v3.28.0 (öffentlicher Beleg-Link, „Belege
   anfragen" mit Vorlagen), v3.29.0 (Einstellungen → Zuschüsse), v3.30.0
   (Kategorien frei anlegbar, Anfrage ohne Vorlagenzwang, Reiter „Vorlagen"),
   v3.31.0 (Bestätigungsmails, automatische Erinnerungen, Nachweise bei späten
-  Anträgen Pflicht). Alles bis v3.24.0 ist veröffentlicht.
+  Anträgen Pflicht), v3.32.0 (E-Mails an den Vorstand je Person und Ereignis
+  einstellbar). Alles bis v3.24.0 ist veröffentlicht.
 - **Nach dem Deploy von v3.31.0 prüfen:** In Netlify unter *Functions* muss
   `reminders` als *Scheduled function* erscheinen (läuft 18 und 19 Uhr UTC).
   Sofort testbar über Einstellungen → Zuschüsse → „Jetzt prüfen".
@@ -2245,3 +2246,33 @@ Beleg, Link gültig signiert), Mailtexte, Erinnerungs-Auswahl (Veranstaltungstag
 eine Woche danach, bereits erinnert, nachträglich eingereicht, vollständig, im
 Beschluss, bezahlt, Auslage, ohne E-Mail-Adresse, Sommer-/Winterzeit,
 Uhrzeit-Sperre). Echter Versand erst nach dem Deploy prüfbar.
+
+## v3.32.0 - E-Mails an den Vorstand je Person und Ereignis einstellbar
+
+**Vorher:** Nur eine einzige Adresse (`settings/security.adminEmail`) bekam
+eine E-Mail, und nur bei neuem Zuschuss und neuer Auslage. Für Belege und
+nachgereichte Nachweise gab es gar keine Mail, nur die Mitteilung in der App.
+
+**Jetzt** (Einstellungen → Benachrichtigungen, Abschnitt „E-Mail an den
+Vorstand"): je Vorstandsmitglied mit Adresse und je Ereignis ein Haken.
+Ereignisse: **Neuer Zuschuss-Antrag**, **Neue Auslagenerstattung**, **Neuer
+Beleg** (über einen Beleg-Link), **Nachweis nachgereicht**.
+
+- Geteilt über `settings/boardEmails`
+  (`src/data/boardEmailSettings.ts`, Sync-Muster wie der Rollen-Katalog, State
+  in `useNotifications`, Abo im zentralen Sync-Effekt). Bewusst **ohne merge**
+  gespeichert, sonst bliebe eine abgewählte Person im Dokument stehen.
+- Serverseitig verschickt `api/boardNotify.ts` (`notifyBoardByEmail` +
+  `boardMail`) an die ausgewählten Adressen; eingehängt in `api/subsidy.ts`
+  (Zuschuss, Auslage, nachgereichter Nachweis) und `api/invoice.ts` (Beleg mit
+  und ohne Beschluss).
+- **Rückfall:** Solange das Dokument nicht existiert, verhält sich alles wie
+  früher (Zuschuss und Auslage an die Admin-Adresse). Sobald einmal etwas
+  gespeichert wurde, zählt ausschließlich die Auswahl – ohne Haken geht für
+  dieses Ereignis bewusst keine E-Mail raus.
+- Unberührt bleiben die Mitteilungen in der App und die Push-Nachrichten; die
+  Auswahl darüber im selben Reiter ist weiterhin eine Geräte-Einstellung.
+
+**Getestet:** Empfänger-Ermittlung mit nachgestellter Datenbank (ohne
+Einstellung, Auswahl je Ereignis, Person ohne Adresse, doppelte Adresse,
+alles abgewählt) und der Mailaufbau samt Maskierung.

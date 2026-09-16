@@ -33,6 +33,12 @@ import {
   FileText
 } from 'lucide-react';
 import { InvoiceRequestTemplate } from '../data/invoiceRequestTemplates';
+import {
+  BoardEmailSettings,
+  BOARD_EMAIL_EVENTS,
+  boardEmailEventsOf,
+  toggleBoardEmailEvent,
+} from '../data/boardEmailSettings';
 import { InvoiceRequestTemplateManager } from './InvoiceRequestTemplateManager';
 import { SubsidyCatalogueSettings } from '../data/subsidyCatalogue';
 import { Subsidy } from '../types';
@@ -100,6 +106,9 @@ interface SettingsModalProps {
   /** Reiter "Vorlagen": E-Mail-Vorlagen fuer "Belege anfragen". */
   invoiceRequestTemplates: InvoiceRequestTemplate[];
   onSaveInvoiceRequestTemplates: (templates: InvoiceRequestTemplate[]) => void;
+  /** Reiter "Benachrichtigungen": wer bekommt bei welchem Ereignis eine E-Mail. */
+  boardEmailSettings: BoardEmailSettings;
+  onSaveBoardEmailSettings: (settings: BoardEmailSettings) => void;
 }
 
 
@@ -134,6 +143,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   subsidies,
   invoiceRequestTemplates,
   onSaveInvoiceRequestTemplates,
+  boardEmailSettings,
+  onSaveBoardEmailSettings,
 }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab || 'members');
 
@@ -1864,6 +1875,69 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     />
                   </label>
                 ))}
+              </div>
+
+              {/* E-Mails bei Vorgängen von außen - gilt für den ganzen Vorstand,
+                  nicht nur für dieses Gerät. */}
+              <div className="rounded-2xl border border-slate-200 p-4 space-y-3">
+                <div>
+                  <div className="font-bold text-slate-900 text-sm">E-Mail an den Vorstand</div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed mt-0.5">
+                    Wer bekommt eine E-Mail, wenn über die öffentlichen Formulare und Links etwas
+                    hereinkommt? Diese Auswahl gilt für alle Geräte und für den ganzen Vorstand – die
+                    Mitteilungen oben bleiben davon unberührt. Ohne Haken geht für dieses Ereignis keine
+                    E-Mail raus.
+                  </p>
+                </div>
+
+                {members.filter((m) => !!m.email).length === 0 && (
+                  <p className="text-[11px] text-slate-400">
+                    Keine Vorstandsmitglieder mit E-Mail-Adresse hinterlegt.
+                  </p>
+                )}
+
+                {members
+                  .filter((m) => !!m.email)
+                  .map((member) => {
+                    const events = boardEmailEventsOf(boardEmailSettings, member.id);
+                    return (
+                      <div
+                        key={member.id}
+                        className="rounded-xl border border-slate-100 bg-slate-50/60 p-2.5 space-y-1.5"
+                      >
+                        <div className="min-w-0">
+                          <span className="font-bold text-slate-800">{member.name}</span>{' '}
+                          <span className="text-[11px] text-slate-400 break-all">{member.email}</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1">
+                          {BOARD_EMAIL_EVENTS.map((event) => (
+                            <label
+                              key={event.key}
+                              title={event.hint}
+                              className="flex items-center justify-between gap-2 cursor-pointer text-slate-600"
+                            >
+                              <span className="min-w-0 truncate">{event.label}</span>
+                              <input
+                                type="checkbox"
+                                checked={events.includes(event.key)}
+                                onChange={(e) =>
+                                  onSaveBoardEmailSettings(
+                                    toggleBoardEmailEvent(
+                                      boardEmailSettings,
+                                      member.id,
+                                      event.key,
+                                      e.target.checked
+                                    )
+                                  )
+                                }
+                                className="w-4 h-4 accent-[#003594] shrink-0"
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
               </div>
 
               {isIosDevice && !isStandaloneApp && (

@@ -413,6 +413,12 @@ export default function App() {
       if (remote && Array.isArray(remote.templates)) setInvoiceRequestTemplates(remote);
     });
 
+    const unsubBoardEmails = FirebaseSync.subscribeBoardEmailSettings((remote) => {
+      if (remote && typeof remote.recipients === 'object' && remote.recipients !== null) {
+        setBoardEmailSettings(remote);
+      }
+    });
+
     // Benachrichtigungen und Revisionshistorie fuer oeffentliche/externe
     // Vorgaenge (siehe api/*.ts) - anders als applyRemote() oben nur neue
     // IDs vorne einfuegen statt die ganze Liste zu ersetzen: beides sind
@@ -471,6 +477,7 @@ export default function App() {
       unsubCatalogue();
       unsubRoleCatalogue();
       unsubInvoiceRequestTemplates();
+      unsubBoardEmails();
       unsubNotifications();
       unsubAuditLog();
     };
@@ -590,6 +597,9 @@ export default function App() {
     handleClearReadNotifications,
     handleSendTestNotification,
     handleAddEmailLog,
+    boardEmailSettings,
+    setBoardEmailSettings,
+    handleSaveBoardEmailSettings,
   } = useNotifications({ currentMember, setSystemBanner });
 
   // --- Beschluesse: siehe src/hooks/useResolutions.ts (sechster und
@@ -1381,6 +1391,8 @@ export default function App() {
         subsidies={subsidies}
         invoiceRequestTemplates={invoiceRequestTemplates.templates}
         onSaveInvoiceRequestTemplates={handleSaveInvoiceRequestTemplates}
+        boardEmailSettings={boardEmailSettings}
+        onSaveBoardEmailSettings={handleSaveBoardEmailSettings}
       />
 
       <TeamsSettingsModal

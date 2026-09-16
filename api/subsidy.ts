@@ -8,6 +8,7 @@ import {
 } from './subsidyProofToken';
 import { sendEmail } from './email';
 import { subsidyConfirmationEmail, expenseConfirmationEmail } from './subsidyEmails';
+import { notifyBoardByEmail, boardMail } from './boardNotify';
 import {
   SUBSIDY_CATALOGUE,
   SubsidyCatalogueEntry,
@@ -386,18 +387,22 @@ export async function handleSubmitSubsidy(
     }).catch(() => {});
 
     // Vorstand informieren, damit niemand die App aktiv beobachten muss.
-    const settings = await FirestoreAdmin.getDocument('settings/security').catch(() => null);
-    const adminEmail = settings?.adminEmail;
-    if (adminEmail) {
-      await sendEmail({
-        to: [adminEmail],
-        subject: `Neuer Zuschuss-Antrag: ${personName} – ${entry.label}`,
-        html: `<p>${personName} hat einen Zuschuss für "${entry.label}" beantragt.</p><p>${
-          missing.length > 0 ? `Es fehlt noch: ${missing.join(' und ')}.` : 'Beide Nachweise liegen bereits vor.'
-        }</p><p>Bitte im Vorstandsportal unter Zuschüsse prüfen.</p>`,
-        text: `${personName} hat einen Zuschuss für "${entry.label}" beantragt. Bitte im Portal prüfen.`,
-      }).catch(() => {});
-    }
+    // Wer eine E-Mail bekommt, steht in settings/boardEmails (Einstellungen →
+    // Benachrichtigungen); ohne diese Einstellung wie bisher die Admin-Adresse.
+    await notifyBoardByEmail(
+      'subsidy',
+      boardMail({
+        title: `Neuer Zuschuss-Antrag: ${personName} – ${entry.label}`,
+        lines: [
+          `${personName} hat einen Zuschuss für "${entry.label}" beantragt.`,
+          `Veranstaltung am ${eventDate} · tatsächliche Kosten ${actualCost.toFixed(2)} € · möglicher Zuschuss ${amount.toFixed(2)} €`,
+          missing.length > 0
+            ? `Es fehlt noch: ${missing.join(' und ')}.`
+            : 'Beide Nachweise liegen bereits vor.',
+        ],
+        where: 'Im Vorstandsportal unter Zuschüsse zu finden.',
+      })
+    );
 
     await writeNotification({
       title: `💶 Neuer Zuschuss-Antrag: ${entry.label}`,
@@ -679,6 +684,14 @@ export async function handleUploadProof(
       targetTab: 'subsidies',
       targetId: check.payload.s,
     });
+    await notifyBoardByEmail(
+      'proof',
+      boardMail({
+        title: `Nachweis nachgereicht: ${subsidy.personName} – ${subsidy.eventName}`,
+        lines: [`${subsidy.personName} hat den ${proofTypeLabel} über den Nachweis-Link hochgeladen.`],
+        where: 'Im Vorstandsportal unter Zuschüsse zu finden.',
+      })
+    );
     await writeAuditLogEntry({
       entityType: 'subsidy',
       entityId: check.payload.s,
@@ -828,20 +841,17 @@ export async function handleSubmitExpense(
       ...expenseConfirmationEmail({ personName, label, expenseDate, amount }),
     }).catch(() => {});
 
-    const settings = await FirestoreAdmin.getDocument('settings/security').catch(() => null);
-    const adminEmail = settings?.adminEmail;
-    if (adminEmail) {
-      await sendEmail({
-        to: [adminEmail],
-        subject: `Neue Auslagenerstattung: ${personName} – ${label}`,
-        html: `<p>${personName} hat eine Auslagenerstattung über <strong>${amount.toFixed(
-          2
-        )} €</strong> eingereicht: "${label}".</p><p>Der Beleg liegt bereits bei. Bitte im Vorstandsportal unter Auslagen prüfen.</p>`,
-        text: `${personName} hat eine Auslagenerstattung über ${amount.toFixed(
-          2
-        )} € eingereicht: "${label}". Bitte im Portal unter Auslagen prüfen.`,
-      }).catch(() => {});
-    }
+    await notifyBoardByEmail(
+      'expense',
+      boardMail({
+        title: `Neue Auslagenerstattung: ${personName} – ${label}`,
+        lines: [
+          `${personName} bittet um Erstattung von ${amount.toFixed(2)} € für "${label}".`,
+          `Beleg vom ${expenseDate} liegt bereits bei.`,
+        ],
+        where: 'Im Vorstandsportal unter Auslagen zu finden.',
+      })
+    );
 
     await writeNotification({
       title: `🧾 Neue Auslagenerstattung: ${label}`,

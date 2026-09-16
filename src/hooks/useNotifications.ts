@@ -9,6 +9,8 @@ import {
   NotificationType,
 } from '../types';
 import { AppStorage } from '../utils/storage';
+import { FirebaseSync } from '../utils/firebaseSync';
+import { BoardEmailSettings } from '../data/boardEmailSettings';
 import { PwaNotificationService } from '../utils/pwaNotifications';
 import { notifyAllDevices } from '../utils/webPushHelper';
 
@@ -38,6 +40,14 @@ export function useNotifications({ currentMember, setSystemBanner }: UseNotifica
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(() =>
     AppStorage.getNotificationSettings()
   );
+  /**
+   * Wer bekommt bei welchem Ereignis eine E-Mail - anders als die
+   * Einstellungen darueber ist das KEINE Geraete-Einstellung, sondern gilt
+   * fuer den ganzen Vorstand (settings/boardEmails, Abo in App.tsx).
+   */
+  const [boardEmailSettings, setBoardEmailSettings] = useState<BoardEmailSettings>(() =>
+    AppStorage.getBoardEmailSettings()
+  );
   const [emailLogs, setEmailLogs] = useState<EmailNotificationLog[]>(() =>
     AppStorage.getEmailLogs()
   );
@@ -52,6 +62,15 @@ export function useNotifications({ currentMember, setSystemBanner }: UseNotifica
   useEffect(() => {
     AppStorage.saveNotificationSettings(notificationSettings);
   }, [notificationSettings]);
+
+  useEffect(() => {
+    AppStorage.saveBoardEmailSettings(boardEmailSettings);
+  }, [boardEmailSettings]);
+
+  const handleSaveBoardEmailSettings = (settings: BoardEmailSettings) => {
+    setBoardEmailSettings(settings);
+    FirebaseSync.saveBoardEmailSettings(settings).catch(() => {});
+  };
 
   useEffect(() => {
     AppStorage.saveEmailLogs(emailLogs);
@@ -151,6 +170,9 @@ export function useNotifications({ currentMember, setSystemBanner }: UseNotifica
     setNotifications,
     notificationSettings,
     setNotificationSettings,
+    boardEmailSettings,
+    setBoardEmailSettings,
+    handleSaveBoardEmailSettings,
     emailLogs,
     setEmailLogs,
     emailServerConfig,

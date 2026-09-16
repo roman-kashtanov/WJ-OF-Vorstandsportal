@@ -28,6 +28,7 @@ import {
 import { SubsidyCatalogueSettings } from '../data/subsidyCatalogue';
 import { RoleCatalogueSettings } from '../data/roleCatalogue';
 import { InvoiceRequestTemplateSettings } from '../data/invoiceRequestTemplates';
+import { BoardEmailSettings } from '../data/boardEmailSettings';
 
 export interface FirebaseSyncStatus {
   isConnected: boolean;
@@ -572,6 +573,39 @@ export const FirebaseSync = {
       updateStatus({ isSyncing: false, lastSyncedAt: new Date().toISOString(), isConnected: true, error: null });
     } catch (err: any) {
       console.warn('Failed to save role catalogue to Firebase:', err.message);
+      updateStatus({ isSyncing: false, error: err.message });
+    }
+  },
+
+  /** Wer bekommt bei welchem Ereignis eine E-Mail (settings/boardEmails). */
+  subscribeBoardEmailSettings(callback: (settings: BoardEmailSettings) => void) {
+    try {
+      const docRef = doc(db, 'settings', 'boardEmails');
+      return onSnapshot(
+        docRef,
+        (snap) => {
+          if (snap.exists()) {
+            callback(snap.data() as BoardEmailSettings);
+          }
+        },
+        (err) => {
+          console.warn('Firebase BoardEmailSettings subscription warning:', err.message);
+        }
+      );
+    } catch (e) {
+      return () => {};
+    }
+  },
+
+  async saveBoardEmailSettings(settings: BoardEmailSettings) {
+    try {
+      updateStatus({ isSyncing: true });
+      const payload = cleanData(settings);
+      // Bewusst ohne merge: eine abgewaehlte Person muss wirklich verschwinden
+      await setDoc(doc(db, 'settings', 'boardEmails'), payload);
+      updateStatus({ isSyncing: false, lastSyncedAt: new Date().toISOString(), isConnected: true, error: null });
+    } catch (err: any) {
+      console.warn('Failed to save board email settings to Firebase:', err.message);
       updateStatus({ isSyncing: false, error: err.message });
     }
   },
