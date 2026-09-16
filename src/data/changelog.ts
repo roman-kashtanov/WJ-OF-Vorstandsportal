@@ -24,6 +24,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '4.1.0',
+    date: '16.09.2026',
+    title: 'Wischen im ganzen Bereich und in den Einstellungen',
+    changes: [
+      'Der Reiterwechsel per Wischen reagiert jetzt im gesamten Inhaltsbereich – auch dort, wo unter der Liste nichts mehr steht.',
+      'Auch in den Einstellungen lassen sich die Reiter durch Wischen wechseln.',
+      'Auf Eingabefeldern und in waagerecht scrollbaren Leisten bleibt das Wischen bewusst aus, damit Tippen und Scrollen nicht gestört werden.',
+    ],
+  },
+  {
     version: '4.0.0',
     date: '16.09.2026',
     title: 'Versionsverlauf in der App',

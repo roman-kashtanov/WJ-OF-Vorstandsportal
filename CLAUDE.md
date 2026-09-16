@@ -38,10 +38,10 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
 
 ## Aktueller Stand (16.09.2026)
 
-- Version **v4.0.0** – am 16.09.2026 gepusht, damit ist alles bis
-  einschließlich v4.0.0 veröffentlicht (v3.25.0 bis v4.0.0 gingen in einem
-  Rutsch raus, Einzelheiten im Versionsverlauf: `CHANGELOG.md` bzw. in der App
-  über die Versionsnummer).
+- Version **v4.1.0**, lokal committet und noch nicht gepusht. Alles bis
+  einschließlich v4.0.0 ist veröffentlicht (Push am 16.09.2026, v3.25.0 bis
+  v4.0.0 in einem Rutsch). Einzelheiten im Versionsverlauf: `CHANGELOG.md`
+  bzw. in der App über die Versionsnummer.
 - **Nach diesem Deploy zu prüfen (offen):**
   - Netlify → *Functions*: `reminders` muss als *Scheduled function*
     auftauchen (läuft 18 und 19 Uhr UTC = 20 Uhr deutscher Zeit). Sofort
@@ -2307,3 +2307,38 @@ und `npm run changelog` laufen lassen (steht auch in den Arbeitsregeln).
 Der Verlauf ist bis v3.1.2 zurück nachgetragen (33 Einträge); Datumsangaben
 gibt es erst ab v3.25.0, vorher wurden sie nicht mitgeführt und werden bewusst
 nicht erfunden.
+
+## v4.1.0 - Wischen im ganzen Inhaltsbereich und in den Einstellungen
+
+**Gemeldet:** Das Wischen zum Reiterwechsel funktionierte nur dort, wo
+tatsächlich Karten lagen – im leeren Bereich darunter passierte nichts.
+
+**Ursache:** `useSwipeTabs` hängte die Gesten an das `ref`-Element der Ansicht.
+Das ist nur so hoch wie seine Liste; der leere Platz darunter gehört zu
+`<main>`.
+
+**Jetzt** (`hooks/useSwipeTabs.ts`):
+- Die Gesten hängen am **Inhaltsbereich `<main>`** (über `closest('main')`),
+  das `ref` dient nur noch als Bezugspunkt für die Ausschlüsse. Neue Option
+  `scope: 'self'` für Fenster ohne `<main>` darüber.
+- **Einstellungen wischbar**: `SettingsModal` nutzt den Hook mit `scope: 'self'`
+  am Inhaltsbereich, Reiterfolge in `SETTINGS_TABS`; die Reiter-Knöpfe rufen
+  jetzt `swipe.select()` statt `setActiveTab()`, damit die Richtung der
+  Einblendung stimmt. Solange der Bereich per Code gesperrt ist, ist das
+  Wischen aus.
+- Der Ausschluss „Fenster" gilt nur noch für **fremde** Fenster: liegt der
+  Wischbereich selbst in einem `.wj-overlay`, wird er nicht mehr geblockt –
+  sonst könnte man in den Einstellungen nie wischen.
+- **Wichtig für dauerhaft eingebundene Fenster:** Der Hook merkt sich das
+  Element jetzt über ein **Callback-Ref mit State** statt `useRef`. Mit
+  `useRef` lief der Effekt nur beim ersten Rendern – da existiert der Inhalt
+  eines geschlossenen Fensters noch gar nicht, die Gesten wurden nie
+  angemeldet. Genau daran ist der erste Versuch gescheitert.
+
+Eingabefelder, waagerecht scrollbare Leisten und `[data-no-swipe]` bleiben
+ausgenommen (in den Einstellungen wischt man also neben den Formularfeldern).
+
+**Getestet** im Browser mit nachgestellten Touch-Gesten: Beschlüsse – Wisch
+ganz unten im leeren Bereich wechselt „Abgestimmt" → „Archiv" und zurück;
+Einstellungen – „Zuschüsse" → „Vorlagen" und zurück, während die Seite
+dahinter unverändert bleibt.

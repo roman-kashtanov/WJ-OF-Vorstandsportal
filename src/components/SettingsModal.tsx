@@ -45,6 +45,7 @@ import { Subsidy } from '../types';
 import { SubsidyCatalogueEditor } from './SubsidyCatalogueEditor';
 import { FirebaseSync } from '../utils/firebaseSync';
 import { useModalTransition } from '../hooks/useModalTransition';
+import { useSwipeTabs } from '../hooks/useSwipeTabs';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { hashPasscode, verifyDeleteCode, verifyPasscode } from '../utils/security';
 import { RevisionHistory } from './RevisionHistory';
@@ -73,6 +74,18 @@ export type SettingsTab =
   | 'subsidies'
   | 'templates'
   | 'history';
+
+/** Reihenfolge der Reiter - muss zur Reiterleiste passen (fürs Wischen). */
+const SETTINGS_TABS: SettingsTab[] = [
+  'members',
+  'security',
+  'system',
+  'notifications',
+  'teams',
+  'subsidies',
+  'templates',
+  'history',
+];
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -163,6 +176,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [settingsCode, setSettingsCode] = useState('');
   const [settingsCodeError, setSettingsCodeError] = useState<string | null>(null);
   const [settingsCodeChecking, setSettingsCodeChecking] = useState(false);
+
+  /**
+   * Reiter per Wischen wechseln - wie in Beschlüssen, Zuschüssen und Belegen.
+   * `scope: 'self'` weil das Fenster kein <main> über sich hat; gelauscht wird
+   * am Inhaltsbereich, solange die Einstellungen entsperrt sind.
+   */
+  const swipe = useSwipeTabs<SettingsTab>({
+    keys: SETTINGS_TABS,
+    active: activeTab,
+    onChange: setActiveTab,
+    enabled: isSettingsUnlocked,
+    scope: 'self',
+  });
 
   useEffect(() => {
     if (!isOpen) {
@@ -808,7 +834,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="flex border-b border-slate-200 bg-slate-50/80 px-4 pt-2 gap-2 text-xs font-semibold text-slate-600 overflow-x-auto shrink-0">
           <button
             type="button"
-            onClick={() => setActiveTab('members')}
+            onClick={() => swipe.select('members')}
             className={`pb-2.5 px-3 border-b-2 font-bold cursor-pointer transition-colors flex items-center space-x-1.5 whitespace-nowrap ${
               activeTab === 'members'
                 ? 'border-[#003594] text-[#003594]'
@@ -821,7 +847,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           <button
             type="button"
-            onClick={() => setActiveTab('security')}
+            onClick={() => swipe.select('security')}
             className={`pb-2.5 px-3 border-b-2 font-bold cursor-pointer transition-colors flex items-center space-x-1.5 whitespace-nowrap ${
               activeTab === 'security'
                 ? 'border-[#003594] text-[#003594]'
@@ -834,7 +860,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           <button
             type="button"
-            onClick={() => setActiveTab('system')}
+            onClick={() => swipe.select('system')}
             className={`pb-2.5 px-3 border-b-2 font-bold cursor-pointer transition-colors flex items-center space-x-1.5 whitespace-nowrap ${
               activeTab === 'system'
                 ? 'border-[#003594] text-[#003594]'
@@ -848,7 +874,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           <button
             type="button"
-            onClick={() => setActiveTab('notifications')}
+            onClick={() => swipe.select('notifications')}
             className={`pb-2.5 px-3 border-b-2 font-bold cursor-pointer transition-colors flex items-center space-x-1.5 whitespace-nowrap ${
               activeTab === 'notifications'
                 ? 'border-[#003594] text-[#003594]'
@@ -860,7 +886,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab('teams')}
+            onClick={() => swipe.select('teams')}
 
             className={`pb-2.5 px-3 border-b-2 font-bold cursor-pointer transition-colors flex items-center space-x-1.5 whitespace-nowrap ${
               activeTab === 'teams'
@@ -874,7 +900,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           <button
             type="button"
-            onClick={() => setActiveTab('subsidies')}
+            onClick={() => swipe.select('subsidies')}
             className={`pb-2.5 px-3 border-b-2 font-bold cursor-pointer transition-colors flex items-center space-x-1.5 whitespace-nowrap ${
               activeTab === 'subsidies'
                 ? 'border-[#003594] text-[#003594]'
@@ -887,7 +913,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           <button
             type="button"
-            onClick={() => setActiveTab('templates')}
+            onClick={() => swipe.select('templates')}
             className={`pb-2.5 px-3 border-b-2 font-bold cursor-pointer transition-colors flex items-center space-x-1.5 whitespace-nowrap ${
               activeTab === 'templates'
                 ? 'border-[#003594] text-[#003594]'
@@ -900,7 +926,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           <button
             type="button"
-            onClick={() => setActiveTab('history')}
+            onClick={() => swipe.select('history')}
             className={`pb-2.5 px-3 border-b-2 font-bold cursor-pointer transition-colors flex items-center space-x-1.5 whitespace-nowrap ${
               activeTab === 'history'
                 ? 'border-[#003594] text-[#003594]'
@@ -912,8 +938,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
         </div>
 
-        {/* Tab Content Body */}
-        <div className="overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4 text-xs">
+        {/* Tab Content Body - zugleich die Fläche zum Wischen */}
+        <div ref={swipe.ref} className="overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4 text-xs">
           
           {/* TAB 1: VORSTAND & FREIGABELISTE */}
           {activeTab === 'members' && (

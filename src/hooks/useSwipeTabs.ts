@@ -1,13 +1,21 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { RefCallback, useCallback, useEffect, useRef, useState } from 'react';
 
 /**
- * Reiter per Wischen wechseln (Beschluesse, Zuschuesse, Auslagen, Belege).
+ * Reiter per Wischen wechseln (Beschluesse, Zuschuesse, Auslagen, Belege und
+ * die Einstellungen).
  *
  * Nach links wischen → naechster Reiter, nach rechts → vorheriger. Erkannt
  * wird nur eine klar waagerechte, zuegige Bewegung, damit normales Scrollen
  * nie versehentlich den Reiter wechselt. Ignoriert werden Gesten, die in
- * Eingabefeldern, in Fenstern oder in waagerecht scrollbaren Leisten (z. B.
- * der Reiterleiste selbst) beginnen.
+ * Eingabefeldern, in fremden Fenstern oder in waagerecht scrollbaren Leisten
+ * (z. B. der Reiterleiste selbst) beginnen.
+ *
+ * **Wo das Wischen greift** (v4.1.0): Die Gesten haengen bewusst NICHT am
+ * `ref`-Element - das ist nur so hoch wie seine Liste, weshalb der leere
+ * Bereich darunter frueher nicht reagierte. Stattdessen lauscht der Hook am
+ * gesamten Inhaltsbereich der Seite (`<main>`), bei `scope: 'self'` am
+ * ref-Element selbst (Einstellungsfenster). `ref` bleibt in beiden Faellen
+ * der Bezugspunkt fuer die Ausschluesse.
  *
  * Tippen und Wischen laufen beide ueber `select()`. Daraus ergibt sich die
  * Richtung fuer die Einblendung: `slideClass` an den Inhalt haengen, der
@@ -19,8 +27,9 @@ const MAX_DURATION_MS = 700;
 /** Die Bewegung muss deutlich waagerechter als senkrecht sein. */
 const DIRECTION_RATIO = 1.5;
 
-const IGNORE_SELECTOR =
-  'input, textarea, select, [contenteditable="true"], .wj-overlay, [data-wj-exit], [data-no-swipe]';
+const IGNORE_SELECTOR = 'input, textarea, select, [contenteditable="true"], [data-no-swipe]';
+/** Fenster und schwebende Menues: nur ignorieren, wenn sie NICHT zum Wischbereich gehoeren. */
+const OVERLAY_SELECTOR = '.wj-overlay, [data-wj-exit]';
 
 export function useSwipeTabs<K extends string>(options: {
   keys: readonly K[];
@@ -28,10 +37,24 @@ export function useSwipeTabs<K extends string>(options: {
   onChange: (key: K) => void;
   /** z. B. aus, solange eine Detailansicht offen ist */
   enabled?: boolean;
+  /**
+   * 'main' (Standard): der ganze Inhaltsbereich der Seite reagiert, auch der
+   * leere Platz unter der Liste. 'self': nur das ref-Element - fuer Fenster,
+   * die kein <main> ueber sich haben.
+   */
+  scope?: 'main' | 'self';
 }) {
-  const { keys, active, onChange, enabled = true } = options;
+  const { keys, active, onChange, enabled = true, scope = 'main' } = options;
   const [direction, setDirection] = useState<'next' | 'prev' | null>(null);
-  const ref = useRef<HTMLDivElement>(null);
+  /**
+   * Bewusst ein Callback-Ref mit State statt useRef: Fenster wie die
+   * Einstellungen bleiben dauerhaft eingebunden und haben beim ersten
+   * Durchlauf noch gar keinen Inhalt. Ein useRef waere dann leer, der Effekt
+   * liefe nie erneut - die Gesten wuerden nie angemeldet. So laeuft er genau
+   * dann, wenn das Element erscheint (und noch einmal, wenn es verschwindet).
+   */
+  const [node, setNode] = useState<HTMLDivElement | null>(null);
+  const ref = useCallback<RefCallback<HTMLDivElement>>((el) => setNode(el), []);
 
   const select = useCallback(
     (key: K) => {
@@ -48,8 +71,11 @@ export function useSwipeTabs<K extends string>(options: {
   latest.current = { keys, active, select };
 
   useEffect(() => {
-    const el = ref.current;
-    if (!el || !enabled) return;
+    if (!node || !enabled) return;
+
+    // Der leere Bereich unter der Liste gehoert zu <main>, nicht mehr zur
+    // Liste selbst - deshalb haengen die Handler dort.
+    const el = (scope === 'main' ? node.closest('main') : null) || node;
 
     let start: { x: number; y: number; t: number } | null = null;
 
@@ -92,7 +118,7 @@ export function useSwipeTabs<K extends string>(options: {
       el.removeEventListener('touchend', onEnd);
       el.removeEventListener('touchcancel', onCancel);
     };
-  }, [enabled]);
+  }, [node, enabled, scope]);
 
   const slideClass =
     direction === 'next' ? 'wj-slide-from-right' : direction === 'prev' ? 'wj-slide-from-left' : '';
@@ -102,6 +128,12 @@ export function useSwipeTabs<K extends string>(options: {
 
 function shouldIgnore(target: Element, boundary: Element): boolean {
   if (target.closest(IGNORE_SELECTOR)) return true;
+
+  // Ein Fenster ueber der Seite blockiert das Wischen - liegt der Wischbereich
+  // aber selbst in diesem Fenster (Einstellungen), ist es das gewollte Ziel.
+  const overlay = target.closest(OVERLAY_SELECTOR);
+  if (overlay && !overlay.contains(boundary)) return true;
+
   // Waagerecht scrollbare Leisten sollen scrollen, nicht den Reiter wechseln
   for (let node: Element | null = target; node && node !== boundary; node = node.parentElement) {
     const style = window.getComputedStyle(node);

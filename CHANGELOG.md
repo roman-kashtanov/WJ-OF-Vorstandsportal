@@ -4,6 +4,14 @@ Diese Datei wird erzeugt: Inhalte bitte in `src/data/changelog.ts` pflegen
 und danach `npm run changelog` ausführen. Dieselben Einträge zeigt die App
 unter Einstellungen → System und beim Klick auf die Versionsnummer.
 
+## v4.1.0 – 16.09.2026
+
+**Wischen im ganzen Bereich und in den Einstellungen**
+
+- Der Reiterwechsel per Wischen reagiert jetzt im gesamten Inhaltsbereich – auch dort, wo unter der Liste nichts mehr steht.
+- Auch in den Einstellungen lassen sich die Reiter durch Wischen wechseln.
+- Auf Eingabefeldern und in waagerecht scrollbaren Leisten bleibt das Wischen bewusst aus, damit Tippen und Scrollen nicht gestört werden.
+
 ## v4.0.0 – 16.09.2026
 
 **Versionsverlauf in der App**
