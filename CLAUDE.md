@@ -38,7 +38,7 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
 
 ## Aktueller Stand (16.09.2026)
 
-- Version **v4.1.1**, lokal committet und noch nicht gepusht. Alles bis
+- Version **v4.2.0**, lokal committet und noch nicht gepusht. Alles bis
   einschließlich v4.0.0 ist veröffentlicht (Push am 16.09.2026, v3.25.0 bis
   v4.0.0 in einem Rutsch); ob v4.1.0 schon gepusht ist, war zuletzt offen.
 - **Eigene Adresse `app.vorstandsportal.cloud`** (24.09.2026): Domain
@@ -48,10 +48,11 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
   angelegten Mail-Einträge nur für `app` abgeschaltet – die Mail-Einträge der
   Hauptdomain (MX `mx00/mx01.ionos.de`, SPF) sind unverändert. Zertifikat von
   Netlify (Let's Encrypt, erneuert sich selbst); ein zusätzlich bei IONOS
-  angelegtes SSL-Zertifikat wird **nicht** benutzt. **Offen:** in Netlify
-  `app.vorstandsportal.cloud` als *primary domain* setzen, in Firebase als
-  *Autorisierte Domain* eintragen (sonst scheitert dort die Google-Anmeldung),
-  danach E-Mail-Versand über Resend mit Absender auf `vorstandsportal.cloud`
+  angelegtes SSL-Zertifikat wird **nicht** benutzt. In Firebase als
+  *Autorisierte Domain* eingetragen, Google-Anmeldung läuft dort seit v4.2.0
+  unter der eigenen Adresse (siehe Abschnitt v4.2.0). **Offen:** in Netlify
+  `app.vorstandsportal.cloud` als *primary domain* setzen (erst wenn der
+  Router zu Hause die neue Adresse kennt), danach E-Mail-Versand über Resend mit Absender auf `vorstandsportal.cloud`
   (`ANLEITUNG-Domain-und-Mailversand.md` geht noch von `wj-offenbach.de` aus
   und muss dafür neu geschrieben werden).
 - Einzelheiten im Versionsverlauf: `CHANGELOG.md` bzw. in der App über die
@@ -2356,3 +2357,53 @@ ausgenommen (in den Einstellungen wischt man also neben den Formularfeldern).
 ganz unten im leeren Bereich wechselt „Abgestimmt" → „Archiv" und zurück;
 Einstellungen – „Zuschüsse" → „Vorlagen" und zurück, während die Seite
 dahinter unverändert bleibt.
+
+## v4.1.1 / v4.2.0 - Eigene Adresse app.vorstandsportal.cloud, Google-Anmeldung dort
+
+**Adresse (v4.1.1):** Domain `vorstandsportal.cloud` bei IONOS, Unteradresse
+`app` als CNAME auf `wj-of-vorstandsportal.netlify.app`. IONOS legt zu jeder
+neuen Unteradresse automatisch Mail-Einträge an (MX, SPF, DKIM, autodiscover);
+ein CNAME verträgt sich nicht mit anderen Einträgen desselben Namens, IONOS
+schaltet sie deshalb für `app` ab – harmlos, die Mail der Hauptdomain hat
+eigene Einträge. Das Zertifikat stellt **Netlify** aus (Let's Encrypt, sobald
+die alten Parkseiten-Einträge aus allen Zwischenspeichern verschwunden sind);
+ein bei IONOS gekauftes/angelegtes SSL-Zertifikat hat damit nichts zu tun.
+Beobachtet: Der Router des Nutzers (Speedport, `192.168.2.1`) hielt die alte
+IONOS-Adresse noch rund eine Stunde, dort kam „404 Not Found" von IONOS,
+während Mobilfunk schon ging. Die Hauptadresse in Netlify erst setzen, wenn
+es überall klappt – sonst leitet die alte Adresse auf eine 404 um.
+
+**Google-Anmeldung unter eigener Adresse (v4.2.0):** Standardmäßig läuft die
+Google-Anmeldung über `vorstandsportal-wj-offenbach.firebaseapp.com` (Google
+zeigt „Weiter zu …firebaseapp.com"), und Safari behandelt das als fremde Seite
+(Rückkehr nach `signInWithRedirect` unzuverlässig). Umsetzung nach Firebases
+Empfehlung „Anmeldedienst über die eigene Domain durchreichen":
+- `netlify.toml`: `/__/auth/*` und `/__/firebase/*` werden mit Status 200 an
+  `https://vorstandsportal-wj-offenbach.firebaseapp.com/…` durchgereicht, **vor**
+  der Single-Page-Regel `/*`. (`/__/firebase/init.json` liefert dort 404 – das
+  ist normal, die Anmeldeseite kommt ohne aus; durchgereicht wird es, damit sie
+  nicht stattdessen unsere `index.html` bekommt.)
+- `src/lib/firebase.ts`: `authDomain` ist auf den Adressen in
+  `AUTH_PROXY_HOSTS` (nur `app.vorstandsportal.cloud`) die eigene Adresse, sonst
+  weiter `firebaseapp.com`. **Bewusst keine „immer aktuelle Adresse"**: Google
+  nimmt nur Rückkehradressen an, die beim OAuth-Client eingetragen sind –
+  lokal, auf der alten Netlify-Adresse und auf Testversionen würde die
+  Anmeldung sonst mit „redirect_uri_mismatch" scheitern. Neue Adresse →
+  Liste ergänzen UND in Google Cloud eintragen.
+- **Google Cloud Console** (Projekt `vorstandsportal-wj-offenbach`, Konto
+  `/u/1`, *APIs und Dienste → Anmeldedaten → „Web client (auto created by
+  Google Service)"*): JavaScript-Quelle `https://app.vorstandsportal.cloud` und
+  Weiterleitungs-URI `https://app.vorstandsportal.cloud/__/auth/handler`
+  eingetragen (24.09.2026). Firebase ist ein Teil von Google Cloud; diese Liste
+  zeigt die Firebase-Konsole nicht an. Beim ersten Öffnen musste der Nutzer
+  die Nutzungsbedingungen von Google Cloud für das Vereinskonto akzeptieren
+  (kostenlos; „Jetzt kostenlos testen" bewusst **nicht** angeklickt).
+- Der Service Worker (`public/sw.js`) hat keinen `fetch`-Handler, fängt
+  `/__/auth/handler` also nicht ab – falls er je einen bekommt, `/__/`
+  ausnehmen.
+
+**Nicht lokal testbar** (die Durchreichung gibt es nur bei Netlify). Geprüft:
+die Firebase-Seiten `/__/auth/handler` und `/__/auth/iframe` antworten, Build
+und Typprüfung sauber. Google meldet, dass Änderungen am OAuth-Client 5 Minuten
+bis einige Stunden brauchen können – kommt direkt nach dem Deploy
+„redirect_uri_mismatch", etwas warten.

@@ -4,6 +4,14 @@ Diese Datei wird erzeugt: Inhalte bitte in `src/data/changelog.ts` pflegen
 und danach `npm run changelog` ausführen. Dieselben Einträge zeigt die App
 unter Einstellungen → System und beim Klick auf die Versionsnummer.
 
+## v4.2.0 – 24.09.2026
+
+**Google-Anmeldung unter der eigenen Adresse**
+
+- Bei „Mit Google anmelden" steht jetzt „Weiter zu app.vorstandsportal.cloud" statt der technischen Firebase-Adresse.
+- Auf dem iPhone kommt man nach der Google-Anmeldung zuverlässiger ins Portal zurück, weil Safari die Anmeldung nicht mehr als fremde Seite behandelt.
+- Die Anmeldung mit E-Mail und Passwort ist unverändert.
+
 ## v4.1.1 – 24.09.2026
 
 **Eigene Adresse: app.vorstandsportal.cloud**

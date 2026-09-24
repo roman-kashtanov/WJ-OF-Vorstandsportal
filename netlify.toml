@@ -30,6 +30,25 @@
 # ihren eigenen Pfad erreicht werden konnte, wodurch am Ende die normale
 # React-Seite statt der Function-Antwort ausgeliefert wurde.
 
+# Google-Anmeldung unter der eigenen Adresse (v4.2.0): Die Anmeldeseiten von
+# Firebase werden unter /__/auth/ durchgereicht, damit Google "Weiter zu
+# app.vorstandsportal.cloud" zeigt statt der firebaseapp.com-Adresse - und
+# Safari die Anmeldung nicht als fremde Seite behandelt. Muss VOR der
+# Single-Page-Regel stehen (erste passende Regel gewinnt). /__/firebase/ wird
+# mit durchgereicht, damit die Anmeldeseite dort dieselbe Antwort bekommt wie
+# auf firebaseapp.com statt unserer index.html.
+[[redirects]]
+  from = "/__/auth/*"
+  to = "https://vorstandsportal-wj-offenbach.firebaseapp.com/__/auth/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/__/firebase/*"
+  to = "https://vorstandsportal-wj-offenbach.firebaseapp.com/__/firebase/:splat"
+  status = 200
+  force = true
+
 # Single-Page-App: alle uebrigen Pfade auf index.html
 [[redirects]]
   from = "/*"

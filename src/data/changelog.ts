@@ -24,6 +24,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '4.2.0',
+    date: '24.09.2026',
+    title: 'Google-Anmeldung unter der eigenen Adresse',
+    changes: [
+      'Bei „Mit Google anmelden" steht jetzt „Weiter zu app.vorstandsportal.cloud" statt der technischen Firebase-Adresse.',
+      'Auf dem iPhone kommt man nach der Google-Anmeldung zuverlässiger ins Portal zurück, weil Safari die Anmeldung nicht mehr als fremde Seite behandelt.',
+      'Die Anmeldung mit E-Mail und Passwort ist unverändert.',
+    ],
+  },
+  {
     version: '4.1.1',
     date: '24.09.2026',
     title: 'Eigene Adresse: app.vorstandsportal.cloud',
