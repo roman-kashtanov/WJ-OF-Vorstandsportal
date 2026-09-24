@@ -11,7 +11,7 @@ import { runSubsidyReminders } from '../../api/reminders';
  */
 export default async (): Promise<Response> => {
   const appUrl =
-    process.env.URL || process.env.DEPLOY_PRIME_URL || 'https://wj-of-vorstandsportal.netlify.app';
+    process.env.URL || process.env.DEPLOY_PRIME_URL || 'https://app.vorstandsportal.cloud';
   const result = await runSubsidyReminders(appUrl);
   // Im Netlify-Protokoll nachvollziehbar, was der Lauf getan hat
   console.log('Zuschuss-Erinnerungen:', JSON.stringify(result.body));

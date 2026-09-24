@@ -28,7 +28,7 @@ Grund, warum die Echtzeit-Synchronisation nicht funktioniert hat.
 5. **Authentication → Sign-in method**: **E-Mail/Passwort** (Standard) und
    **Google** aktivieren.
 6. **Authentication → Settings → Authorized domains**: die Netlify-Adresse
-   eintragen (z. B. `wjof-vorstand.netlify.app` und eine spätere eigene Domain).
+   eintragen – `app.vorstandsportal.cloud` und `wj-of-vorstandsportal.netlify.app`.
 
 Alle weiteren Vorstandsmitglieder werden danach bequem in der App unter
 *Portal → Vorstand* gepflegt; die Freigabeliste wird automatisch mitgeführt.

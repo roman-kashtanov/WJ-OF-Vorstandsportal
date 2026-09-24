@@ -4,6 +4,14 @@ Diese Datei wird erzeugt: Inhalte bitte in `src/data/changelog.ts` pflegen
 und danach `npm run changelog` ausführen. Dieselben Einträge zeigt die App
 unter Einstellungen → System und beim Klick auf die Versionsnummer.
 
+## v4.1.1 – 24.09.2026
+
+**Eigene Adresse: app.vorstandsportal.cloud**
+
+- Das Portal ist jetzt unter der eigenen Adresse app.vorstandsportal.cloud erreichbar – mit gültigem Sicherheitszertifikat.
+- Die bisherige Adresse funktioniert weiter; bereits verschickte Links bleiben gültig.
+- Die App auf dem Home-Bildschirm am besten einmal löschen und von der neuen Adresse neu installieren; Face ID und Mitteilungen danach einmal neu einschalten.
+
 ## v4.1.0 – 16.09.2026
 
 **Wischen im ganzen Bereich und in den Einstellungen**

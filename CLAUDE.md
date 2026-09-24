@@ -38,10 +38,24 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
 
 ## Aktueller Stand (16.09.2026)
 
-- Version **v4.1.0**, lokal committet und noch nicht gepusht. Alles bis
+- Version **v4.1.1**, lokal committet und noch nicht gepusht. Alles bis
   einschließlich v4.0.0 ist veröffentlicht (Push am 16.09.2026, v3.25.0 bis
-  v4.0.0 in einem Rutsch). Einzelheiten im Versionsverlauf: `CHANGELOG.md`
-  bzw. in der App über die Versionsnummer.
+  v4.0.0 in einem Rutsch); ob v4.1.0 schon gepusht ist, war zuletzt offen.
+- **Eigene Adresse `app.vorstandsportal.cloud`** (24.09.2026): Domain
+  `vorstandsportal.cloud` bei IONOS (auf den Nutzer privat registriert),
+  Namensserver bleiben bei IONOS. Eintrag `app` = CNAME auf
+  `wj-of-vorstandsportal.netlify.app`; IONOS hat dafür die automatisch
+  angelegten Mail-Einträge nur für `app` abgeschaltet – die Mail-Einträge der
+  Hauptdomain (MX `mx00/mx01.ionos.de`, SPF) sind unverändert. Zertifikat von
+  Netlify (Let's Encrypt, erneuert sich selbst); ein zusätzlich bei IONOS
+  angelegtes SSL-Zertifikat wird **nicht** benutzt. **Offen:** in Netlify
+  `app.vorstandsportal.cloud` als *primary domain* setzen, in Firebase als
+  *Autorisierte Domain* eintragen (sonst scheitert dort die Google-Anmeldung),
+  danach E-Mail-Versand über Resend mit Absender auf `vorstandsportal.cloud`
+  (`ANLEITUNG-Domain-und-Mailversand.md` geht noch von `wj-offenbach.de` aus
+  und muss dafür neu geschrieben werden).
+- Einzelheiten im Versionsverlauf: `CHANGELOG.md` bzw. in der App über die
+  Versionsnummer.
 - **Nach diesem Deploy zu prüfen (offen):**
   - Netlify → *Functions*: `reminders` muss als *Scheduled function*
     auftauchen (läuft 18 und 19 Uhr UTC = 20 Uhr deutscher Zeit). Sofort
@@ -85,7 +99,7 @@ ohne Fachjargon; Konsequenzen benennen, nicht nur Optionen aufzählen.
 |---|---|
 | Quellcode | `~/Claude/Vorstandsportal` (Git, Branch `main`) |
 | GitHub | `roman-kashtanov/WJ-OF-Vorstandsportal` — **öffentlich** |
-| Live | https://wj-of-vorstandsportal.netlify.app |
+| Live | https://app.vorstandsportal.cloud (eigene Domain seit 24.09.2026, bei IONOS; die alte Adresse https://wj-of-vorstandsportal.netlify.app bleibt erreichbar) |
 | Netlify-Konto | `offenbachwj` (Team-Slug), Site-ID `23662692-a17e-4fab-967f-2042e79221e7` |
 | Firebase | Projekt `vorstandsportal-wj-offenbach` (WJ-Google-Konto) |
 | Dev-Server | Port 3007 (`npm run dev`), in root `.claude/launch.json` als `vorstandsportal` |

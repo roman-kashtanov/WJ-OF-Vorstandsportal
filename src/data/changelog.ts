@@ -24,6 +24,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '4.1.1',
+    date: '24.09.2026',
+    title: 'Eigene Adresse: app.vorstandsportal.cloud',
+    changes: [
+      'Das Portal ist jetzt unter der eigenen Adresse app.vorstandsportal.cloud erreichbar – mit gültigem Sicherheitszertifikat.',
+      'Die bisherige Adresse funktioniert weiter; bereits verschickte Links bleiben gültig.',
+      'Die App auf dem Home-Bildschirm am besten einmal löschen und von der neuen Adresse neu installieren; Face ID und Mitteilungen danach einmal neu einschalten.',
+    ],
+  },
+  {
     version: '4.1.0',
     date: '16.09.2026',
     title: 'Wischen im ganzen Bereich und in den Einstellungen',
