@@ -38,8 +38,8 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
 
 ## Aktueller Stand (16.09.2026)
 
-- Version **v4.2.1**, lokal committet, noch nicht gepusht (Umleitung der alten
-  Adresse). v4.2.0 ist veröffentlicht (Push am 24.09.2026, v4.1.0 bis v4.2.0
+- Version **v4.2.2**, lokal committet, noch nicht gepusht (v4.2.1 Umleitung der
+  alten Adresse, v4.2.2 Endlosschleife nach dem Abmelden behoben). v4.2.0 ist veröffentlicht (Push am 24.09.2026, v4.1.0 bis v4.2.0
   samt Resend-Anleitung). `app.vorstandsportal.cloud` ist in Netlify als
   *Primary domain* gesetzt (25.09.2026). Live geprüft: v4.2.0 wird ausgeliefert,
   `/__/auth/handler` liefert die Firebase-Anmeldeseite (Durchreichung aktiv).
@@ -2443,3 +2443,31 @@ sonst weiter dorthin. Abschalten = Block entfernen. Testversionen
 (Deploy Previews) haben andere Hostnamen und sind nicht betroffen. Eine in
 einem alten, noch offenen Tab abgeschickte Anfrage (POST an `/api/…`) scheitert
 nach der Umleitung – nach dem Neuladen landet man auf der neuen Adresse.
+
+## v4.2.2 - Endlosschleife nach dem Abmelden
+
+**Gemeldet (iPhone):** Nach dem Abmelden kam sofort „Face ID einrichten",
+das Fenster ließ sich nicht wegklicken – „Später" führte immer wieder dorthin.
+
+**Ursache:** `AuthModal` ist in `App.tsx` dauerhaft eingebunden und wird nur
+über `isOpen` ein-/ausgeblendet (gleiche Falle wie früher bei
+`EmailVoteModal`). Es behielt nach der Anmeldung `step` ('code' bzw.
+'biometric') und `pendingUser`. Beim Abmelden öffnete es deshalb wieder beim
+Face-ID-Schritt der gerade abgemeldeten Person. „Später" rief `onSuccess` auf –
+**ohne Firebase-Anmeldung** (die hatte `handleLogout` beendet). Der Effekt in
+`App.tsx` (`authReady && !firebaseUid && authSession.isAuthenticated →
+handleLogout`) meldete sofort wieder ab → Fenster wieder offen → Schleife.
+Nebenbei hätte „Später" die Person lokal ohne Passwort wieder „angemeldet"
+(Daten kamen mangels Firebase-Anmeldung zwar nie an, trotzdem falsch).
+
+**Behoben** (`components/AuthModal.tsx`):
+- Effekt auf `isOpen`: bei jedem Öffnen zurück auf `step = 'login'`,
+  `pendingUser = null`, Code-Felder, Fehler und Passwortfeld geleert.
+- Alle Abschlüsse laufen über `complete()`: ohne `auth.currentUser` kein
+  `onSuccess`, sondern zurück zur Anmeldung mit „Die Anmeldung ist abgelaufen".
+
+**Lokal nicht nachstellbar:** Im Entwicklermodus entfallen Code und Face ID.
+Geprüft: Typen, Build, Abmelden → Anmeldebildschirm bleibt stehen → erneut
+anmelden. Auf dem iPhone nach dem Deploy testen. Bis dahin hilft: App
+komplett schließen (vom Bildschirm wischen) und neu öffnen – dann startet das
+Fenster frisch bei der Anmeldung.

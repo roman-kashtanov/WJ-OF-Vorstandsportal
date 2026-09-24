@@ -95,6 +95,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     Biometric.isSupported().then(setBiometricSupported);
   }, []);
 
+  /**
+   * Bei jedem Öffnen wieder bei der Anmeldung beginnen (v4.2.2).
+   *
+   * Das Fenster bleibt in App.tsx dauerhaft eingebunden und wird nur ein- und
+   * ausgeblendet - ohne diesen Reset merkte es sich den letzten Schritt samt
+   * Person. Folge beim Abmelden: Statt der Anmeldung erschien sofort wieder
+   * „Face ID einrichten" (bzw. der Code) für die gerade abgemeldete Person;
+   * „Später" meldete sie ohne Passwort wieder an, App.tsx meldete sie mangels
+   * Firebase-Anmeldung sofort wieder ab - eine Endlosschleife, aus der man
+   * nicht herauskam.
+   */
+  useEffect(() => {
+    if (!isOpen) return;
+    setStep('login');
+    setPendingUser(null);
+    setError(null);
+    setDigits(['', '', '', '', '']);
+    setCodeError(null);
+    setBiometricError(null);
+    setIsEnablingBiometric(false);
+    setLoginPassword('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
   // Ergebnis einer Weiterleitungs-Anmeldung (Fallback fuer iOS/PWA)
   useEffect(() => {
     getRedirectResult(auth)
@@ -107,13 +131,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   if (!isOpen) return null;
 
+  /**
+   * Anmeldung abschließen - aber nur, wenn Firebase die Person wirklich
+   * angemeldet hat. Ohne Firebase-Anmeldung kämen keine Daten an, und App.tsx
+   * würde sofort wieder abmelden (siehe Reset oben). Dann lieber zurück zur
+   * Anmeldung mit einer klaren Meldung.
+   */
+  const complete = (user: BoardMember) => {
+    if (!auth.currentUser) {
+      setPendingUser(null);
+      setStep('login');
+      setError('Die Anmeldung ist abgelaufen. Bitte erneut anmelden.');
+      return;
+    }
+    onSuccess({ isAuthenticated: true, isCodeVerified: true, user });
+  };
+
   const proceedWith = (user: BoardMember) => {
     setPendingUser(user);
     setError(null);
     // Lokal (npm run dev) ohne Vorstandscode - im veroeffentlichten Portal
     // ist import.meta.env.DEV fest false und dieser Teil faellt weg.
     if (import.meta.env.DEV || AppStorage.isExemptFromCode(user, securitySettings)) {
-      onSuccess({ isAuthenticated: true, isCodeVerified: true, user });
+      complete(user);
     } else {
       setStep('code');
       setDigits(['', '', '', '', '']);
@@ -316,7 +356,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         if (biometricSupported && !Biometric.isEnabled()) {
           setStep('biometric');
         } else {
-          onSuccess({ isAuthenticated: true, isCodeVerified: true, user: pendingUser });
+          complete(pendingUser);
         }
       } else {
         setCodeError('Code ungültig.');
@@ -619,7 +659,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   });
                   setIsEnablingBiometric(false);
                   if (res.ok) {
-                    onSuccess({ isAuthenticated: true, isCodeVerified: true, user: pendingUser });
+                    complete(pendingUser);
                   } else {
                     setBiometricError(res.error || 'Einrichtung fehlgeschlagen.');
                   }
@@ -633,7 +673,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 type="button"
                 onClick={() =>
                   pendingUser &&
-                  onSuccess({ isAuthenticated: true, isCodeVerified: true, user: pendingUser })
+                  complete(pendingUser)
                 }
                 className="w-full py-3 rounded-2xl border border-slate-200 text-xs font-semibold text-slate-600 active:bg-slate-50"
               >

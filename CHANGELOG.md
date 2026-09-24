@@ -4,6 +4,13 @@ Diese Datei wird erzeugt: Inhalte bitte in `src/data/changelog.ts` pflegen
 und danach `npm run changelog` ausführen. Dieselben Einträge zeigt die App
 unter Einstellungen → System und beim Klick auf die Versionsnummer.
 
+## v4.2.2 – 25.09.2026
+
+**Abmelden ohne Endlosschleife**
+
+- Behoben: Nach dem Abmelden erschien sofort wieder „Face ID einrichten“ (oder die Code-Abfrage) und ließ sich nicht wegklicken – „Später“ führte immer wieder zum selben Fenster.
+- Nach dem Abmelden beginnt das Anmeldefenster jetzt immer bei der Anmeldung mit E-Mail und Passwort bzw. Google.
+
 ## v4.2.1 – 25.09.2026
 
 **Alte Adresse leitet auf die neue um**

@@ -24,6 +24,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '4.2.2',
+    date: '25.09.2026',
+    title: 'Abmelden ohne Endlosschleife',
+    changes: [
+      'Behoben: Nach dem Abmelden erschien sofort wieder „Face ID einrichten“ (oder die Code-Abfrage) und ließ sich nicht wegklicken – „Später“ führte immer wieder zum selben Fenster.',
+      'Nach dem Abmelden beginnt das Anmeldefenster jetzt immer bei der Anmeldung mit E-Mail und Passwort bzw. Google.',
+    ],
+  },
+  {
     version: '4.2.1',
     date: '25.09.2026',
     title: 'Alte Adresse leitet auf die neue um',
