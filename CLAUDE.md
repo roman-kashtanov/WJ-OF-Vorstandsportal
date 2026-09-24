@@ -38,8 +38,10 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
 
 ## Aktueller Stand (16.09.2026)
 
-- Version **v4.2.0** – alles veröffentlicht (Push am 24.09.2026, v4.1.0 bis
-  v4.2.0 samt Resend-Anleitung). Live geprüft: v4.2.0 wird ausgeliefert,
+- Version **v4.2.1**, lokal committet, noch nicht gepusht (Umleitung der alten
+  Adresse). v4.2.0 ist veröffentlicht (Push am 24.09.2026, v4.1.0 bis v4.2.0
+  samt Resend-Anleitung). `app.vorstandsportal.cloud` ist in Netlify als
+  *Primary domain* gesetzt (25.09.2026). Live geprüft: v4.2.0 wird ausgeliefert,
   `/__/auth/handler` liefert die Firebase-Anmeldeseite (Durchreichung aktiv).
 - **Resend (24.09.2026):** Konto angelegt, Domain `vorstandsportal.cloud`
   (Region Irland) eingetragen, die drei DNS-Einträge bei IONOS von Hand gesetzt
@@ -106,7 +108,7 @@ ohne Fachjargon; Konsequenzen benennen, nicht nur Optionen aufzählen.
 |---|---|
 | Quellcode | `~/Claude/Vorstandsportal` (Git, Branch `main`) |
 | GitHub | `roman-kashtanov/WJ-OF-Vorstandsportal` — **öffentlich** |
-| Live | https://app.vorstandsportal.cloud (eigene Domain seit 24.09.2026, bei IONOS; die alte Adresse https://wj-of-vorstandsportal.netlify.app bleibt erreichbar) |
+| Live | https://app.vorstandsportal.cloud (eigene Domain seit 24.09.2026, bei IONOS; die alte Adresse https://wj-of-vorstandsportal.netlify.app leitet seit v4.2.1 per 302 dorthin um) |
 | Netlify-Konto | `offenbachwj` (Team-Slug), Site-ID `23662692-a17e-4fab-967f-2042e79221e7` |
 | Firebase | Projekt `vorstandsportal-wj-offenbach` (WJ-Google-Konto) |
 | Dev-Server | Port 3007 (`npm run dev`), in root `.claude/launch.json` als `vorstandsportal` |
@@ -2384,8 +2386,9 @@ die alten Parkseiten-Einträge aus allen Zwischenspeichern verschwunden sind);
 ein bei IONOS gekauftes/angelegtes SSL-Zertifikat hat damit nichts zu tun.
 Beobachtet: Der Router des Nutzers (Speedport, `192.168.2.1`) hielt die alte
 IONOS-Adresse noch rund eine Stunde, dort kam „404 Not Found" von IONOS,
-während Mobilfunk schon ging. Die Hauptadresse in Netlify erst setzen, wenn
-es überall klappt – sonst leitet die alte Adresse auf eine 404 um.
+während Mobilfunk schon ging. Achtung: Das Setzen der *Primary domain* in Netlify leitet die eigene
+`…netlify.app`-Adresse **nicht** um (nur zusätzliche Domain-Aliase) – dafür
+sorgt seit v4.2.1 eine eigene Regel in `netlify.toml`.
 
 **Google-Anmeldung unter eigener Adresse (v4.2.0):** Standardmäßig läuft die
 Google-Anmeldung über `vorstandsportal-wj-offenbach.firebaseapp.com` (Google
@@ -2421,3 +2424,22 @@ die Firebase-Seiten `/__/auth/handler` und `/__/auth/iframe` antworten, Build
 und Typprüfung sauber. Google meldet, dass Änderungen am OAuth-Client 5 Minuten
 bis einige Stunden brauchen können – kommt direkt nach dem Deploy
 „redirect_uri_mismatch", etwas warten.
+
+## v4.2.1 - Alte Netlify-Adresse leitet auf app.vorstandsportal.cloud um
+
+Nach dem Setzen der *Primary domain* zeigte `wj-of-vorstandsportal.netlify.app`
+das Portal weiter selbst an (HTTP 200) – Netlify leitet nur zusätzliche
+Domain-Aliase auf die Hauptadresse um, nicht die eigene netlify.app-Adresse.
+Dadurch gab es zwei Adressen mit getrennter Anmeldung, getrennter
+Home-Bildschirm-App und getrennter Face-ID-Kopplung.
+
+Jetzt: erste Regel in `netlify.toml`, nur für diesen Host,
+`https://wj-of-vorstandsportal.netlify.app/*` → `https://app.vorstandsportal.cloud/:splat`,
+**302** (vorläufig) mit `force`. Netlify hängt den Suchteil (`?t=…`) von selbst
+an, alte Nachweis-/Beleg-/Abstimmungslinks funktionieren also weiter.
+**Bewusst 302 statt 301:** eine 301 merken sich Browser dauerhaft – wird die
+(privat registrierte, als Versuch gekaufte) Domain aufgegeben, sprängen Geräte
+sonst weiter dorthin. Abschalten = Block entfernen. Testversionen
+(Deploy Previews) haben andere Hostnamen und sind nicht betroffen. Eine in
+einem alten, noch offenen Tab abgeschickte Anfrage (POST an `/api/…`) scheitert
+nach der Umleitung – nach dem Neuladen landet man auf der neuen Adresse.

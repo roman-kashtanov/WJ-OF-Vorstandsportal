@@ -30,6 +30,21 @@
 # ihren eigenen Pfad erreicht werden konnte, wodurch am Ende die normale
 # React-Seite statt der Function-Antwort ausgeliefert wurde.
 
+# Alte Adresse auf die neue umleiten (v4.2.1). Netlify tut das fuer die
+# eigene netlify.app-Adresse NICHT von selbst, auch wenn eine eigene Domain
+# als "Primary domain" gesetzt ist. Pfad und Suchteil (?t=... aus Nachweis-,
+# Beleg- und Abstimmungslinks) bleiben erhalten.
+#
+# Bewusst 302 (vorlaeufig) statt 301 (dauerhaft): Browser merken sich eine
+# 301 auf Dauer. Wird die Domain spaeter aufgegeben oder geaendert, wuerden
+# Geraete sonst weiter auf die alte Zieladresse springen. Zum Abschalten
+# einfach diesen Block entfernen.
+[[redirects]]
+  from = "https://wj-of-vorstandsportal.netlify.app/*"
+  to = "https://app.vorstandsportal.cloud/:splat"
+  status = 302
+  force = true
+
 # Google-Anmeldung unter der eigenen Adresse (v4.2.0): Die Anmeldeseiten von
 # Firebase werden unter /__/auth/ durchgereicht, damit Google "Weiter zu
 # app.vorstandsportal.cloud" zeigt statt der firebaseapp.com-Adresse - und

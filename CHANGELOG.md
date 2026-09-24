@@ -4,6 +4,14 @@ Diese Datei wird erzeugt: Inhalte bitte in `src/data/changelog.ts` pflegen
 und danach `npm run changelog` ausführen. Dieselben Einträge zeigt die App
 unter Einstellungen → System und beim Klick auf die Versionsnummer.
 
+## v4.2.1 – 25.09.2026
+
+**Alte Adresse leitet auf die neue um**
+
+- Wer die bisherige Netlify-Adresse aufruft, landet jetzt automatisch auf app.vorstandsportal.cloud.
+- Bereits verschickte Links (Abstimmung, Nachweis, Beleg) funktionieren weiter und führen zur neuen Adresse.
+- Nach dem ersten Aufruf der neuen Adresse einmal neu anmelden; die App auf dem Home-Bildschirm am besten neu installieren.
+
 ## v4.2.0 – 24.09.2026
 
 **Google-Anmeldung unter der eigenen Adresse**

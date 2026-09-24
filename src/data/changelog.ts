@@ -24,6 +24,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '4.2.1',
+    date: '25.09.2026',
+    title: 'Alte Adresse leitet auf die neue um',
+    changes: [
+      'Wer die bisherige Netlify-Adresse aufruft, landet jetzt automatisch auf app.vorstandsportal.cloud.',
+      'Bereits verschickte Links (Abstimmung, Nachweis, Beleg) funktionieren weiter und führen zur neuen Adresse.',
+      'Nach dem ersten Aufruf der neuen Adresse einmal neu anmelden; die App auf dem Home-Bildschirm am besten neu installieren.',
+    ],
+  },
+  {
     version: '4.2.0',
     date: '24.09.2026',
     title: 'Google-Anmeldung unter der eigenen Adresse',
