@@ -47,8 +47,11 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
   (Region Irland) eingetragen, die drei DNS-Einträge bei IONOS von Hand gesetzt
   und öffentlich sichtbar (`resend._domainkey`, MX + SPF auf `send`). Die
   „Auto configure"-Seite von IONOS zeigte die Hostnamen ohne Präfix an und wurde
-  deshalb abgelehnt. Netlify-Variablen in Arbeit; `MAIL_PROVIDER=resend` erst
-  nach „Verified" in Resend, danach Test-E-Mail und Kopfzeilen prüfen.
+  deshalb abgelehnt. **Läuft seit 24.09.2026:** Netlify-Variablen gesetzt, Mails kommen von
+  `portal@vorstandsportal.cloud` (Antwort an `offenbachwj@gmail.com`) und
+  landen im Gmail-Posteingang; Google-Anmeldung zeigt die eigene Adresse.
+  Offen: Kopfzeilen (SPF/DKIM/DMARC = PASS) noch nicht gesehen; optional eine
+  Antwortadresse auf der eigenen Domain (Weiterleitung an Gmail).
 - **Eigene Adresse `app.vorstandsportal.cloud`** (24.09.2026): Domain
   `vorstandsportal.cloud` bei IONOS (auf den Nutzer privat registriert),
   Namensserver bleiben bei IONOS. Eintrag `app` = CNAME auf
@@ -203,7 +206,7 @@ per SMTP mit App-Passwort. Resend war früher bewusst ausgeschlossen, weil die
 Domain-Verifizierung den SPF-Eintrag von `wj-offenbach.de` (IONOS +
 vereinonline.org) berührt hätte.
 
-**Umstellung auf Resend in Arbeit (ab 24.09.2026):** mit der eigenen Domain
+**Seit 24.09.2026 über Resend:** mit der eigenen Domain
 `vorstandsportal.cloud` entfällt das SPF-Risiko. Absender
 `portal@vorstandsportal.cloud`, Region EU, Schritte in
 `ANLEITUNG-Domain-und-Mailversand.md`. Umgeschaltet wird allein über
