@@ -1,228 +1,133 @@
-# Anleitung: Eigene Domain und seriöser Mailversand
+# Anleitung: Mailversand über Resend mit eigener Domain
 
-Diese Anleitung beschreibt, wie das Vorstandsportal von der vorläufigen
-Netlify-Adresse auf eine eigene Adresse unter `wj-offenbach.de` umgestellt wird
-und wie die E-Mails künftig von einer Vereinsadresse versendet werden.
+Stand: 24.09.2026. Das Portal läuft unter **`https://app.vorstandsportal.cloud`**
+(Domain `vorstandsportal.cloud` bei IONOS, Unteradresse `app` zeigt auf
+Netlify – siehe CLAUDE.md, Abschnitt v4.1.1/v4.2.0).
 
-**Wann machen?** Erst **nach der Vorstellung im Vorstand.** Bis dahin läuft alles
-auf der Netlify-Adresse weiter – das genügt für die Testphase mit wenigen
-Personen vollkommen.
+Diese Anleitung stellt den **Mailversand** um: weg vom Gmail-Postfach
+`offenbachwj@gmail.com`, hin zu **Resend** mit Absender auf der eigenen Domain,
+z. B. `portal@vorstandsportal.cloud`.
 
-**Kosten:** keine. Subdomains sind bei einer vorhandenen Domain enthalten,
-Resend ist bis 3.000 Mails/Monat kostenlos.
+**Am Programm muss dafür nichts geändert werden** – der Server kann Resend
+bereits. Es sind nur Einstellungen bei Resend, IONOS und Netlify.
 
 ---
 
-## Die beiden Adressen
+## Warum überhaupt umstellen?
 
-| Zweck | Subdomain | Sichtbar als |
+| Heute (Gmail) | Mit Resend |
+|---|---|
+| Absender ist eine `@gmail.com`-Adresse – wirkt privat, landet öfter im Spam | Absender auf der eigenen Domain, per DKIM unterschrieben |
+| Gmail begrenzt auf ca. 500 Empfänger pro Tag | kostenloser Tarif: 3.000 Mails im Monat, 100 pro Tag – reicht deutlich |
+| Versand hängt am Passwort eines Google-Kontos | Versand über einen eigenen Schlüssel, jederzeit austauschbar |
+
+Früher war Resend bewusst **nicht** gewählt, weil die Einrichtung den
+SPF-Eintrag von `wj-offenbach.de` (IONOS + vereinonline.org) berührt hätte.
+Mit der eigenen Domain `vorstandsportal.cloud` gibt es dieses Risiko nicht
+mehr – sie wird von nichts anderem genutzt.
+
+---
+
+## Schritt 1: Konto bei Resend
+
+1. Auf [resend.com](https://resend.com) registrieren.
+   **Mit dem Vereins-Postfach `offenbachwj@gmail.com`**, nicht privat – dann
+   lässt sich der Zugang später übergeben.
+2. Der kostenlose Tarif genügt.
+
+## Schritt 2: Domain bei Resend eintragen
+
+1. Resend → **Domains** → **Add Domain**.
+2. Domain: **`vorstandsportal.cloud`**
+3. Region: **Ireland (eu-west-1)** – Daten bleiben in der EU.
+4. Resend zeigt danach eine Liste von DNS-Einträgen. Die Werte sind für jedes
+   Konto anders, also **genau so übernehmen, wie Resend sie anzeigt**. Typisch
+   sind:
+
+| Typ | Hostname (bei IONOS eintragen) | Wert (aus Resend kopieren) |
 |---|---|---|
-| Das Portal | `vorstandsportal.wj-offenbach.de` | Adresse im Browser und in allen Links |
-| Der Mailversand | `vorstand.wj-offenbach.de` | Absender `portal@vorstand.wj-offenbach.de` |
+| TXT | `resend._domainkey` | langer Schlüssel, beginnt mit `p=…` |
+| MX | `send` | `feedback-smtp.eu-west-1.amazonses.com`, Priorität 10 |
+| TXT | `send` | `v=spf1 include:amazonses.com ~all` |
+| TXT *(empfohlen)* | `_dmarc` | `v=DMARC1; p=none;` |
 
-Wichtig: **Punkt, nicht Bindestrich.** `vorstandsportal.wj-offenbach.de` ist eine
-kostenlose Subdomain eurer Domain. `vorstandsportal-wj-offenbach.de` wäre
-dagegen eine neue Domain, die extra gekauft werden müsste.
+## Schritt 3: Einträge bei IONOS setzen
 
-Beide Subdomains sind völlig unabhängig von der Vereinswebsite. An
-`wj-offenbach.de` selbst wird nichts geändert – die Website läuft unberührt
-weiter, es wird lediglich je ein zusätzlicher Wegweiser eingetragen.
+IONOS → **Domains & SSL** → `vorstandsportal.cloud` → **DNS** →
+**Record hinzufügen**.
 
----
+- Beim Hostnamen nur den Teil **vor** `vorstandsportal.cloud` eintragen.
+  Zeigt Resend `resend._domainkey.vorstandsportal.cloud`, gehört in das Feld
+  nur `resend._domainkey`.
+- TTL: kleinster Wert (5 Minuten).
+- **Nichts löschen oder ändern**, was schon da ist – insbesondere nicht:
+  - den CNAME `app` (das Portal),
+  - die MX-Einträge `mx00/mx01.ionos.de` und den SPF-Eintrag der Hauptdomain
+    (E-Mail-Empfang bei IONOS),
+  - die DKIM-Einträge `s1-ionos._domainkey` / `s2-ionos._domainkey`.
 
-## Schritt 1: Das Portal unter eigener Adresse
+  Die Resend-Einträge liegen unter anderen Namen (`send`,
+  `resend._domainkey`, `_dmarc`) und vertragen sich damit.
+- Meldet IONOS wie beim `app`-Eintrag einen Konflikt mit einem „Service", die
+  Liste genau lesen: Abgeschaltet werden darf nur etwas, das zu `send` gehört,
+  **nie** Einträge der Hauptdomain.
 
-### 1a. Netlify-Adresse nachschauen
+Danach in Resend auf **Verify DNS Records** klicken. Das dauert Minuten bis
+wenige Stunden, bis alle Einträge grün sind.
 
-In Netlify oben steht die aktuelle Adresse der Seite, etwas wie
-`vorstandsportal.netlify.app`. Diesen Wert brauchst du gleich – notiere ihn
-genau, inklusive `.netlify.app`.
+## Schritt 4: Schlüssel anlegen
 
-### 1b. Eintrag bei IONOS
+Resend → **API Keys** → **Create API Key**:
 
-IONOS → **Domains & SSL** → `wj-offenbach.de` → **DNS** → Eintrag hinzufügen:
+- Name: `Vorstandsportal`
+- Berechtigung: **Sending access**
+- Domain: `vorstandsportal.cloud`
 
-```
-Typ:      CNAME
-Hostname: vorstandsportal
-Ziel:     <die Adresse aus 1a>
-```
+Den Schlüssel (beginnt mit `re_`) sofort kopieren – Resend zeigt ihn nur
+einmal. **Nirgends in den Code oder in Nachrichten schreiben**, nur in Netlify.
 
-Speichern. Die Änderung kann bis zu 24 Stunden brauchen, meistens geht es
-deutlich schneller.
+## Schritt 5: In Netlify hinterlegen
 
-### 1c. Domain in Netlify eintragen
-
-Netlify → **Domain management** → **Add a domain** →
-`vorstandsportal.wj-offenbach.de` eintragen.
-
-Netlify stellt das Sicherheitszertifikat (HTTPS) automatisch aus, dafür ist
-nichts zu tun.
-
-### 1d. Als Hauptadresse setzen
-
-In Netlify bei `vorstandsportal.wj-offenbach.de` auf **„Set as primary domain"**.
-
-Danach zeigt der alte `netlify.app`-Link automatisch auf die neue Adresse, und
-alle Links in den E-Mails verwenden ab sofort die neue Adresse. **Am Portal
-selbst muss nichts geändert werden** – die App bildet ihre Links immer aus der
-Adresse, unter der sie gerade aufgerufen wird.
-
-### Ergebnis nach Schritt 1
-
-Das Portal ist unter `vorstandsportal.wj-offenbach.de` erreichbar. Niemand
-bekommt die Netlify-Adresse noch zu sehen. Der Mailversand läuft noch
-unverändert über das Gmail-Postfach.
-
----
-
-## Schritt 2: Mailversand über die Vereinsdomain
-
-### 2a. Konto bei Resend anlegen
-
-Auf [resend.com](https://resend.com) registrieren. Der kostenlose Tarif reicht
-(3.000 Mails pro Monat, 100 pro Tag) – das Portal verschickt deutlich weniger.
-
-**Wichtig:** Für die Anmeldung das eigens angelegte Portal-Postfach verwenden,
-nicht das private – damit der Zugang später übergeben werden kann.
-
-### 2b. Versand-Subdomain eintragen
-
-In Resend → **Domains** → **Add Domain** → `vorstand.wj-offenbach.de` eintragen.
-Ausdrücklich die Subdomain, **nicht** `wj-offenbach.de` (Begründung unten).
-
-Resend zeigt daraufhin eine Liste von DNS-Einträgen an (TXT, teils MX oder
-CNAME). Diese Werte sind für jedes Konto anders.
-
-### 2c. Die Einträge bei IONOS setzen
-
-Dieselbe Stelle wie in Schritt 1b: IONOS → **Domains & SSL** →
-`wj-offenbach.de` → **DNS**.
-
-Für jeden Eintrag aus Resend einen neuen Eintrag anlegen. Achte darauf, beim
-Hostnamen nur den Teil **vor** `wj-offenbach.de` einzutragen – zeigt Resend
-z. B. `resend._domainkey.vorstand.wj-offenbach.de` an, gehört bei IONOS in das
-Hostname-Feld `resend._domainkey.vorstand`.
-
-Nach dem Speichern in Resend auf **Verify** klicken. Bis alle Einträge erkannt
-werden, kann es einige Minuten bis Stunden dauern.
-
-### 2d. In Netlify hinterlegen
-
-Netlify → **Site configuration** → **Environment variables**:
+Netlify → **Site configuration** → **Environment variables** → hinzufügen:
 
 | Variable | Wert |
 |---|---|
-| `RESEND_API_KEY` | der Schlüssel aus Resend (dort unter *API Keys*) |
-| `RESEND_FROM` | `WJ Offenbach Vorstandsportal <portal@vorstand.wj-offenbach.de>` |
-| `MAIL_REPLY_TO` | eine echte Adresse, an die Antworten gehen sollen |
+| `RESEND_API_KEY` | der Schlüssel aus Schritt 4 |
+| `RESEND_FROM` | `WJOF Vorstandsportal <portal@vorstandsportal.cloud>` |
+| `MAIL_REPLY_TO` | eine Adresse, die gelesen wird – vorerst `offenbachwj@gmail.com` |
 | `MAIL_PROVIDER` | `resend` |
 
-**Wichtig:** Der Wechsel passiert erst durch `MAIL_PROVIDER=resend`. Solange
-diese Variable fehlt, verschickt das Portal weiter über das Gmail-Postfach –
-auch wenn die Resend-Zugangsdaten schon eingetragen sind. So kann ein halb
-fertig eingerichteter Versand den laufenden Betrieb nicht unbemerkt
-übernehmen.
+- Der Wechsel passiert **erst durch `MAIL_PROVIDER=resend`**. Solange diese
+  Variable fehlt, verschickt das Portal weiter über Gmail – auch wenn die
+  Resend-Werte schon eingetragen sind.
+- Die vorhandenen Gmail-Variablen (`SMTP_USER`, `SMTP_PASSWORD`) **stehen
+  lassen**. Klappt mit Resend etwas nicht, genügt es, `MAIL_PROVIDER` zu
+  entfernen – dann läuft sofort wieder alles über Gmail.
+- `portal@` muss kein echtes Postfach sein; Resend darf mit jeder Adresse der
+  verifizierten Domain senden. Antworten gehen an `MAIL_REPLY_TO`.
 
-Die vorhandenen SMTP-Variablen bleiben stehen. Sollte mit Resend etwas nicht
-stimmen, genügt es, `MAIL_PROVIDER` wieder zu entfernen – dann läuft sofort
-wieder alles über Gmail.
+Danach **Deploys → Trigger deploy → Deploy site**, damit die neuen Werte greifen.
 
-Anschließend in Netlify einmal **Deploy** auslösen (oder eine beliebige
-Änderung pushen), damit die neuen Werte greifen.
+## Schritt 6: Testen
 
-### 2e. Antworten auffangen
+1. Im Portal **Einstellungen → System → Funktionsprüfung** → eigene Adresse
+   eintragen → **Test-E-Mail**.
+2. Die Mail muss von `portal@vorstandsportal.cloud` kommen.
+3. In Gmail bei der Test-Mail **⋮ → Original anzeigen**: bei **SPF**, **DKIM**
+   und **DMARC** sollte jeweils `PASS` stehen.
 
-Zum reinen **Versenden** wird kein Postfach benötigt – Resend darf senden,
-sobald die Domain verifiziert ist. Antwortet aber jemand auf die Mail, muss die
-Antwort irgendwo ankommen. Zwei Möglichkeiten:
-
-* `MAIL_REPLY_TO` auf eine bestehende Adresse setzen (einfachster Weg), **oder**
-* bei IONOS eine Weiterleitung für `portal@vorstand.wj-offenbach.de` einrichten.
-
----
-
-## Warum eine Subdomain und nicht `wj-offenbach.de` direkt?
-
-Für den Mailversand gibt es einen DNS-Eintrag namens **SPF**, und davon darf es
-pro Domain nur **einen einzigen** geben. Der Verein hat mit Sicherheit bereits
-einen, sonst würden die regulären Vereinsmails nicht funktionieren.
-
-Würde man Resend auf der Hauptdomain einrichten, müsste dieser bestehende
-Eintrag **erweitert** werden. Macht man das falsch – etwa indem man ihn
-überschreibt – landen ab diesem Moment die normalen Vereinsmails im Spam oder
-kommen gar nicht mehr an.
-
-Mit einer eigenen Subdomain entsteht dieses Risiko nicht: Sie hat ihre eigenen
-Einträge, die Hauptdomain wird nicht angefasst. Resend empfiehlt dieses Vorgehen
-ausdrücklich, auch weil der Ruf des Versands damit sauber getrennt bleibt.
-
----
-
-## Ist das Spam-Problem damit gelöst?
-
-**Weitgehend ja – aber es ist keine Garantie.** Im Einzelnen:
-
-### Was die beiden Schritte beheben
-
-| Ursache | Status |
-|---|---|
-| Links zeigen auf eine fremde Sammeldomain (`netlify.app`) | mit Schritt 1 behoben |
-| Absender `@gmail.com` lässt sich nicht für den Verein signieren | mit Schritt 2 behoben |
-| Keine SPF-/DKIM-Signatur für die Vereinsdomain | mit Schritt 2 behoben |
-| Mails ohne Nur-Text-Fassung | bereits im Portal behoben (v3.15.3) |
-| Keine Antwortadresse, kein Abmeldelink | bereits im Portal behoben (v3.15.3) |
-
-Damit sind alle bekannten technischen Negativsignale ausgeräumt. Das ist der
-entscheidende Unterschied: Aus „unbekannter Absender von einer Freemail-Adresse
-mit Links auf eine fremde Domain" wird „Absender, der sich nachweislich als
-`wj-offenbach.de` ausweist und auf `wj-offenbach.de` verlinkt".
-
-### Was trotzdem passieren kann
-
-* **Die neue Versand-Subdomain hat anfangs noch keinen Ruf.** In den ersten
-  Wochen kann es vereinzelt weiter vorkommen, dass eine Mail im Spam landet.
-  Das legt sich, sobald ein paar Mails erfolgreich zugestellt und gelesen
-  wurden. Nicht mit einer großen Rundmail starten, sondern normal loslaufen
-  lassen.
-* **Einzelne strenge Filter** (manche Firmen-Postfächer) sortieren unabhängig
-  von allem aus. Dagegen hilft keine Einstellung.
-* **DMARC:** Für die volle Wirkung sollte die Domain zusätzlich einen
-  DMARC-Eintrag haben. Falls `wj-offenbach.de` noch keinen hat, ist das ein
-  eigener Schritt – und einer, der die Vereinsmails betrifft. Nur gemeinsam mit
-  jemandem machen, der die Mail-Einstellungen des Vereins kennt.
-
-### Was beim Rollout zusätzlich hilft
-
-Wenn das Portal den Mitgliedern vorgestellt wird, ein Satz in die Ankündigung:
-
-> Falls die Bestätigungsmail im Spam-Ordner landet, bitte einmal auf
-> „Kein Spam" tippen – danach kommt sie zuverlässig an.
-
-Das ist unspektakulär, aber wirksamer als jede technische Einstellung, weil es
-dem Postfach jedes Mitglieds direkt sagt, dass der Absender erwünscht ist.
-
-### Realistische Erwartung
-
-Nach beiden Schritten sollte der Regelfall die Zustellung in den Posteingang
-sein. Einzelfälle bleiben möglich – Zustellbarkeit ist immer eine
-Wahrscheinlichkeit, keine Zusage. Wichtig ist: Die Ursachen, die man
-beeinflussen kann, sind dann beseitigt.
+Kommt eine Fehlermeldung von Resend (z. B. „domain is not verified"), ist
+Schritt 3 noch nicht durch – etwas warten, in Resend erneut prüfen.
 
 ---
 
 ## Kurzfassung zum Abhaken
 
-- [ ] **Nach der Vorstellung im Vorstand**
-- [ ] Netlify-Adresse notieren
-- [ ] IONOS: CNAME `vorstandsportal` → Netlify-Adresse
-- [ ] Netlify: Domain hinzufügen und als Hauptadresse setzen
-- [ ] *Portal läuft jetzt unter der eigenen Adresse*
-- [ ] Resend-Konto mit dem Portal-Postfach anlegen
-- [ ] Resend: `vorstand.wj-offenbach.de` als Domain eintragen
-- [ ] IONOS: die von Resend angezeigten Einträge setzen, in Resend verifizieren
-- [ ] Netlify: `RESEND_API_KEY`, `RESEND_FROM`, `MAIL_REPLY_TO` eintragen
-- [ ] Netlify: `MAIL_PROVIDER` auf `resend` setzen (erst das schaltet um)
-- [ ] Deploy auslösen
-- [ ] Testmail an eine eigene Adresse schicken und prüfen, wo sie landet
-- [ ] *Mails kommen jetzt von `portal@vorstand.wj-offenbach.de`*
+- [ ] Resend-Konto mit `offenbachwj@gmail.com`
+- [ ] Domain `vorstandsportal.cloud` bei Resend, Region Irland
+- [ ] DNS-Einträge aus Resend bei IONOS gesetzt (nichts Bestehendes gelöscht)
+- [ ] Resend zeigt alle Einträge als verifiziert
+- [ ] API-Schlüssel (Sending access) angelegt
+- [ ] Netlify: `RESEND_API_KEY`, `RESEND_FROM`, `MAIL_REPLY_TO`, `MAIL_PROVIDER=resend`
+- [ ] Neu veröffentlicht (Trigger deploy)
+- [ ] Test-E-Mail angekommen, SPF/DKIM/DMARC = PASS

@@ -52,9 +52,9 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
   *Autorisierte Domain* eingetragen, Google-Anmeldung läuft dort seit v4.2.0
   unter der eigenen Adresse (siehe Abschnitt v4.2.0). **Offen:** in Netlify
   `app.vorstandsportal.cloud` als *primary domain* setzen (erst wenn der
-  Router zu Hause die neue Adresse kennt), danach E-Mail-Versand über Resend mit Absender auf `vorstandsportal.cloud`
-  (`ANLEITUNG-Domain-und-Mailversand.md` geht noch von `wj-offenbach.de` aus
-  und muss dafür neu geschrieben werden).
+  Router zu Hause die neue Adresse kennt), danach E-Mail-Versand über Resend mit Absender
+  `portal@vorstandsportal.cloud` – Anleitung ist neu geschrieben
+  (`ANLEITUNG-Domain-und-Mailversand.md`), Umsetzung durch den Nutzer offen.
 - Einzelheiten im Versionsverlauf: `CHANGELOG.md` bzw. in der App über die
   Versionsnummer.
 - **Nach diesem Deploy zu prüfen (offen):**
@@ -190,11 +190,19 @@ in den Einstellungen erteilt die Freigabe automatisch.
 
 ## E-Mail
 
-Versand über das Gmail-Postfach des Vereins (`offenbachwj@gmail.com`) per SMTP
-mit App-Passwort. Bewusst **kein** Resend: Dessen Domain-Verifizierung hätte
-den bestehenden SPF-Eintrag von `wj-offenbach.de` (IONOS + vereinonline.org)
-berührt und damit den Mailversand des Vereins gefährdet. Resend bleibt als
-Alternative im Code und greift nur, wenn kein SMTP hinterlegt ist.
+Bisher Versand über das Gmail-Postfach des Vereins (`offenbachwj@gmail.com`)
+per SMTP mit App-Passwort. Resend war früher bewusst ausgeschlossen, weil die
+Domain-Verifizierung den SPF-Eintrag von `wj-offenbach.de` (IONOS +
+vereinonline.org) berührt hätte.
+
+**Umstellung auf Resend in Arbeit (ab 24.09.2026):** mit der eigenen Domain
+`vorstandsportal.cloud` entfällt das SPF-Risiko. Absender
+`portal@vorstandsportal.cloud`, Region EU, Schritte in
+`ANLEITUNG-Domain-und-Mailversand.md`. Umgeschaltet wird allein über
+Netlify-Variablen (`RESEND_API_KEY`, `RESEND_FROM`, `MAIL_REPLY_TO`,
+`MAIL_PROVIDER=resend`) – ohne `MAIL_PROVIDER=resend` bleibt Gmail aktiv, und
+das Entfernen dieser Variable schaltet jederzeit zurück. Die Gmail-Variablen
+bleiben als Rückfall stehen.
 
 Gmail erlaubt rund 500 Empfänger pro Tag und akzeptiert nur das angemeldete
 Konto als Absender.
