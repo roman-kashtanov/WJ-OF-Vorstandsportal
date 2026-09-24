@@ -38,9 +38,15 @@ Entscheidungen, bekannte Fallstricke und der Stand der Einrichtung.
 
 ## Aktueller Stand (16.09.2026)
 
-- Version **v4.2.0**, lokal committet und noch nicht gepusht. Alles bis
-  einschließlich v4.0.0 ist veröffentlicht (Push am 16.09.2026, v3.25.0 bis
-  v4.0.0 in einem Rutsch); ob v4.1.0 schon gepusht ist, war zuletzt offen.
+- Version **v4.2.0** – alles veröffentlicht (Push am 24.09.2026, v4.1.0 bis
+  v4.2.0 samt Resend-Anleitung). Live geprüft: v4.2.0 wird ausgeliefert,
+  `/__/auth/handler` liefert die Firebase-Anmeldeseite (Durchreichung aktiv).
+- **Resend (24.09.2026):** Konto angelegt, Domain `vorstandsportal.cloud`
+  (Region Irland) eingetragen, die drei DNS-Einträge bei IONOS von Hand gesetzt
+  und öffentlich sichtbar (`resend._domainkey`, MX + SPF auf `send`). Die
+  „Auto configure"-Seite von IONOS zeigte die Hostnamen ohne Präfix an und wurde
+  deshalb abgelehnt. Netlify-Variablen in Arbeit; `MAIL_PROVIDER=resend` erst
+  nach „Verified" in Resend, danach Test-E-Mail und Kopfzeilen prüfen.
 - **Eigene Adresse `app.vorstandsportal.cloud`** (24.09.2026): Domain
   `vorstandsportal.cloud` bei IONOS (auf den Nutzer privat registriert),
   Namensserver bleiben bei IONOS. Eintrag `app` = CNAME auf
